@@ -9,7 +9,9 @@ services:
     volumes:
       - static_volume:/backend/staticfiles
       - media_volume:/backend/mediafiles
-      - ./data:/etc/mapserver/data:z  # Use local data folder instead of volume
+      - ./mapserver:/etc/mapserver/data:z  # Use local data folder instead of volume
+      # Mount the timeseries data from your actual location
+      - ./mapserver/timeseries_data:/etc/mapserver/data/timeseries_data:z
     ports:
       - "8090:8000"
     environment:
@@ -48,7 +50,9 @@ services:
     container_name: flood_watch_celery_worker
     command: celery -A flood_watch_system worker -l info
     volumes:
-      - ./data:/etc/mapserver/data:z  # Use local data folder instead of volume
+      - ./mapserver:/etc/mapserver/data:z  # Use local data folder instead of volume
+      # Mount the timeseries data from your actual location
+      - ./mapserver/timeseries_data:/etc/mapserver/data/timeseries_data:z
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DB_HOST=flood_watch_postgis
@@ -80,7 +84,9 @@ services:
     container_name: flood_watch_celery_beat
     command: celery -A flood_watch_system beat -l info
     volumes:
-      - ./data:/etc/mapserver/data:z  # Use local data folder instead of volume
+      - ./mapserver:/etc/mapserver/data:z  # Use local data folder instead of volume
+      # Mount the timeseries data from your actual location
+      - ./mapserver/timeseries_data:/etc/mapserver/data/timeseries_data:z
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DB_HOST=flood_watch_postgis
@@ -139,15 +145,17 @@ services:
 
   mapserver:
     build:
-      context: ./data
+      context: ./mapserver
       dockerfile: Dockerfile
     image: hkoros/floodwatch_mapserver:v1.1
     container_name: flood_watch_mapserver
     ports:
       - "8093:80"
     volumes:
-      - ./data/shapefiles:/data/shapefiles:z  # GeoJSON data directory with z flag for SELinux
-      - ./data/mapfiles:/etc/mapserver:z  # MapServer config with z flag for SELinux
+      - ./mapserver/shapefiles:/data/shapefiles:z  # GeoJSON data directory with z flag for SELinux
+      - ./mapserver/mapfiles:/etc/mapserver:z  # MapServer config with z flag for SELinux
+      # Mount the timeseries data from your actual location
+      - ./mapserver/timeseries_data:/etc/mapserver/data/timeseries_data:z
     user: "0:0"
     environment:
       - MS_MAPFILE=/etc/mapserver/master.map
@@ -169,6 +177,36 @@ services:
         max-size: "20m"
         max-file: "3"
 
+  mapcache:
+    build:
+      context: ./mapcache
+      dockerfile: Dockerfile
+    image: hkoros/floodwatch_mapcache:v1.0
+    container_name: flood_watch_mapcache
+    ports:
+      - "8095:80"
+    volumes:
+      - ./mapcache/config/mapcache.xml:/etc/mapcache/mapcache.xml:z
+      - ./mapcache/cache:/var/cache/mapcache:z
+      - ./mapcache/locks:/var/lock/mapcache:z
+      - ./mapserver/mapfiles:/etc/mapserver:z  # Mount mapserver config files
+      # Mount the timeseries data from your actual location
+      - ./mapserver/timeseries_data:/etc/mapserver/data/timeseries_data:z
+    environment:
+      - MS_MAPFILE=/etc/mapserver/master.map
+      - MAPCACHE_CONFIG_FILE=/etc/mapcache/mapcache.xml
+    depends_on:
+      - mapserver
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/mapcache/demo"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   frontend:
     build:
       context: ./frontend
@@ -181,14 +219,18 @@ services:
     volumes:
       - static_volume:/frontend/static
       - media_volume:/frontend/media
-      - ./data:/etc/mapserver/data  # Use local data folder instead of volume
+      - ./mapserver:/etc/mapserver/data:z  # Use local data folder instead of volume
+      # Mount the timeseries data from your actual location
+      - ./mapserver/timeseries_data:/etc/mapserver/data/timeseries_data:z
     environment:
       - NODE_ENV=production
       - VITE_API_URL=http://localhost:8090  # Use localhost instead of IP
       - VITE_MAPSERVER_URL=http://localhost:8093  # Use localhost instead of IP
+      - VITE_MAPCACHE_URL=http://localhost:8095  # Use localhost for MapCache
     depends_on:
       - web
       - mapserver
+      - mapcache
     networks:
       - app-network
     restart: unless-stopped

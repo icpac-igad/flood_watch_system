@@ -1,0 +1,262 @@
+
+services:
+  web:
+    image: hkoros/flood_watch_system_backend:staging
+    container_name: flood_watch_backend_staging
+    command: gunicorn flood_watch_system.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - static_volume:/backend/staticfiles
+      - media_volume:/backend/mediafiles
+      - ./mapserver:/etc/mapserver/data:z
+    ports:
+      - "8090:8000"
+    environment:
+      - DB_HOST=flood_watch_postgis
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DEBUG=0  # Disabled debug for staging
+      - SECRET_KEY=${SECRET_KEY}
+      - DJANGO_ALLOWED_HOSTS=10.10.1.13,127.0.0.1,localhost,0.0.0.0,staging.floodwatch.example.com
+      - DJANGO_SETTINGS_MODULE=flood_watch_system.settings
+      - SFTP_HOST=${SFTP_HOST}
+      - SFTP_PORT=${SFTP_PORT}
+      - SFTP_USERNAME=${SFTP_USERNAME}
+      - SFTP_PASSWORD=${SFTP_PASSWORD}
+      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE}
+      - JSON_REMOTE_DIR=${JSON_REMOTE_DIR}
+      - SHAPEFILE_REMOTE_DIR=${SHAPEFILE_REMOTE_DIR}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - ENVIRONMENT=staging
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  celery_worker:
+    image: hkoros/flood_watch_system_celery_worker:staging
+    container_name: flood_watch_celery_worker_staging
+    command: celery -A flood_watch_system worker -l info
+    volumes:
+      - ./mapserver:/etc/mapserver/data:z
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=flood_watch_postgis
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=flood_watch_system.settings
+      - SFTP_HOST=${SFTP_HOST}
+      - SFTP_PORT=${SFTP_PORT}
+      - SFTP_USERNAME=${SFTP_USERNAME}
+      - SFTP_PASSWORD=${SFTP_PASSWORD}
+      - JSON_REMOTE_DIR=${JSON_REMOTE_DIR}
+      - SHAPEFILE_REMOTE_DIR=${SHAPEFILE_REMOTE_DIR}
+      - ENVIRONMENT=staging
+    depends_on:
+      - web
+      - redis
+    networks:
+      - app-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  celery_beat:
+    image: hkoros/flood_watch_system_celery_beat:staging
+    container_name: flood_watch_celery_beat_staging
+    command: celery -A flood_watch_system beat -l info
+    volumes:
+      - ./mapserver:/etc/mapserver/data:z
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=flood_watch_postgis
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=flood_watch_system.settings
+      - ENVIRONMENT=staging
+    depends_on:
+      - web
+      - redis
+    networks:
+      - app-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  db:
+    image: hkoros/floodwatch_postgis:staging
+    container_name: flood_watch_postgis_staging
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_HOST_AUTH_METHOD=md5
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgis_data_staging:/var/lib/postgresql/data/pgdata
+    ports:
+      - "8091:5432"
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  redis:
+    image: hkoros/redis:staging
+    container_name: flood_watch_redis_staging
+    ports:
+      - "8092:6379"
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  mapserver:
+    image: hkoros/floodwatch_mapserver:staging
+    container_name: flood_watch_mapserver_staging
+    ports:
+      - "8093:80"
+    volumes:
+      - ./mapserver/shapefiles:/data/shapefiles:z
+      - ./mapserver/mapfiles:/etc/mapserver:z
+    user: "0:0"
+    environment:
+      - MS_MAPFILE=/etc/mapserver/master.map
+      - MS_ERRORFILE=/tmp/mapserver_error.log
+      - MS_DEBUGLEVEL=3  # Reduced debug level for staging
+      - ENVIRONMENT=staging
+    command: ["apache2ctl", "-D", "FOREGROUND"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/cgi-bin/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - app-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  mapcache:
+    image: hkoros/floodwatch_mapcache:staging
+    container_name: flood_watch_mapcache_staging
+    ports:
+      - "8095:80"
+    volumes:
+      - ./mapcache/config/mapcache.xml:/etc/mapcache/mapcache.xml:z
+      - ./mapcache/cache:/var/cache/mapcache:z
+      - ./mapcache/locks:/var/lock/mapcache:z
+      - ./mapserver/mapfiles:/etc/mapserver:z
+    environment:
+      - MS_MAPFILE=/etc/mapserver/master.map
+      - MAPCACHE_CONFIG_FILE=/etc/mapcache/mapcache.xml
+      - ENVIRONMENT=staging
+    depends_on:
+      - mapserver
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/mapcache/demo"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  frontend:
+    image: hkoros/flood_watch_system_frontend:staging
+    container_name: flood_watch_frontend_staging
+    ports:
+      - "8094:8080"
+    volumes:
+      - static_volume:/frontend/static
+      - media_volume:/frontend/media
+      - ./mapserver:/etc/mapserver/data
+    environment:
+      - NODE_ENV=production  # Still using production mode but with staging config
+      - VITE_API_URL=http://10.10.1.13:8090  # Using server IP instead of localhost
+      - VITE_MAPSERVER_URL=http://10.10.1.13:8093  # Using server IP instead of localhost
+      - VITE_APP_ENV=staging
+    depends_on:
+      - web
+      - mapserver
+    networks:
+      - app-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.31.0.0/16
+    name: flood_watch_staging_network
+
+volumes:
+  postgis_data_staging:
+    driver: local
+  static_volume:
+    driver: local
+  media_volume:
+    driver: local

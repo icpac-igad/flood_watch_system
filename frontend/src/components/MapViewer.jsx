@@ -15,18 +15,29 @@ import L from "leaflet";
 import { DischargeChart, GeoSFMChart } from "../utils/chartUtils.jsx";
 
 // Configuration for the map's initial state and WMS server
+// Add MapCache URLs to your MAP_CONFIG
 const MAP_CONFIG = {
   initialPosition: [4.6818, 34.9911],
   initialZoom: 5,
-  mapserverWMSUrl: `http://10.10.1.13:8093/cgi-bin/mapserv?map=/etc/mapserver/master.map`,
+  mapserverWMSUrl: `http://localhost:8093/cgi-bin/mapserv?map=/etc/mapserver/master.map`,
+  mapcacheWMSUrl: `http://localhost:8095/mapcache/wms`,  // MapCache WMS endpoint
+  mapcacheTMSUrl: `http://localhost:8095/mapcache/tms/1.0.0`, // MapCache TMS endpoint
   getFeatureInfoFormat: "application/json",
 };
 
 // Define the GeoJSON path based on environment
+// const GEOJSON_PATH = process.env.NODE_ENV === "production"
+//   ? "/data/timeseries_data/merged_data.geojson"  // Docker path
+//   : "/merged_data.geojson";  // Local development path
+// Define the GeoJSON paths based on environment
 const GEOJSON_PATH = process.env.NODE_ENV === "production"
-  ? "/data/timeseries_data/merged_data.geojson"  // Docker path
+  ? "/timeseries_data/merged_data.geojson"  // Docker path (matches volume mount in docker-compose)
   : "/merged_data.geojson";  // Local development path
 
+// Additional data paths if needed
+// const HYDRO_DATA_PATH = process.env.NODE_ENV === "production"
+//   ? "/etc/mapserver/data/timeseries_data/hydro_data_with_locations.geojson"
+//   : "/hydro_data_with_locations.geojson";
 // Configuration for monitoring stations (fp_sections_igad points)
 const MONITORING_STATIONS_CONFIG = {
   style: {
@@ -230,14 +241,23 @@ const LAYER_METADATA = {
 };
 
 // Utility function to create WMS layer objects
-const createWMSLayer = (name, layerId, isMapServer = false) => ({
-  name,
-  layer: isMapServer ? layerId : `floodwatch:${layerId}`,
-  legend: isMapServer 
-    ? `${MAP_CONFIG.mapserverWMSUrl}&REQUEST=GetLegendGraphic&VERSION=1.3.0&FORMAT=image/png&LAYER=${layerId}`
-    : `${MAP_CONFIG.geoserverWMSUrl}?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&LAYER=floodwatch:${layerId}`,
-  isMapServer,
-});
+// Enhanced layer creation function with MapCache support
+const createWMSLayer = (name, layerId, isMapServer = false, useCache = true) => {
+  // For static layers (boundaries, etc.), use MapCache
+  // For dynamic layers (alerts, forecasts), use direct MapServer
+  const wmsUrl = (useCache && isMapServer) ? MAP_CONFIG.mapcacheWMSUrl : MAP_CONFIG.mapserverWMSUrl;
+  
+  return {
+    name,
+    layer: isMapServer ? layerId : `floodwatch:${layerId}`,
+    legend: isMapServer 
+      ? `${MAP_CONFIG.mapserverWMSUrl}&REQUEST=GetLegendGraphic&VERSION=1.3.0&FORMAT=image/png&LAYER=${layerId}`
+      : `${MAP_CONFIG.geoserverWMSUrl}?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&LAYER=floodwatch:${layerId}`,
+    isMapServer,
+    useCache,
+    wmsUrl
+  };
+};
 
 // Utility function to generate a date string for flood hazard layers
 const getFloodHazardDate = () =>
@@ -245,8 +265,8 @@ const getFloodHazardDate = () =>
 
 // Layer definitions
 const HAZARD_LAYERS = [
-  createWMSLayer("Inundation Map", `flood_hazard_${getFloodHazardDate()}`, true),
-  createWMSLayer("Hazards Map", "Alerts", true),
+  createWMSLayer("Inundation Map", `flood_hazard_${getFloodHazardDate()}`, true,false),
+  createWMSLayer("Hazards Map", "Alerts", true,false),
 ];
 
 const IMPACT_LAYERS = [
@@ -260,12 +280,13 @@ const IMPACT_LAYERS = [
 ];
 
 // Updated boundary layers to use MapServer
+// Boundary layers (static data) use MapCache for better performance
 const BOUNDARY_LAYERS = [
-  createWMSLayer("Admin 1", "admin_level_1", true),
-  createWMSLayer("Admin 2", "admin_level_2", true),
-  createWMSLayer("Lakes", "lakes", true),
-  createWMSLayer("Rivers", "rivers", true),
-  createWMSLayer("Basins", "basins", true),
+  createWMSLayer("Admin 1", "admin_level_1", true, true),
+  createWMSLayer("Admin 2", "admin_level_2", true, true),
+  createWMSLayer("Lakes", "lakes", true, true),
+  createWMSLayer("Rivers", "rivers", true, true),
+  createWMSLayer("Basins", "basins", true, true),
 ];
 
 const BASE_MAPS = [
@@ -707,6 +728,7 @@ const FeatureInfoHandler = ({ map, selectedLayers, selectedBoundaryLayers, onFea
 };
 
 // Custom WMS layer component for stable loading
+// Enhanced WMS layer component for MapCache support
 const StableWMSLayer = React.memo(({ url, layers, transparent = true, format = "image/png", version = "1.1.1" }) => {
   const [key, setKey] = useState(0);
   
@@ -789,39 +811,51 @@ const MapViewer = () => {
   };
 
   // Function to fetch GeoJSON data
-  const fetchMonitoringData = useCallback(() => {
-    fetch(GEOJSON_PATH)
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return response.json();
-      })
-      .then((data) => {
-        data.features.forEach((feature) => {
-          if (feature.geometry?.coordinates) {
-            feature.properties.latitude = feature.geometry.coordinates[1];
-            feature.properties.longitude = feature.geometry.coordinates[0];
-          }
-        });
-        setMonitoringData(data);
-      })
-      .catch((error) => {
-        console.error("Error loading monitoring data:", error);
-        setMonitoringData(null);
+  // Add this logging to help debug the data loading
+const fetchMonitoringData = useCallback(() => {
+  console.log("Fetching monitoring data from:", GEOJSON_PATH);
+  
+  fetch(GEOJSON_PATH)
+    .then((response) => {
+      if (!response.ok) {
+        console.error(`HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((data) => {
+      console.log("Successfully loaded monitoring data, features:", data.features?.length);
+      
+      // Process the features to add latitude/longitude properties for easier access
+      data.features.forEach((feature) => {
+        if (feature.geometry?.coordinates) {
+          feature.properties.latitude = feature.geometry.coordinates[1];
+          feature.properties.longitude = feature.geometry.coordinates[0];
+        }
       });
-  }, []);
-
-  // Fetch monitoring data when toggled on and periodically
-  useEffect(() => {
-    if (showMonitoringStations) {
-      fetchMonitoringData();
-      const interval = setInterval(fetchMonitoringData, 60000);
-      return () => clearInterval(interval);
-    } else {
+      
+      setMonitoringData(data);
+    })
+    .catch((error) => {
+      console.error("Error loading monitoring data:", error);
       setMonitoringData(null);
-      setTimeSeriesData([]);
-      setSelectedStation(null);
-    }
-  }, [showMonitoringStations, fetchMonitoringData]);
+    });
+}, []);
+
+// Add console logs to the useEffect that initializes monitoring data
+useEffect(() => {
+  if (showMonitoringStations) {
+    console.log("Initializing monitoring stations data");
+    fetchMonitoringData();
+    const interval = setInterval(fetchMonitoringData, 60000);
+    return () => clearInterval(interval);
+  } else {
+    console.log("Monitoring stations disabled");
+    setMonitoringData(null);
+    setTimeSeriesData([]);
+    setSelectedStation(null);
+  }
+}, [showMonitoringStations, fetchMonitoringData]);
 
   useEffect(() => {
     if (showGeoFSM) {
@@ -1107,55 +1141,35 @@ const MapViewer = () => {
               attribution={BASE_MAPS[0].attribution}
             />
             
-           {/* 1. First render impact/hazard layers at the bottom */}
-              {Array.from(selectedLayers).map((layerId) => (
-              <StableWMSLayer
-                key={`layer-${layerId}`}
-                url={MAP_CONFIG.mapserverWMSUrl}
-                layers={layerId}
-                transparent={true}
-                format="image/png"
-                version="1.3.0"
-                zIndex={100}
-              />
-            ))}
-            
-            {/* 2. Then render lakes layer with specific z-index */}
-            {selectedBoundaryLayers.has('lakes') && (
-              <StableWMSLayer
-                key="boundary-lakes"
-                url={MAP_CONFIG.mapserverWMSUrl}
-                layers="lakes"
-                transparent={true}
-                format="image/png"
-                version="1.3.0"
-                zIndex={200}
-              />
-            )}
-            
-            {/* 3. Then render non-admin boundary layers */}
-            {selectedBoundaryLayers.has('rivers') && (
-              <StableWMSLayer
-                key="boundary-rivers"
-                url={MAP_CONFIG.mapserverWMSUrl}
-                layers="rivers"
-                transparent={true}
-                format="image/png"
-                version="1.3.0"
-                zIndex={300}
-              />
-            )}
-            
-            {selectedBoundaryLayers.has('basins') && (
-              <StableWMSLayer
-                key="boundary-basins"
-                url={MAP_CONFIG.mapserverWMSUrl}
-                layers="basins"
-                transparent={true}
-                format="image/png"
-                version="1.3.0"
-                zIndex={350}
-              />
+           {/* Render layers using either MapCache or direct MapServer based on layer settings */}
+            {Array.from(selectedLayers).map((layerId) => {
+              const layerConfig = [...HAZARD_LAYERS, ...IMPACT_LAYERS].find(l => l.layer === layerId);
+              return (
+                <StableWMSLayer
+                  key={`layer-${layerId}`}
+                  url={layerConfig?.useCache ? MAP_CONFIG.mapcacheWMSUrl : MAP_CONFIG.mapserverWMSUrl}
+                  layers={layerId}
+                  transparent={true}
+                  format="image/png"
+                  version="1.3.0"
+                  zIndex={100}
+                />
+              );
+            })}
+
+            {/* Boundary layers with MapCache */}
+            {['lakes', 'rivers', 'basins', 'admin_level_1', 'admin_level_2'].map(layerId => 
+              selectedBoundaryLayers.has(layerId) && (
+                <StableWMSLayer
+                  key={`boundary-${layerId}`}
+                  url={MAP_CONFIG.mapcacheWMSUrl}
+                  layers={layerId}
+                  transparent={true}
+                  format="image/png"
+                  version="1.3.0"
+                  zIndex={layerId.includes('admin') ? 400 : 200}
+                />
+              )
             )}
             
             {/* 4. Admin layers with highest z-index to ensure they're always on top */}

@@ -56,17 +56,27 @@ class Command(BaseCommand):
         except IOError:
             return False
 
-    def get_valid_json_path(self, sftp, max_retries=7):
-        current_date = datetime.now()
+    def get_valid_json_path(self, sftp):
+        """Try today's data first, then yesterday's data if needed"""
+        today = datetime.now()
+        yesterday = today - timedelta(days=1)
         
-        for i in range(max_retries):
-            try_date = current_date - timedelta(days=i)
-            _, full_path, _ = self.get_data_path(try_date)
-            
-            if self.check_remote_path_exists(sftp, full_path):
-                return full_path, try_date
-                
-        return None, None
+        # First check today's data
+        _, today_path, _ = self.get_data_path(today)
+        if self.check_remote_path_exists(sftp, today_path):
+            self.stdout.write(self.style.SUCCESS(f"Using today's data from: {today.strftime('%Y-%m-%d')}"))
+            return today_path, today, False
+        
+        # If today's data not available, try yesterday's
+        _, yesterday_path, _ = self.get_data_path(yesterday)
+        if self.check_remote_path_exists(sftp, yesterday_path):
+            self.stdout.write(self.style.WARNING(
+                f"Today's data not available. Using yesterday's data from: {yesterday.strftime('%Y-%m-%d')}"
+            ))
+            return yesterday_path, yesterday, True
+        
+        # If both are missing, raise an error
+        raise Exception("No data available for today or yesterday")
 
     def handle(self, *args, **kwargs):
         try:
@@ -83,10 +93,10 @@ class Command(BaseCommand):
                 os.makedirs(shapefile_dir, exist_ok=True)
                 
                 # Sync data from SFTP server to temp directory
-                json_files, shapefile_dir = self.sync_data(json_dir, shapefile_dir)
+                json_files, shapefile_dir, data_date, is_fallback = self.sync_data(json_dir, shapefile_dir)
                 
                 # Process and merge data, saving to the timeseries directory
-                self.process_and_merge_data(json_files, shapefile_dir, output_file)
+                self.process_and_merge_data(json_files, shapefile_dir, output_file, data_date, is_fallback)
 
         except Exception as e:
             self.stderr.write(self.style.ERROR(f"Error: {e}"))
@@ -109,12 +119,8 @@ class Command(BaseCommand):
         sftp = self.connect_sftp()
 
         try:
-            # Get valid JSON path with fallback
-            json_path, data_date = self.get_valid_json_path(sftp)
-            if not json_path:
-                raise Exception("No valid JSON data found for the last 7 days")
-
-            self.stdout.write(f"Using JSON data from: {data_date.strftime('%Y-%m-%d')}")
+            # Get valid JSON path with fallback to yesterday
+            json_path, data_date, is_fallback = self.get_valid_json_path(sftp)
 
             # Get static shapefile directory
             shapefile_remote_dir = config('SHAPEFILE_REMOTE_DIR')
@@ -130,7 +136,7 @@ class Command(BaseCommand):
             shapefile_extensions = ['.shp', '.shx', '.dbf', '.prj']
             self.download_files(sftp, shapefile_remote_dir, shapefile_dir, extensions=shapefile_extensions)
 
-            return json_files, shapefile_dir
+            return json_files, shapefile_dir, data_date, is_fallback
 
         finally:
             sftp.close()
@@ -167,7 +173,7 @@ class Command(BaseCommand):
 
         return downloaded_files
 
-    def process_and_merge_data(self, json_files, shapefile_dir, output_file):
+    def process_and_merge_data(self, json_files, shapefile_dir, output_file, data_date, is_fallback):
         try:
             # Ensure the output directory exists and is writable
             output_dir = os.path.dirname(output_file)
@@ -225,6 +231,10 @@ class Command(BaseCommand):
                                 match = gdf[gdf['SEC_NAME'] == section_name]
                                 if not match.empty:
                                     merged_entry = entry.copy()
+                                    # Add data date and fallback flag
+                                    merged_entry['data_date'] = data_date.strftime('%Y-%m-%d')
+                                    merged_entry['is_fallback'] = is_fallback
+                                    
                                     for col in match.columns:
                                         if col != 'geometry':
                                             merged_entry[col] = match.iloc[0][col]
@@ -248,8 +258,15 @@ class Command(BaseCommand):
                 final_gdf = gpd.GeoDataFrame(merged_data, geometry='geometry')
                 final_gdf.set_crs(epsg=4326, inplace=True)
                 
-                # Add metadata about the data date
-                final_gdf.attrs['data_date'] = datetime.now().strftime('%Y-%m-%d')
+                # Add metadata about the data date and fallback status
+                final_gdf.attrs['data_date'] = data_date.strftime('%Y-%m-%d')
+                final_gdf.attrs['is_fallback'] = is_fallback
+                
+                # Log a warning if using fallback data
+                if is_fallback:
+                    self.stdout.write(self.style.WARNING(
+                        f"Using yesterday's data as fallback. Data date: {data_date.strftime('%Y-%m-%d')}"
+                    ))
                 
                 # Save to the output file
                 if os.path.exists(output_file):

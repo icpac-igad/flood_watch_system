@@ -1,5 +1,5 @@
 # Change Django version to be compatible with django-celery-beat
-Django==4.2.21
+Django==4.2.11
 # Keep all other dependencies the same
 affine==2.4.0
 anyascii==0.3.2
@@ -13,7 +13,7 @@ charset-normalizer==3.4.1
 click==8.1.8
 click-plugins==1.1.1
 cligj==0.7.2
-cryptography==44.0.1
+cryptography==44.0.0
 defusedxml==0.7.1
 django-cors-headers==4.6.0
 django-environ==0.11.2

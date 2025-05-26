@@ -24,7 +24,8 @@ Thumbs.db
 
 node_modules/
 
-data/impact_shapefiles/
-data/rasters/
-data/shapefiles/
-data/timeseries_data/
+mapserver/impact_shapefiles/
+mapserver/rasters/
+mapserver/shapefiles/
+mapserver/timeseries_data/
+mapcache/cache/

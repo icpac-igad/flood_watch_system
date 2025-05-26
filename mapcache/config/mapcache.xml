@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mapcache>
+  <!-- Set the disk cache -->
+  <cache name="disk" type="disk">
+    <base>/var/cache/mapcache</base>
+    <symlink_blank/>
+  </cache>
+
+  <!-- Define common grids -->
+  <grid name="WGS84">
+    <srs>EPSG:4326</srs>
+    <extent>-180 -90 180 90</extent>
+    <resolutions>0.5 0.25 0.1 0.05 0.025 0.01 0.005 0.0025</resolutions>
+    <size>256 256</size>
+  </grid>
+
+  <grid name="GoogleMapsCompatible">
+    <srs>EPSG:3857</srs>
+    <extent>-20037508.34 -20037508.34 20037508.34 20037508.34</extent>
+    <resolutions>156543.03390625 78271.516953125 39135.7584765625 19567.87923828125 9783.939619140625 4891.9698095703125 2445.9849047851562 1222.9924523925781 611.4962261962891 305.74811309814453 152.87405654907226 76.43702827453613 38.21851413726807 19.109257068634033 9.554628534317017 4.777314267158508 2.388657133579254 1.194328566789627 0.5971642833948135</resolutions>
+    <size>256 256</size>
+  </grid>
+
+  <!-- Sources based on the layers in your master.map file -->
+  <source name="admin_level_1" type="wms">
+    <getmap>
+      <params>
+        <FORMAT>image/png</FORMAT>
+        <LAYERS>admin_level_1</LAYERS>
+        <MAP>/etc/mapserver/master.map</MAP>
+      </params>
+    </getmap>
+    <http>
+      <url>http://mapserver/cgi-bin/mapserv</url>
+    </http>
+  </source>
+  
+  <source name="admin_level_2" type="wms">
+    <getmap>
+      <params>
+        <FORMAT>image/png</FORMAT>
+        <LAYERS>admin_level_2</LAYERS>
+        <MAP>/etc/mapserver/master.map</MAP>
+      </params>
+    </getmap>
+    <http>
+      <url>http://mapserver/cgi-bin/mapserv</url>
+    </http>
+  </source>
+  
+  <source name="rivers" type="wms">
+    <getmap>
+      <params>
+        <FORMAT>image/png</FORMAT>
+        <LAYERS>rivers</LAYERS>
+        <MAP>/etc/mapserver/master.map</MAP>
+      </params>
+    </getmap>
+    <http>
+      <url>http://mapserver/cgi-bin/mapserv</url>
+    </http>
+  </source>
+  
+  <source name="lakes" type="wms">
+    <getmap>
+      <params>
+        <FORMAT>image/png</FORMAT>
+        <LAYERS>lakes</LAYERS>
+        <MAP>/etc/mapserver/master.map</MAP>
+      </params>
+    </getmap>
+    <http>
+      <url>http://mapserver/cgi-bin/mapserv</url>
+    </http>
+  </source>
+  
+  <!-- Source for all layers combined -->
+  <source name="floodwatch_all" type="wms">
+    <getmap>
+      <params>
+        <FORMAT>image/png</FORMAT>
+        <LAYERS>admin_level_1,admin_level_2,rivers,lakes</LAYERS>
+        <MAP>/etc/mapserver/master.map</MAP>
+      </params>
+    </getmap>
+    <http>
+      <url>http://mapserver/cgi-bin/mapserv</url>
+    </http>
+  </source>
+
+  <!-- Tileset configurations -->
+  <tileset name="admin_level_1">
+    <source>admin_level_1</source>
+    <cache>disk</cache>
+    <grid>GoogleMapsCompatible</grid>
+    <grid>WGS84</grid>
+    <format>PNG</format>
+    <metatile>4 4</metatile>
+    <metabuffer>10</metabuffer>
+    <expires>3600</expires>
+    <auto_expire>86400</auto_expire>
+  </tileset>
+  
+  <tileset name="admin_level_2">
+    <source>admin_level_2</source>
+    <cache>disk</cache>
+    <grid>GoogleMapsCompatible</grid>
+    <grid>WGS84</grid>
+    <format>PNG</format>
+    <metatile>4 4</metatile>
+    <metabuffer>10</metabuffer>
+    <expires>3600</expires>
+    <auto_expire>86400</auto_expire>
+  </tileset>
+  
+  <tileset name="rivers">
+    <source>rivers</source>
+    <cache>disk</cache>
+    <grid>GoogleMapsCompatible</grid>
+    <grid>WGS84</grid>
+    <format>PNG</format>
+    <metatile>4 4</metatile>
+    <metabuffer>10</metabuffer>
+    <expires>3600</expires>
+    <auto_expire>86400</auto_expire>
+  </tileset>
+  
+  <tileset name="lakes">
+    <source>lakes</source>
+    <cache>disk</cache>
+    <grid>GoogleMapsCompatible</grid>
+    <grid>WGS84</grid>
+    <format>PNG</format>
+    <metatile>4 4</metatile>
+    <metabuffer>10</metabuffer>
+    <expires>3600</expires>
+    <auto_expire>86400</auto_expire>
+  </tileset>
+  
+  <tileset name="floodwatch_all">
+    <source>floodwatch_all</source>
+    <cache>disk</cache>
+    <grid>GoogleMapsCompatible</grid>
+    <grid>WGS84</grid>
+    <format>PNG</format>
+    <metatile>4 4</metatile>
+    <metabuffer>10</metabuffer>
+    <expires>3600</expires>
+    <auto_expire>86400</auto_expire>
+  </tileset>
+
+  <!-- Service endpoints -->
+  <service type="wms" enabled="true">
+    <full_wms>assemble</full_wms>
+    <resample_mode>bilinear</resample_mode>
+    <format>PNG</format>
+    <maxsize>4096 4096</maxsize>
+  </service>
+  
+  <service type="wmts" enabled="true"/>
+  <service type="tms" enabled="true"/>
+  <service type="kml" enabled="true"/>
+  <service type="gmaps" enabled="true"/>
+  <service type="ve" enabled="true"/>
+  <service type="demo" enabled="true"/>
+
+  <!-- Default configuration options -->
+  <default_format>PNG</default_format>
+  <errors>report</errors>
+  <lock_dir>/var/lock/mapcache</lock_dir>
+  <log_level>info</log_level>
+</mapcache>
