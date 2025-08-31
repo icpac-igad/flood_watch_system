@@ -58,9 +58,8 @@ const exportToPNG = (chartRef, filename, stationName = '') => {
 };
 
 // Component to render a discharge forecast chart
-export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', stationName = '', height = 300 }) => {
+export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', stationName = '', height = 400 }) => {
   const chartRef = useRef(null);
-  console.log("DischargeChart received data:", timeSeriesData?.length, "points, series:", selectedSeries);
   
   if (!timeSeriesData || timeSeriesData.length === 0) {
     return <div className="chart-no-data" style={{ padding: '20px', textAlign: 'center' }}>No data available.</div>;
@@ -75,38 +74,132 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
     (selectedSeries === 'gfs' && !isNaN(item.gfs)) ||
     (selectedSeries === 'icon' && !isNaN(item.icon))
   );
+
+  // Split data into historical and forecast based on today's date
+  const splitDataByToday = React.useMemo(() => {
+    const today = new Date();
+    const currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+    
+    const historicalData = [];
+    const forecastData = [];
+    let todayIndex = -1;
+    
+    processedData.forEach((item, index) => {
+      if (item.time <= currentDate) {
+        historicalData.push({
+          ...item,
+          gfsForecast: null,
+          iconForecast: null
+        });
+        todayIndex = index;
+      } else {
+        forecastData.push({
+          ...item,
+          gfsForecast: item.gfs,
+          iconForecast: item.icon,
+          gfs: null,
+          icon: null
+        });
+      }
+    });
+    
+    // Connect forecast data to last historical point
+    if (historicalData.length > 0 && forecastData.length > 0) {
+      const lastHistorical = historicalData[historicalData.length - 1];
+      forecastData.unshift({
+        time: lastHistorical.time,
+        gfs: null,
+        icon: null,
+        gfsForecast: lastHistorical.gfs,
+        iconForecast: lastHistorical.icon
+      });
+    }
+    
+    return { historicalData, forecastData, todayIndex };
+  }, [processedData]);
+
+  // Combine all data for chart rendering
+  const chartData = React.useMemo(() => {
+    const combined = [...processedData];
+    const today = new Date();
+    const currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+    
+    // Find today's index
+    let todayIndex = -1;
+    for (let i = 0; i < combined.length; i++) {
+      if (combined[i].time.getTime() >= currentDate.getTime()) {
+        todayIndex = i;
+        break;
+      }
+    }
+    
+    // Add forecast data keys to all data points
+    combined.forEach((item, index) => {
+      if (index >= todayIndex && todayIndex !== -1) {
+        // From today onwards, show as forecast (dotted)
+        item.gfsForecast = item.gfs;
+        item.iconForecast = item.icon;
+        item.gfs = null;
+        item.icon = null;
+      } else {
+        // Before today, show as historical (solid) only
+        item.gfsForecast = null;
+        item.iconForecast = null;
+      }
+    });
+
+    // Add connection point: duplicate the last historical point as first forecast point
+    if (todayIndex > 0 && todayIndex !== -1) {
+      const lastHistoricalPoint = combined[todayIndex - 1];
+      if (lastHistoricalPoint && !lastHistoricalPoint.gfsForecast) {
+        lastHistoricalPoint.gfsForecast = lastHistoricalPoint.gfs;
+        lastHistoricalPoint.iconForecast = lastHistoricalPoint.icon;
+      }
+    }
+    
+    return combined;
+  }, [processedData]);
   
-  // Log first data point to see date format
-  if (processedData.length > 0) {
-    console.log("First data point:", processedData[0].time, "Type:", typeof processedData[0].time);
-  }
 
   // Calculate Y-axis domain for better scaling
-  const allValues = processedData.flatMap(item => [item.gfs, item.icon].filter(v => v != null && !isNaN(v)));
-  const minValue = Math.min(...allValues);
-  const maxValue = Math.max(...allValues);
-  const range = maxValue - minValue;
+  const allValues = chartData.flatMap(item => [item.gfs, item.icon, item.gfsForecast, item.iconForecast].filter(v => v != null && !isNaN(v)));
   
-  // Adjust padding based on the range to ensure visibility of small differences
-  let padding;
-  if (range < 0.1) {
-    padding = range * 0.5; // 50% padding for very small ranges
-  } else if (range < 1) {
-    padding = range * 0.3; // 30% padding for small ranges
-  } else {
-    padding = range * 0.1; // 10% padding for normal ranges
-  }
-  
-  // Ensure minimum visible range
-  const minRange = 0.05;
   let yDomain;
-  if (range < minRange) {
-    const center = (minValue + maxValue) / 2;
-    const adjustedMin = center - minRange / 2;
-    const adjustedMax = center + minRange / 2;
-    yDomain = [Math.max(0, adjustedMin), adjustedMax];
+  // If no valid values, provide default domain
+  if (allValues.length === 0) {
+    yDomain = [0, 1];
   } else {
-    yDomain = [Math.max(0, minValue - padding), maxValue + padding];
+    const minValue = Math.min(...allValues);
+    const maxValue = Math.max(...allValues);
+    const range = maxValue - minValue;
+    
+    // For very small or zero ranges, ensure proper scaling
+    if (range === 0) {
+      // All values are the same
+      if (maxValue === 0) {
+        yDomain = [0, 1];
+      } else if (maxValue < 0.01) {
+        yDomain = [0, maxValue * 2];
+      } else {
+        yDomain = [maxValue * 0.8, maxValue * 1.2];
+      }
+    } else if (range < 0.001) {
+      // Extremely small range - use tight bounds
+      const padding = range * 2;
+      yDomain = [Math.max(0, minValue - padding), maxValue + padding];
+    } else if (range < 0.01) {
+      // Very small range - use moderate padding
+      const padding = range * 1.5;
+      yDomain = [Math.max(0, minValue - padding), maxValue + padding];
+    } else if (range < 0.1) {
+      // Small range - use standard padding
+      const padding = range * 0.5;
+      yDomain = [Math.max(0, minValue - padding), maxValue + padding];
+    } else {
+      // Normal range - use minimal padding
+      const padding = range * 0.1;
+      yDomain = [Math.max(0, minValue - padding), maxValue + padding];
+    }
   }
 
   // Calculate appropriate tick values to avoid duplicates
@@ -161,44 +254,22 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
 
   // Get current date for reference line - make it dynamic
   const today = new Date();
-  const currentDate = new Date(2025, today.getMonth(), today.getDate(), 12, 0, 0);
+  const currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
   
-  // Find the closest data point to today for better alignment
-  let closestDataPoint = null;
-  if (processedData.length > 0) {
-    closestDataPoint = processedData.reduce((prev, curr) => {
-      return Math.abs(curr.time - currentDate) < Math.abs(prev.time - currentDate) ? curr : prev;
-    });
-  }
   
-  console.log("Processed chart data:", processedData.length, "points");
-  console.log("Sample data points:", processedData.slice(0, 3));
-  console.log("Current date for reference line:", currentDate);
-  console.log("Closest data point:", closestDataPoint);
-  
-  // Check if current date is within data range
-  if (processedData.length > 0) {
-    const firstDate = processedData[0].time;
-    const lastDate = processedData[processedData.length - 1].time;
-    console.log("Data range:", firstDate, "to", lastDate);
-    console.log("Current date in range?", currentDate >= firstDate && currentDate <= lastDate);
-  }
 
 
   // Find today's data point in the dataset
   const todayDataPoint = React.useMemo(() => {
-    if (processedData.length === 0) return null;
+    if (chartData.length === 0) return null;
     
     // Check data range
-    const firstDate = processedData[0].time;
-    const lastDate = processedData[processedData.length - 1].time;
+    const firstDate = chartData[0].time;
+    const lastDate = chartData[chartData.length - 1].time;
     
-    console.log("Data range:", firstDate.toDateString(), "to", lastDate.toDateString());
-    console.log("Looking for today:", currentDate.toDateString());
     
     // Check if today is within the data range
     if (currentDate < firstDate || currentDate > lastDate) {
-      console.log("Today is outside data range");
       return null;
     }
     
@@ -207,8 +278,8 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
     let closestDiff = Infinity;
     let closestIndex = -1;
     
-    for (let i = 0; i < processedData.length; i++) {
-      const dataPoint = processedData[i];
+    for (let i = 0; i < chartData.length; i++) {
+      const dataPoint = chartData[i];
       const diff = Math.abs(dataPoint.time.getTime() - currentDate.getTime());
       
       if (diff < closestDiff) {
@@ -220,8 +291,7 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
     
     if (closestPoint) {
       // Calculate position as percentage of data points
-      const percentage = (closestIndex / (processedData.length - 1)) * 100;
-      console.log("Found closest point:", closestPoint.time.toDateString(), "at index", closestIndex, "position:", percentage + "%");
+      const percentage = (closestIndex / (chartData.length - 1)) * 100;
       
       return {
         dataPoint: closestPoint,
@@ -231,12 +301,12 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
     }
     
     return null;
-  }, [processedData, currentDate]);
+  }, [chartData, currentDate]);
 
   return (
     <div className="chart-container" ref={chartRef} style={{ position: 'relative' }}>
       <ResponsiveContainer width="100%" height={height}>
-        <LineChart data={processedData} margin={{ top: 25, right: 20, left: 110, bottom: 60 }}>
+        <LineChart data={chartData} margin={{ top: 5, right: 5, left: 45, bottom: 30 }}>
             <defs>
               <linearGradient id="gfsGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#1f77b4" stopOpacity={0.3}/>
@@ -252,14 +322,15 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
               dataKey="time" 
               angle={-45} 
               textAnchor="end" 
-              height={60} 
+              height={30} 
               tickFormatter={(dt) => {
                 const date = new Date(dt);
                 return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
               }} 
-              minTickGap={40}
+              minTickGap={20}
               stroke="#666"
-              fontSize={11}
+              fontWeight={600}
+              fontSize={9}
             />
             <YAxis 
               domain={yDomain}
@@ -268,46 +339,58 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
                 value: 'Discharge (m³/s)', 
                 angle: -90, 
                 position: 'insideLeft', 
-                offset: 15, 
-                style: { textAnchor: 'middle', fontSize: '13px', fill: '#333' } 
+                offset: -5, 
+                style: { textAnchor: 'middle', fontSize: '10px', fill: '#333' } 
               }}
               stroke="#666"
-              fontSize={11}
+              fontWeight={600}
+              fontSize={9}
               tickFormatter={(value) => {
                 const num = Number(value);
                 if (isNaN(num)) return '0';
                 
-                if (num >= 1000) return (num / 1000).toFixed(2) + 'k';
-                return num.toFixed(2);
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+                if (num >= 1) return num.toFixed(1);
+                if (num >= 0.1) return num.toFixed(2);
+                return num.toFixed(3);
               }}
-              width={80}
+              width={40}
             />
             <Tooltip 
               labelFormatter={(label) => `Date: ${label.toLocaleDateString('en-GB')}`} 
-              formatter={(value, name) => [Number(value).toFixed(2) + ' m³/s', name]}
+              formatter={(value, name) => [Number(value).toFixed(3) + ' m³/s', name]}
               contentStyle={{
                 backgroundColor: 'rgba(255, 255, 255, 0.95)',
                 border: '1px solid #ccc',
                 borderRadius: '4px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                fontSize: '14px'
+                fontSize: '11px'
               }}
             />
             <RechartsLegend 
               wrapperStyle={{ 
-                paddingTop: '10px',
-                fontSize: '14px'
+                paddingTop: '2px',
+                fontSize: '10px'
               }}
               iconType="line"
+              payload={[
+                { value: 'GFS', type: 'line', color: '#1f77b4' },
+                { value: 'ICON', type: 'line', color: '#ff7f0e' }
+              ].filter(item => 
+                (selectedSeries === 'both') || 
+                (selectedSeries === 'gfs' && item.value === 'GFS') ||
+                (selectedSeries === 'icon' && item.value === 'ICON')
+              )}
             />
+            {/* Historical data - solid lines */}
             {(selectedSeries === 'both' || selectedSeries === 'gfs') && 
               <Line 
                 type="monotone" 
                 dataKey="gfs" 
                 stroke="#1f77b4" 
-                name="GFS Model" 
+                name="GFS" 
                 dot={false} 
-                strokeWidth={3}
+                strokeWidth={2}
                 activeDot={{ r: 6, stroke: '#1f77b4', strokeWidth: 2, fill: 'white' }}
               />
             }
@@ -316,9 +399,33 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
                 type="monotone" 
                 dataKey="icon" 
                 stroke="#ff7f0e" 
-                name="ICON Model" 
+                name="ICON" 
                 dot={false} 
-                strokeWidth={3}
+                strokeWidth={2}
+                activeDot={{ r: 6, stroke: '#ff7f0e', strokeWidth: 2, fill: 'white' }}
+              />
+            }
+            
+            {/* Forecast data - dotted lines (hidden from legend) */}
+            {(selectedSeries === 'both' || selectedSeries === 'gfs') && 
+              <Line 
+                type="monotone" 
+                dataKey="gfsForecast" 
+                stroke="#1f77b4" 
+                dot={false} 
+                strokeWidth={2}
+                strokeDasharray="8 4"
+                activeDot={{ r: 6, stroke: '#1f77b4', strokeWidth: 2, fill: 'white' }}
+              />
+            }
+            {(selectedSeries === 'both' || selectedSeries === 'icon') && 
+              <Line 
+                type="monotone" 
+                dataKey="iconForecast" 
+                stroke="#ff7f0e" 
+                dot={false} 
+                strokeWidth={2}
+                strokeDasharray="8 4"
                 activeDot={{ r: 6, stroke: '#ff7f0e', strokeWidth: 2, fill: 'white' }}
               />
             }
@@ -331,9 +438,9 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
                 label={{ 
                   value: "Today", 
                   position: "insideTopRight",
-                  offset: 10,
+                  offset: 5,
                   fill: "#FF4444",
-                  fontSize: 12,
+                  fontSize: 10,
                   fontWeight: 600
                 }}
               />
@@ -345,30 +452,96 @@ export const DischargeChart = ({ timeSeriesData, selectedSeries = 'both', statio
 };
 
 // Component to render GeoSFM charts (river depth or streamflow)
-export const GeoSFMChart = ({ timeSeriesData, dataType = 'riverdepth', height = 300 }) => {
+export const GeoSFMChart = ({ timeSeriesData, dataType = 'riverdepth', height = 400 }) => {
   const chartRef = useRef(null);
   
-  if (!timeSeriesData || timeSeriesData.length === 0) {
-    return <div className="chart-no-data" style={{ padding: '20px', textAlign: 'center' }}>No data available.</div>;
-  }
-
+  // Always call all hooks before any conditional returns
   const yAxisLabel = dataType === 'riverdepth' ? 'River Depth (m)' : 'Streamflow (m³/s)';
   const tooltipLabel = dataType === 'riverdepth' ? 'River Depth' : 'Streamflow';
   const displayUnit = dataType === 'riverdepth' ? 'm' : 'm³/s';
   const dataKey = dataType === 'riverdepth' ? 'depth' : 'streamflow';
   
+  if (!timeSeriesData || timeSeriesData.length === 0) {
+    return <div className="chart-no-data" style={{ padding: '20px', textAlign: 'center' }}>No data available.</div>;
+  }
+  
+  // Split data into historical and forecast based on today's date
+  const chartData = React.useMemo(() => {
+    const today = new Date();
+    const currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+    
+    // Find today's index
+    let todayIndex = -1;
+    for (let i = 0; i < timeSeriesData.length; i++) {
+      const itemTime = new Date(timeSeriesData[i].timestamp);
+      if (itemTime.getTime() >= currentDate.getTime()) {
+        todayIndex = i;
+        break;
+      }
+    }
+    
+    // Add forecast data keys to all data points
+    const combined = timeSeriesData.map((item, index) => {
+      const newItem = { ...item };
+      if (index >= todayIndex && todayIndex !== -1) {
+        // From today onwards, show as forecast (dotted)
+        newItem[`${dataKey}Forecast`] = newItem[dataKey];
+        newItem[dataKey] = null;
+      } else {
+        // Before today, show as historical (solid) only
+        newItem[`${dataKey}Forecast`] = null;
+      }
+      return newItem;
+    });
+
+    // Add connection point: duplicate the last historical point as first forecast point
+    if (todayIndex > 0 && todayIndex !== -1) {
+      const lastHistoricalPoint = combined[todayIndex - 1];
+      if (lastHistoricalPoint && !lastHistoricalPoint[`${dataKey}Forecast`]) {
+        lastHistoricalPoint[`${dataKey}Forecast`] = lastHistoricalPoint[dataKey];
+      }
+    }
+    
+    return combined;
+  }, [timeSeriesData, dataKey]);
+  
   // Calculate Y-axis domain for better scaling
-  const values = timeSeriesData.map(item => Number(item[dataKey]) || 0).filter(v => !isNaN(v));
+  const values = chartData.flatMap(item => [item[dataKey], item[`${dataKey}Forecast`]]).filter(v => v != null && !isNaN(v));
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
   const padding = (maxValue - minValue) * 0.1;
   const yDomain = [Math.max(0, minValue - padding), maxValue + padding];
 
+  // Find today's data point for reference line
+  const today = new Date();
+  const currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+  
+  const todayDataPoint = React.useMemo(() => {
+    if (chartData.length === 0) return null;
+    
+    // Find the closest data point to today
+    let closestPoint = null;
+    let closestDiff = Infinity;
+    
+    for (let i = 0; i < chartData.length; i++) {
+      const dataPoint = chartData[i];
+      const itemTime = new Date(dataPoint.timestamp);
+      const diff = Math.abs(itemTime.getTime() - currentDate.getTime());
+      
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closestPoint = dataPoint;
+      }
+    }
+    
+    return closestPoint;
+  }, [chartData, currentDate]);
+
 
   return (
     <div className="chart-container" ref={chartRef}>
       <ResponsiveContainer width="100%" height={height}>
-          <LineChart data={timeSeriesData} margin={{ top: 10, right: 20, left: 50, bottom: 60 }}>
+          <LineChart data={chartData} margin={{ top: 5, right: 5, left: 45, bottom: 30 }}>
             <defs>
               <linearGradient id="geosfmGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#1f77b4" stopOpacity={0.3}/>
@@ -380,14 +553,15 @@ export const GeoSFMChart = ({ timeSeriesData, dataType = 'riverdepth', height = 
               dataKey="timestamp" 
               angle={-45} 
               textAnchor="end" 
-              height={60} 
+              height={30} 
               tickFormatter={(dt) => {
                 const date = new Date(dt);
                 return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
               }} 
-              minTickGap={40}
+              minTickGap={20}
               stroke="#666"
-              fontSize={10}
+              fontWeight={600}
+              fontSize={9}
             />
             <YAxis 
               domain={yDomain}
@@ -395,8 +569,8 @@ export const GeoSFMChart = ({ timeSeriesData, dataType = 'riverdepth', height = 
                 value: yAxisLabel, 
                 angle: -90, 
                 position: 'insideLeft', 
-                offset: 15, 
-                style: { textAnchor: 'middle', fontSize: '13px', fill: '#333' } 
+                offset: -5, 
+                style: { textAnchor: 'middle', fontSize: '10px', fill: '#333' } 
               }} 
               tickFormatter={(value) => {
                 const num = Number(value);
@@ -412,9 +586,10 @@ export const GeoSFMChart = ({ timeSeriesData, dataType = 'riverdepth', height = 
                   }
                 }
               }}
-              width={60}
+              width={40}
               stroke="#666"
-              fontSize={11}
+              fontWeight={600}
+              fontSize={9}
             />
             <Tooltip 
               labelFormatter={(label) => `Date: ${new Date(label).toLocaleDateString('en-GB')}`} 
@@ -430,13 +605,14 @@ export const GeoSFMChart = ({ timeSeriesData, dataType = 'riverdepth', height = 
               wrapperStyle={{ paddingTop: '10px' }}
               iconType="line"
             />
+            {/* Historical data - solid line */}
             <Line 
               type="monotone" 
               dataKey={dataKey} 
               stroke={dataType === 'riverdepth' ? '#2196F3' : '#FF6B35'} 
               name={tooltipLabel} 
               dot={false} 
-              strokeWidth={3}
+              strokeWidth={2}
               activeDot={{ 
                 r: 6, 
                 stroke: dataType === 'riverdepth' ? '#2196F3' : '#FF6B35', 
@@ -444,6 +620,41 @@ export const GeoSFMChart = ({ timeSeriesData, dataType = 'riverdepth', height = 
                 fill: 'white' 
               }}
             />
+            
+            {/* Forecast data - dotted line (hidden from legend) */}
+            <Line 
+              type="monotone" 
+              dataKey={`${dataKey}Forecast`} 
+              stroke={dataType === 'riverdepth' ? '#2196F3' : '#FF6B35'} 
+              dot={false} 
+              strokeWidth={2}
+              strokeDasharray="8 4"
+              activeDot={{ 
+                r: 6, 
+                stroke: dataType === 'riverdepth' ? '#2196F3' : '#FF6B35', 
+                strokeWidth: 2, 
+                fill: 'white' 
+              }}
+              legendType="none"
+            />
+            
+            {/* Today reference line */}
+            {todayDataPoint && (
+              <ReferenceLine 
+                x={todayDataPoint.timestamp} 
+                stroke="#FF4444" 
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                label={{ 
+                  value: "Today", 
+                  position: "insideTopRight",
+                  offset: 5,
+                  fill: "#FF4444",
+                  fontSize: 10,
+                  fontWeight: 600
+                }}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
     </div>

@@ -9,8 +9,11 @@ import {
   GeoJSON,
   Popup,
 } from "react-leaflet";
+import MarkerClusterGroup from 'react-leaflet-markercluster';
 import { ListGroup, Nav, Tab, Modal, Button } from "react-bootstrap";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import L from "leaflet";
 import { DischargeChart, GeoSFMChart } from "../utils/chartUtils.jsx";
@@ -28,10 +31,49 @@ L.Icon.Default.mergeOptions({
   shadowUrl: iconShadow,
 });
 
+// Add CSS styles for blinking animation
+const style = document.createElement('style');
+style.innerHTML = `
+  @keyframes blink-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  
+  @keyframes blink-alarm {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  
+  @keyframes blink-emergency {
+    0%, 100% { opacity: 1; }
+    25% { opacity: 0.2; }
+    50% { opacity: 1; }
+    75% { opacity: 0.2; }
+  }
+  
+  .marker-warning, .cluster-warning {
+    animation: blink-warning 2s infinite;
+  }
+  
+  .marker-alarm, .cluster-alarm {
+    animation: blink-alarm 1.5s infinite;
+  }
+  
+  .marker-emergency, .cluster-emergency {
+    animation: blink-emergency 1s infinite;
+  }
+`;
+document.head.appendChild(style);
+
 // Configuration for the map's initial state and WMS server
 const MAP_CONFIG = {
-  initialPosition: [4.6818, 34.9911],
+  initialPosition: [4.6818, 34.9911], // Central East Africa
   initialZoom: 5,
+  // Much more flexible bounds for East Africa region
+  // Allows extensive panning while still having some limits
+  maxBounds: [[-35, -20], [35, 75]], // Very expanded bounds for easy navigation
+  minZoom: 2,
+  maxZoom: 18,
   mapserverWMSUrl: `http://197.254.1.10:8093/cgi-bin/mapserv?map=/etc/mapserver/master.map`,
   mapcacheWMSUrl: `http://197.254.1.10:8095/mapcache/wms`,
   mapcacheTMSUrl: `http://197.254.1.10:8095/mapcache/tms/1.0.0`,
@@ -77,6 +119,168 @@ const LAYER_METADATA = {
 // Helper function to handle layer loading errors
 const handleLayerError = (layerId, error) => {
   console.error(`Error loading layer ${layerId}:`, error);
+  // Add more detailed error logging for hazard layers
+  if (layerId.includes('flood_hazard')) {
+    console.error('Flood hazard layer error details:', {
+      layerId: layerId,
+      errorMessage: error?.message || 'Unknown error',
+      errorType: error?.type || 'Unknown type'
+    });
+  }
+};
+
+// Helper function to handle overlapping points by adding small offset
+const handleOverlappingPoints = (features) => {
+  const locationMap = new Map();
+  
+  features.forEach((feature) => {
+    if (feature.geometry?.coordinates) {
+      const [lng, lat] = feature.geometry.coordinates;
+      const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      
+      if (!locationMap.has(key)) {
+        locationMap.set(key, []);
+      }
+      locationMap.get(key).push(feature);
+    }
+  });
+  
+  // Apply small offset to overlapping points
+  locationMap.forEach((overlappingFeatures) => {
+    if (overlappingFeatures.length > 1) {
+      const angleStep = (2 * Math.PI) / overlappingFeatures.length;
+      const offsetDistance = 0.0001; // Small offset in degrees
+      
+      overlappingFeatures.forEach((feature, index) => {
+        const angle = index * angleStep;
+        const [originalLng, originalLat] = feature.geometry.coordinates;
+        
+        // Apply circular offset
+        feature.geometry.coordinates[0] = originalLng + offsetDistance * Math.cos(angle);
+        feature.geometry.coordinates[1] = originalLat + offsetDistance * Math.sin(angle);
+      });
+    }
+  });
+  
+  return features;
+};
+
+
+// Helper function to determine alert status based on thresholds
+const getAlertStatus = (station, currentDischarge = null) => {
+  const props = station.properties;
+  const q_thr1 = parseFloat(props.Q_THR1 || props.q_thr1); // Alert threshold
+  const q_thr2 = parseFloat(props.Q_THR2 || props.q_thr2); // Alarm threshold  
+  const q_thr3 = parseFloat(props.Q_THR3 || props.q_thr3); // Emergency threshold
+  
+  // If we have current discharge data, use it for real-time status
+  if (currentDischarge !== null && currentDischarge !== undefined && !isNaN(currentDischarge)) {
+    if (!isNaN(q_thr3) && currentDischarge >= q_thr3) return 'Emergency';
+    if (!isNaN(q_thr2) && currentDischarge >= q_thr2) return 'Alarm';
+    if (!isNaN(q_thr1) && currentDischarge >= q_thr1) return 'Warning';
+    return 'Normal';
+  }
+  
+  // Otherwise use status from properties or default to Normal
+  return props.status || props.Status || 'Normal';
+};
+
+// Helper function to calculate overall threshold statistics
+const calculateThresholdStats = (monitoringData, timeSeriesData) => {
+  if (!monitoringData?.features) return { normal: 0, warning: 0, alarm: 0, emergency: 0, total: 0 };
+  
+  const stats = { normal: 0, warning: 0, alarm: 0, emergency: 0, total: 0 };
+  
+  monitoringData.features.forEach(station => {
+    // Get current discharge from this station's own time series data
+    let currentDischarge = null;
+    
+    const gfsData = station.properties["time_series_discharge_simulated-gfs"];
+    const iconData = station.properties["time_series_discharge_simulated-icon"];
+    
+    if (gfsData || iconData) {
+      let latestGfs = 0;
+      let latestIcon = 0;
+      
+      if (gfsData) {
+        const gfsValues = gfsData.split(",").map(val => Number(val.trim()) || 0);
+        latestGfs = gfsValues[gfsValues.length - 1] || 0;
+      }
+      
+      if (iconData) {
+        const iconValues = iconData.split(",").map(val => Number(val.trim()) || 0);
+        latestIcon = iconValues[iconValues.length - 1] || 0;
+      }
+      
+      currentDischarge = Math.max(latestGfs, latestIcon);
+    }
+    
+    const status = getAlertStatus(station, currentDischarge);
+    stats[status.toLowerCase()]++;
+    stats.total++;
+  });
+  
+  return stats;
+};
+
+
+// Helper function to create marker icon based on alert status
+const createMarkerIcon = (alertStatus, isSelected = false, isCluster = false, clusterCount = 0) => {
+  if (isCluster) {
+    // For clusters, use the same marker icon but scale size based on alert-specific count
+    const iconMap = {
+      'Normal': '/assets/map-markers/Normal.svg',
+      'Warning': '/assets/map-markers/Warning.svg', 
+      'Alarm': '/assets/map-markers/Alarm.svg',
+      'Emergency': '/assets/map-markers/Emergency.svg'
+    };
+    
+    const iconUrl = iconMap[alertStatus] || iconMap['Normal'];
+    
+    // Use same fixed size for all clusters - only label and color differ
+    const size = 28; // Fixed size for all clusters
+    
+    // Only show count label for Warning (yellow) clusters
+    const showLabel = alertStatus === 'Warning';
+    
+    // Add blinking class for non-normal statuses
+    const blinkClass = alertStatus !== 'Normal' ? `cluster-${alertStatus.toLowerCase()}` : '';
+    
+    return L.divIcon({
+      html: `
+        <div style="position: relative; width: ${size}px; height: ${size}px;">
+          <img src="${iconUrl}" style="width: 100%; height: 100%;" />
+          ${showLabel ? `<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(255,255,255,0.9); color: #333; border-radius: 50%; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; border: 1px solid rgba(0,0,0,0.3); box-shadow: 0 1px 2px rgba(0,0,0,0.3);">${clusterCount}</div>` : ''}
+        </div>
+      `,
+      className: `cluster-marker ${blinkClass}`,
+      iconSize: [size, size],
+      iconAnchor: [size/2, size]
+    });
+  } else {
+    // Regular individual markers
+    const iconMap = {
+      'Normal': '/assets/map-markers/Normal.svg',
+      'Warning': '/assets/map-markers/Warning.svg', 
+      'Alarm': '/assets/map-markers/Alarm.svg',
+      'Emergency': '/assets/map-markers/Emergency.svg'
+    };
+    
+    const iconUrl = iconMap[alertStatus] || iconMap['Normal'];
+    const iconSize = isSelected ? [20, 20] : [16, 16];
+    
+    // Add blinking class for non-normal statuses
+    const blinkClass = alertStatus !== 'Normal' ? `marker-${alertStatus.toLowerCase()}` : '';
+    const className = [isSelected ? 'selected-marker' : '', blinkClass].filter(Boolean).join(' ');
+    
+    return L.icon({
+      iconUrl: iconUrl,
+      iconSize: iconSize,
+      iconAnchor: [iconSize[0]/2, iconSize[1]],
+      popupAnchor: [0, -iconSize[1]],
+      className: className
+    });
+  }
 };
 
 // Utility function to create WMS layer objects with date support
@@ -242,9 +446,28 @@ const MetadataModal = ({ show, handleClose, metadata }) => {
   );
 };
 
+// Helper function to format date compactly
+const formatCompactDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${date.getDate()} ${months[date.getMonth()]}`;
+};
+
 // Component to render a layer selector with checkboxes and calendar
 const LayerSelector = ({ title, layers, selectedLayers, onLayerSelect, onInfoClick, selectedDate, onDateChange, showCalendar = true }) => {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [showFullDate, setShowFullDate] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth < 768;
+  const isTablet = windowWidth >= 768 && windowWidth < 1024;
   
   return (
     <div className="layers-section">
@@ -253,37 +476,39 @@ const LayerSelector = ({ title, layers, selectedLayers, onLayerSelect, onInfoCli
         {showCalendar && (
           <div style={{ position: 'relative' }}>
             <button
-              onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+              onClick={() => {
+                setIsCalendarOpen(!isCalendarOpen);
+                if (isMobile) {
+                  setShowFullDate(!showFullDate);
+                }
+              }}
+              onMouseEnter={() => !isMobile && setShowFullDate(true)}
+              onMouseLeave={() => !isMobile && !isCalendarOpen && setShowFullDate(false)}
               style={{
-                padding: '8px 12px',
-                fontSize: '14px',
+                padding: isMobile ? '4px 6px' : '6px 10px',
+                fontSize: isMobile ? '11px' : isTablet ? '12px' : '13px',
                 backgroundColor: '#007bff',
                 border: '2px solid #007bff',
                 borderRadius: '6px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '3px',
                 color: 'white',
                 fontWeight: '500',
                 transition: 'all 0.2s ease',
-                minWidth: '140px',
-                justifyContent: 'center'
+                minWidth: showFullDate ? (isMobile ? '100px' : '120px') : (isMobile ? '65px' : '80px'),
+                justifyContent: 'center',
+                position: 'relative',
+                whiteSpace: 'nowrap'
               }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#0056b3';
-                e.target.style.borderColor = '#0056b3';
-                e.target.style.transform = 'translateY(-1px)';
-                e.target.style.boxShadow = '0 4px 12px rgba(0, 123, 255, 0.3)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#007bff';
-                e.target.style.borderColor = '#007bff';
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = 'none';
-              }}
+              title={selectedDate || new Date().toISOString().split('T')[0]}
             >
-              📅 {selectedDate || new Date().toISOString().split('T')[0]}
+              <span style={{ fontSize: isMobile ? '10px' : '12px' }}>📅</span>
+              <span>{showFullDate 
+                ? (selectedDate || new Date().toISOString().split('T')[0])
+                : formatCompactDate(selectedDate || new Date().toISOString().split('T')[0])}
+              </span>
             </button>
             {isCalendarOpen && (
               <div style={{
@@ -474,42 +699,29 @@ const TabSidebar = ({
   showGeoFSM,
   setShowGeoFSM,
   geoFSMLoading,
-  selectedYear,
-  setSelectedYear,
   selectedStation,
   showMikeHydro,
   setShowMikeHydro,
-  showFastFlood,
-  setShowFastFlood,
-  showGlofas,
-  setShowGlofas,
   onInfoClick,
   selectedDate,
   onDateChange,
 }) => {
   const [stationDate, setStationDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isLayersExpanded, setIsLayersExpanded] = useState(false); // Default collapsed
   
   return (
-    <div className="sidebar">
-      <Tab.Container defaultActiveKey="forecast">
-        <Nav variant="tabs" className="sidebar-tabs">
-          <Nav.Item>
-            <Nav.Link eventKey="forecast" className="tab-link">
-              Sector Layers
-            </Nav.Link>
-          </Nav.Item>
-          <Nav.Item>
-            <Nav.Link eventKey="monitoring" className="tab-link">
-              Impact Layers
-            </Nav.Link>
-          </Nav.Item>
-        </Nav>
-        <Tab.Content>
-          <Tab.Pane eventKey="forecast" className="tab-pane">
-            <div style={{ marginBottom: '15px' }}>
-              <h4 style={{ margin: 0 }}>Station Information</h4>
-            </div>
-            <ListGroup className="mb-4">
+    <div className="sidebar" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Station Information Section - Always Visible */}
+      <div style={{ 
+        padding: '15px', 
+        borderBottom: '2px solid #e9ecef', 
+        backgroundColor: '#f8f9fa',
+        flexShrink: 0,
+        maxHeight: '40%',
+        overflowY: 'auto'
+      }}>
+        <h5 style={{ margin: '0 0 10px 0', color: '#1B6840', fontWeight: '600', fontSize: '16px' }}>Station Information</h5>
+        <ListGroup style={{ fontSize: '14px' }}>
               <ListGroup.Item>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div className="layer-content">
@@ -548,39 +760,12 @@ const TabSidebar = ({
                           className="toggle-slider-small"
                         ></label>
                       </div>
-                      <label htmlFor="geofsm-toggle">GeoSFM</label>
+                      <label htmlFor="geofsm-toggle">
+                        GeoSFM {geoFSMLoading && <span style={{fontSize: '12px', color: '#666'}}> (Loading...)</span>}
+                      </label>
                     </div>
                     <InfoIcon layerName="GeoSFM" onClick={onInfoClick} />
                   </div>
-                  {showGeoFSM && geoFSMLoading && (
-                    <div style={{ marginLeft: "38px", marginTop: "8px" }}>
-                      <div className="spinner-border spinner-border-sm text-primary" role="status">
-                        <span className="visually-hidden">Loading GeoSFM data...</span>
-                      </div>
-                      <small className="text-muted ms-2">Loading GeoSFM data...</small>
-                    </div>
-                  )}
-                  {showGeoFSM && !geoFSMLoading && (
-                    <div style={{ marginLeft: "38px", marginTop: "8px" }}>
-                      <label htmlFor="year-select" style={{ fontSize: "0.875rem", marginRight: "8px" }}>
-                        Year:
-                      </label>
-                      <select
-                        id="year-select"
-                        value={selectedYear}
-                        onChange={(e) => setSelectedYear(e.target.value)}
-                        style={{ 
-                          fontSize: "0.875rem", 
-                          padding: "2px 4px",
-                          borderRadius: "4px",
-                          border: "1px solid #ccc"
-                        }}
-                      >
-                        <option value="2025">2025</option>
-                        <option value="2024">2024</option>
-                      </select>
-                    </div>
-                  )}
                 </div>
               </ListGroup.Item>
               <ListGroup.Item>
@@ -605,52 +790,8 @@ const TabSidebar = ({
                   <InfoIcon layerName="Mike Hydro" onClick={onInfoClick} />
                 </div>
               </ListGroup.Item>
-              <ListGroup.Item>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div className="layer-content">
-                    <div className="toggle-switch-small">
-                      <input
-                        type="checkbox"
-                        id="fast-flood-toggle"
-                        checked={showFastFlood}
-                        onChange={() => setShowFastFlood(!showFastFlood)}
-                      />
-                      <label
-                        htmlFor="fast-flood-toggle"
-                        className="toggle-slider-small"
-                      ></label>
-                    </div>
-                    <label htmlFor="fast-flood-toggle">
-                      Fast Flood
-                    </label>
-                  </div>
-                  <InfoIcon layerName="Fast Flood" onClick={onInfoClick} />
-                </div>
-              </ListGroup.Item>
-              <ListGroup.Item>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div className="layer-content">
-                    <div className="toggle-switch-small">
-                      <input
-                        type="checkbox"
-                        id="glofas-toggle"
-                        checked={showGlofas}
-                        onChange={() => setShowGlofas(!showGlofas)}
-                      />
-                      <label
-                        htmlFor="glofas-toggle"
-                        className="toggle-slider-small"
-                      ></label>
-                    </div>
-                    <label htmlFor="glofas-toggle">
-                      Glofas
-                    </label>
-                  </div>
-                  <InfoIcon layerName="Glofas" onClick={onInfoClick} />
-                </div>
-              </ListGroup.Item>
-            </ListGroup>
-            {selectedStation && (
+        </ListGroup>
+        {selectedStation && (
               <div className="station-characteristics">
                 <h5>{selectedStation.properties?.SEC_NAME}</h5>
                 <div className="characteristics-grid">
@@ -676,13 +817,13 @@ const TabSidebar = ({
                   <div className="characteristic-item">
                     <span className="characteristic-label">Alert Threshold:</span>
                     <span className="characteristic-value alert-threshold">
-                      {selectedStation.properties?.Q_THR1} m³/s
+                      {selectedStation.properties?.Q_THR1 ? parseFloat(selectedStation.properties.Q_THR1).toFixed(2) : 'N/A'} m³/s
                     </span>
                   </div>
                   <div className="characteristic-item">
                     <span className="characteristic-label">Alarm Threshold:</span>
                     <span className="characteristic-value alarm-threshold">
-                      {selectedStation.properties?.Q_THR2} m³/s
+                      {selectedStation.properties?.Q_THR2 ? parseFloat(selectedStation.properties.Q_THR2).toFixed(2) : 'N/A'} m³/s
                     </span>
                   </div>
                   <div className="characteristic-item">
@@ -690,14 +831,42 @@ const TabSidebar = ({
                       Emergency Threshold:
                     </span>
                     <span className="characteristic-value emergency-threshold">
-                      {selectedStation.properties?.Q_THR3} m³/s
+                      {selectedStation.properties?.Q_THR3 ? parseFloat(selectedStation.properties.Q_THR3).toFixed(2) : 'N/A'} m³/s
                     </span>
                   </div>
                 </div>
               </div>
             )}
-          </Tab.Pane>
-          <Tab.Pane eventKey="monitoring" className="tab-pane">
+      </div>
+      
+      {/* Collapsible Impact Layers Section */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div 
+          className="sidebar-tabs"
+          onClick={() => setIsLayersExpanded(!isLayersExpanded)}
+          style={{ 
+            cursor: 'pointer', 
+            padding: '15px',
+            backgroundColor: isLayersExpanded ? '#1B6840' : '#f8f9fa',
+            borderBottom: '1px solid #e9ecef',
+            display: 'flex',
+            justifyContent: 'flex-start', // Align to left like Station Information
+            alignItems: 'center',
+            userSelect: 'none',
+            transition: 'all 0.3s ease'
+          }}
+        >
+          <span style={{ 
+            color: isLayersExpanded ? 'white' : '#1B6840', 
+            fontWeight: '600',
+            fontSize: '16px', // Match Station Information font size
+            marginLeft: '0' // Ensure no extra margin
+          }}>
+            Impact Layers
+          </span>
+        </div>
+        {isLayersExpanded && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
             <LayerSelector
               title="Inundation Map"
               layers={hazardLayers}
@@ -715,7 +884,7 @@ const TabSidebar = ({
               onInfoClick={onInfoClick}
               selectedDate={selectedDate}
               onDateChange={onDateChange}
-              showCalendar={true} // FIXED: Changed from false to true
+              showCalendar={true}
             />
             <LayerSelector
               title="IBEW Layers"
@@ -726,9 +895,9 @@ const TabSidebar = ({
               selectedDate={selectedDate}
               onDateChange={onDateChange}
             />
-          </Tab.Pane>
-        </Tab.Content>
-      </Tab.Container>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -742,8 +911,21 @@ const StableWMSLayer = React.memo(({ url, layers, transparent = true, format = "
     if (layerType === 'ibew') {
       return layers; // Use layer name as-is: "popafftot_%date%"
     }
-    return layerConfig?.needsDate && selectedDate ? 
+    const formattedId = layerConfig?.needsDate && selectedDate ? 
       formatLayerIdWithDate(layers, selectedDate, layerType) : layers;
+    
+    // Debug logging for inundation/hazard layers
+    if (layers.includes('flood_hazard') || layers === 'flood_hazard') {
+      console.log('Inundation layer debug:', {
+        originalLayer: layers,
+        layerType: layerType,
+        selectedDate: selectedDate,
+        finalLayerId: formattedId,
+        needsDate: layerConfig?.needsDate
+      });
+    }
+    
+    return formattedId;
   }, [layers, layerConfig, selectedDate, layerType]);
   
   // Build URL with runtime substitution parameters for IBEW layers
@@ -764,7 +946,16 @@ const StableWMSLayer = React.memo(({ url, layers, transparent = true, format = "
     setKey(prev => prev + 1);
   }, [finalLayerId, selectedDate]);
   
-  console.log(`Rendering WMS Layer: ${finalLayerId} with date: ${selectedDate}, URL: ${finalUrl}`);
+  
+  // Debug logging for hazard layers
+  if (finalLayerId.includes('flood_hazard')) {
+    console.log('Rendering flood hazard WMS layer:', {
+      url: finalUrl,
+      layerId: finalLayerId,
+      format: format,
+      transparent: transparent
+    });
+  }
   
   return (
     <WMSTileLayer
@@ -781,7 +972,7 @@ const StableWMSLayer = React.memo(({ url, layers, transparent = true, format = "
       zIndex={zIndex}
       eventHandlers={{
         error: (error) => handleLayerError(finalLayerId, error),
-        load: () => console.log(`Successfully loaded layer: ${finalLayerId}`)
+        load: () => {}
       }}
     />
   );
@@ -799,25 +990,21 @@ const MapViewer = () => {
   const [showMonitoringStations, setShowMonitoringStations] = useState(false);
   const [showGeoFSM, setShowGeoFSM] = useState(false);
   const [showMikeHydro, setShowMikeHydro] = useState(false);
-  const [showFastFlood, setShowFastFlood] = useState(false);
-  const [showGlofas, setShowGlofas] = useState(false);
   const [monitoringData, setMonitoringData] = useState(null);
   const [geoFSMData, setGeoFSMData] = useState(null);
   const [selectedStation, setSelectedStation] = useState(null);
   const [timeSeriesData, setTimeSeriesData] = useState([]);
   const [geoFSMTimeSeriesData, setGeoFSMTimeSeriesData] = useState([]);
+  const [geoFSMLoading, setGeoFSMLoading] = useState(false);
   const [showChart, setShowChart] = useState(false);
   
   // Debug showChart changes
   useEffect(() => {
-    console.log("showChart state changed:", showChart);
   }, [showChart]);
   const [chartType, setChartType] = useState("discharge");
-  const [geoFSMDataType, setGeoFSMDataType] = useState("riverdepth");
+  const [geoFSMDataType, setGeoFSMDataType] = useState("streamflow");
   const [selectedSeries, setSelectedSeries] = useState("both");
   const [availableDataTypes, setAvailableDataTypes] = useState([]);
-  const [geoFSMLoading, setGeoFSMLoading] = useState(false);
-  const [selectedYear, setSelectedYear] = useState("2025");
   const [panelHeight, setPanelHeight] = useState(320);
   const [panelWidth, setPanelWidth] = useState(600);
   const [isResizing, setIsResizing] = useState(false);
@@ -825,6 +1012,25 @@ const MapViewer = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
+  
+  // State for mobile responsiveness
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [sidebarOpen, setSidebarOpen] = useState(!window.innerWidth < 768);
+  
+  // Handle window resize for responsiveness
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      // Auto-close sidebar on mobile
+      if (mobile && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [sidebarOpen]);
   
   // State for metadata modal
   const [showMetadataModal, setShowMetadataModal] = useState(false);
@@ -835,7 +1041,6 @@ const MapViewer = () => {
 
   // Handler for date changes - now applies to all layers
   const handleDateChange = (date) => {
-    console.log(`Common date changed to: ${date}`);
     setSelectedDate(date);
     
     // Force map refresh when date changes
@@ -864,7 +1069,6 @@ const MapViewer = () => {
 
   // Function to fetch GeoJSON data
   const fetchMonitoringData = useCallback(() => {
-    console.log("Fetching monitoring data from:", GEOJSON_PATH);
     
     fetch(GEOJSON_PATH)
       .then((response) => {
@@ -875,7 +1079,6 @@ const MapViewer = () => {
         return response.json();
       })
       .then((data) => {
-        console.log("Successfully loaded monitoring data, features:", data.features?.length);
         
         data.features.forEach((feature) => {
           if (feature.geometry?.coordinates) {
@@ -894,12 +1097,10 @@ const MapViewer = () => {
 
   useEffect(() => {
     if (showMonitoringStations) {
-      console.log("Initializing monitoring stations data");
       fetchMonitoringData();
       const interval = setInterval(fetchMonitoringData, 60000);
       return () => clearInterval(interval);
     } else {
-      console.log("Monitoring stations disabled");
       setMonitoringData(null);
       setTimeSeriesData([]);
       setSelectedStation(null);
@@ -912,21 +1113,49 @@ const MapViewer = () => {
       fetch("hydro_data_with_locations.geojson")
         .then((response) => response.json())
         .then((data) => {
-          // Filter for selected year data only to improve performance
-          const filteredData = {
-            ...data,
-            features: data.features.filter((feature) => {
-              return feature.properties.timestamp?.startsWith(selectedYear);
-            })
-          };
           
-          filteredData.features.forEach((feature) => {
-            if (feature.geometry?.coordinates) {
-              feature.properties.latitude = feature.geometry.coordinates[1];
-              feature.properties.longitude = feature.geometry.coordinates[0];
+          // Since we're using the pre-filtered file, skip complex date filtering
+          // The file is already filtered to relevant dates
+          const allFeatures = data.features;
+          
+          // Debug: Check for station ID 249 specifically
+          const station249Features = allFeatures.filter(f => f.properties.Id === 249);
+          
+          // Check if coordinates are the same
+          if (station249Features.length > 1) {
+            const coords = station249Features.map(f => f.geometry?.coordinates);
+          }
+          
+          // Deduplicate features by station ID - keep only one feature per station for map display
+          const stationMap = new Map();
+          allFeatures.forEach((feature, index) => {
+            const stationId = feature.properties.Id;
+            if (stationId && !stationMap.has(stationId)) {
+              // Add coordinates as properties for easier access
+              if (feature.geometry?.coordinates) {
+                feature.properties.latitude = feature.geometry.coordinates[1];
+                feature.properties.longitude = feature.geometry.coordinates[0];
+              }
+              stationMap.set(stationId, feature);
             }
           });
+          
+          // Create filtered data with unique stations only for map display
+          const filteredData = {
+            ...data,
+            features: Array.from(stationMap.values())
+          };
+          
+          
+          // Store the deduplicated data for map display
           setGeoFSMData(filteredData);
+          
+          // Store the full dataset globally for time series processing
+          window.geoFSMFullData = {
+            ...data,
+            features: allFeatures
+          };
+          
           const validTypes = ["riverdepth", "streamflow"];
           const dataTypes = [
             ...new Set(
@@ -934,55 +1163,39 @@ const MapViewer = () => {
                 .map((f) => f.properties.data_type)
                 .filter((type) => type && validTypes.includes(type)),
             ),
-          ];
+          ].sort((a, b) => a === "streamflow" ? -1 : b === "streamflow" ? 1 : 0);
           setAvailableDataTypes(
-            dataTypes.length > 0 ? dataTypes : ["riverdepth"],
+            dataTypes.length > 0 ? dataTypes : ["streamflow", "riverdepth"],
           );
-          setGeoFSMDataType(dataTypes[0] || "riverdepth");
+          setGeoFSMDataType(dataTypes.includes("streamflow") ? "streamflow" : (dataTypes[0] || "streamflow"));
 
-          const allTimeSeries = filteredData.features
-            .reduce((acc, f) => {
-              const timestamp = new Date(f.properties.timestamp);
-              if (isNaN(timestamp.getTime())) return acc;
-              const existing = acc.find(
-                (item) => item.timestamp.getTime() === timestamp.getTime(),
-              );
-              if (existing) {
-                if (f.properties.data_type === "riverdepth")
-                  existing.depth = Number(f.properties.value) || 0;
-                else if (f.properties.data_type === "streamflow")
-                  existing.streamflow = Number(f.properties.value) || 0;
-              } else {
-                acc.push({
-                  timestamp,
-                  depth:
-                    f.properties.data_type === "riverdepth"
-                      ? Number(f.properties.value) || 0
-                      : 0,
-                  streamflow:
-                    f.properties.data_type === "streamflow"
-                      ? Number(f.properties.value) || 0
-                      : 0,
-                });
-              }
-              return acc;
-            }, [])
-            .sort((a, b) => a.timestamp - b.timestamp);
-          setGeoFSMTimeSeriesData(allTimeSeries);
+          // Skip expensive time series processing during initial load
+          // This will be done only when a station is selected
+          setGeoFSMTimeSeriesData([]);
           setGeoFSMLoading(false);
         })
         .catch((error) => {
           console.error("Error loading GeoSFM data:", error);
+          setGeoFSMData(null);
+          setGeoFSMTimeSeriesData([]);
+          setAvailableDataTypes([]);
           setGeoFSMLoading(false);
         });
     } else {
       setGeoFSMData(null);
       setGeoFSMTimeSeriesData([]);
       setAvailableDataTypes([]);
-      setSelectedStation(null);
       setGeoFSMLoading(false);
+      // Only clear selected station if it was a GeoFSM station
+      if (selectedStation && selectedStation.properties.Id) {
+        setSelectedStation(null);
+        setChartType("discharge"); // Reset to default discharge chart type
+        setGeoFSMDataType("streamflow"); // Reset to default GeoSFM data type
+      }
     }
-  }, [showGeoFSM, selectedYear]);
+  }, [showGeoFSM]);
+
+
 
   // Handle panel resizing
   const handleResizeStart = (direction, e) => {
@@ -1185,12 +1398,10 @@ const MapViewer = () => {
 
   const handleStationClick = useCallback(
     (feature) => {
-      console.log("Station clicked:", feature?.properties?.SEC_NAME || feature?.properties?.Name);
       setSelectedStation(feature);
       setShowChart(true);
       
       if (!feature?.properties) {
-        console.log("No properties found in feature");
         return;
       }
 
@@ -1199,17 +1410,26 @@ const MapViewer = () => {
       // For GeoSFM data, set chartType to indicate we're in GeoSFM mode
       if (dataType === "riverdepth" || dataType === "streamflow") {
         setChartType("riverdepth"); // Use riverdepth as the general GeoSFM indicator
-        setGeoFSMDataType(dataType); // Set the specific data type
+        // If this is a GeoSFM station, prioritize streamflow if available
+        const stationId = feature.properties.Id;
+        const stationFeatures = (window.geoFSMFullData || geoFSMData)?.features?.filter(f => f.properties.Id === stationId) || [];
+        const hasStreamflow = stationFeatures.some(f => f.properties.data_type === "streamflow");
+        setGeoFSMDataType(hasStreamflow ? "streamflow" : dataType);
       } else {
         setChartType(dataType);
-        setGeoFSMDataType(dataType === "discharge" ? "riverdepth" : dataType);
+        setGeoFSMDataType(dataType === "discharge" ? "streamflow" : dataType);
       }
 
       try {
         if (dataType === "riverdepth" || dataType === "streamflow") {
+          
+          // Use the full dataset for time series processing, not the deduplicated display data
+          const fullGeoFSMData = window.geoFSMFullData || geoFSMData;
+          
+          const stationFeatures = fullGeoFSMData?.features?.filter((f) => f.properties.Id === feature.properties.Id) || [];
+          
           const timeSeries =
-            geoFSMData?.features
-              ?.filter((f) => f.properties.Id === feature.properties.Id)
+            stationFeatures
               .reduce((acc, f) => {
                 const timestamp = new Date(f.properties.timestamp);
                 if (isNaN(timestamp.getTime())) return acc;
@@ -1237,24 +1457,27 @@ const MapViewer = () => {
                 return acc;
               }, [])
               .sort((a, b) => a.timestamp - b.timestamp) || [];
+          
+          
           setGeoFSMTimeSeriesData(timeSeries);
           setTimeSeriesData([]);
           
           // Set available data types based on the selected station's data
           const stationDataTypes = [
             ...new Set(
-              geoFSMData?.features
+              fullGeoFSMData?.features
                 ?.filter((f) => f.properties.Id === feature.properties.Id)
                 .map((f) => f.properties.data_type)
                 .filter((type) => type && ["riverdepth", "streamflow"].includes(type))
             )
-          ];
-          setAvailableDataTypes(stationDataTypes.length > 0 ? stationDataTypes : ["riverdepth"]);
+          ].sort((a, b) => a === "streamflow" ? -1 : b === "streamflow" ? 1 : 0);
+          setAvailableDataTypes(stationDataTypes.length > 0 ? stationDataTypes : ["streamflow", "riverdepth"]);
+          
+          // Ensure streamflow is selected if available
+          if (stationDataTypes.includes("streamflow")) {
+            setGeoFSMDataType("streamflow");
+          }
         } else {
-          console.log("Processing FloodPROOFS station:", feature?.properties?.SEC_NAME);
-          console.log("Raw time period:", feature.properties.time_period);
-          console.log("Raw GFS data:", feature.properties["time_series_discharge_simulated-gfs"]);
-          console.log("Raw ICON data:", feature.properties["time_series_discharge_simulated-icon"]);
           
           const timePeriod =
             feature.properties.time_period?.split(",")?.map((t) => t.trim()) ||
@@ -1268,7 +1491,6 @@ const MapViewer = () => {
               ?.split(",")
               .map((val) => Number(val.trim()) || 0) || [];
               
-          console.log("Parsed arrays - time:", timePeriod.length, "gfs:", gfsValues.length, "icon:", iconValues.length);
 
           const rawData = timePeriod
             .map((time, index) => ({
@@ -1283,8 +1505,6 @@ const MapViewer = () => {
                 !isNaN(item.icon),
             );
             
-          console.log("Raw data before filtering:", rawData.length);
-          console.log("Sample raw data:", rawData.slice(0, 3));
 
           // Aggregate data by day (daily averages)
           const dailyData = rawData.reduce((acc, item) => {
@@ -1311,7 +1531,6 @@ const MapViewer = () => {
             icon: day.iconValues.reduce((sum, val) => sum + val, 0) / day.iconValues.length
           })).sort((a, b) => a.time - b.time);
 
-          console.log("Processed time series data:", aggregatedData.length, "daily points");
           setTimeSeriesData(aggregatedData);
           setGeoFSMTimeSeriesData([]);
         }
@@ -1341,7 +1560,87 @@ const MapViewer = () => {
 
   return (
     <div className="map-viewer">
-      <div className="sidebar">
+      {/* Development Notice Banner - Centered Below Navbar Items */}
+      <div style={{
+        position: 'fixed',
+        top: '82px', // Small gap after navbar ends
+        left: isMobile ? '50%' : '50%', // Center horizontally
+        transform: 'translateX(-50%)',
+        width: isMobile ? '300px' : '500px', // Responsive width
+        height: '28px',
+        backgroundColor: 'rgba(255, 193, 7, 0.95)', // Yellow background
+        borderRadius: '8px', // Rounded all corners
+        overflow: 'hidden',
+        zIndex: 1000, // Above map but below other controls
+        display: 'flex',
+        alignItems: 'center',
+        pointerEvents: 'none', // Don't interfere with map interaction
+        boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+        border: '2px solid #ffc107'
+      }}>
+        <div style={{
+          display: 'flex',
+          animation: 'scrollTextContinuous 45s linear infinite', // Slower continuous animation
+          whiteSpace: 'nowrap',
+          paddingLeft: '100%'
+        }}>
+          <span style={{
+            color: '#333', // Black text on yellow background
+            fontSize: '16px', // Increased font size
+            fontWeight: 'bold', // Bold text
+            letterSpacing: '0.5px',
+            display: 'inline-block',
+            minWidth: '1200px' // Ensure text width is exactly double the container width
+          }}>
+            ⚠️ NOTICE: This system is under development. Most features are still in testing phases and may not function as expected. ⚠️ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            ⚠️ NOTICE: This system is under development. Most features are still in testing phases and may not function as expected. ⚠️
+          </span>
+        </div>
+      </div>
+      
+      {/* Add CSS animation */}
+      <style>
+        {`
+          @keyframes scrollTextContinuous {
+            0% {
+              transform: translateX(0%);
+            }
+            100% {
+              transform: translateX(-100%);
+            }
+          }
+        `}
+      </style>
+      
+      {/* Mobile toggle button */}
+      {isMobile && (
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          style={{
+            position: 'fixed',
+            bottom: sidebarOpen ? '40vh' : '10px',
+            left: '10px',
+            zIndex: 1002,
+            backgroundColor: '#1B6840',
+            color: 'white',
+            border: 'none',
+            borderRadius: '50%',
+            width: '50px',
+            height: '50px',
+            fontSize: '24px',
+            cursor: 'pointer',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+            transition: 'all 0.3s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          {sidebarOpen ? '✕' : '☰'}
+        </button>
+      )}
+      
+      <div className={`sidebar ${isMobile && !sidebarOpen ? 'sidebar-hidden' : ''}`}>
         <TabSidebar
           hazardLayers={hazardLayersWithDate}
           impactLayers={IMPACT_LAYERS}
@@ -1356,15 +1655,9 @@ const MapViewer = () => {
           showGeoFSM={showGeoFSM}
           setShowGeoFSM={setShowGeoFSM}
           geoFSMLoading={geoFSMLoading}
-          selectedYear={selectedYear}
-          setSelectedYear={setSelectedYear}
           selectedStation={selectedStation}
           showMikeHydro={showMikeHydro}
           setShowMikeHydro={setShowMikeHydro}
-          showFastFlood={showFastFlood}
-          setShowFastFlood={setShowFastFlood}
-          showGlofas={showGlofas}
-          setShowGlofas={setShowGlofas}
           onInfoClick={handleInfoClick}
           selectedDate={selectedDate}
           onDateChange={handleDateChange}
@@ -1377,7 +1670,20 @@ const MapViewer = () => {
           <MapContainer
             center={MAP_CONFIG.initialPosition}
             zoom={MAP_CONFIG.initialZoom}
-            scrollWheelZoom={true}
+            minZoom={MAP_CONFIG.minZoom}
+            maxZoom={MAP_CONFIG.maxZoom}
+            maxBounds={MAP_CONFIG.maxBounds}
+            maxBoundsViscosity={0.1}
+            scrollWheelZoom={{
+              speed: 0.5,  // Slower zoom speed (default is 1)
+              sensitivity: 0.5  // Less sensitive to scroll
+            }}
+            wheelDebounceTime={100}  // Add debounce for smoother scrolling
+            wheelPxPerZoomLevel={120}  // More scroll needed per zoom level
+            zoomSnap={0.25}  // Allow fractional zoom levels for smoother transitions
+            zoomDelta={0.5}  // Smaller zoom increments (default is 1)
+            zoomAnimation={true}  // Enable zoom animation
+            zoomAnimationThreshold={4}  // Always animate zoom
             style={{ height: "100%", width: "100%" }}
             key={mapKey}
           >
@@ -1497,42 +1803,201 @@ const MapViewer = () => {
             </LayersControl>
             
             {showMonitoringStations && monitoringData?.features && (
-              <GeoJSON
+              <MarkerClusterGroup
+                maxClusterRadius={50}
+                disableClusteringAtZoom={15}
+                spiderfyOnMaxZoom={true}
+                showCoverageOnHover={false}
+                spiderLegPolylineOptions={{ weight: 1.5, color: '#222', opacity: 0.5 }}
+                spiderfyDistanceMultiplier={1.5}
+                iconCreateFunction={(cluster) => {
+                  const markers = cluster.getAllChildMarkers();
+                  const alertLevels = markers.map(marker => marker.alertStatus || 'Normal');
+                  
+                  // Count stations by alert level
+                  const emergencyCount = alertLevels.filter(level => level === 'Emergency').length;
+                  const alarmCount = alertLevels.filter(level => level === 'Alarm').length;
+                  const warningCount = alertLevels.filter(level => level === 'Warning').length;
+                  
+                  // Determine highest severity and show count for that level
+                  let alertStatus;
+                  let displayCount;
+                  
+                  if (emergencyCount > 0) {
+                    alertStatus = 'Emergency';
+                    displayCount = emergencyCount;
+                  } else if (alarmCount > 0) {
+                    alertStatus = 'Alarm';
+                    displayCount = alarmCount;
+                  } else if (warningCount > 0) {
+                    alertStatus = 'Warning';
+                    displayCount = warningCount;
+                  } else {
+                    alertStatus = 'Normal';
+                    displayCount = cluster.getChildCount(); // Show total count for normal clusters
+                  }
+                  
+                  // Create cluster icon with threshold-based count
+                  const clusterIcon = createMarkerIcon(alertStatus, false, true, displayCount);
+                  return clusterIcon;
+                }}
+              >
+                <GeoJSON
                 key={`monitoring-stations-${selectedStation?.properties?.SEC_NAME || "none"}`}
-                data={monitoringData}
+                data={{
+                  ...monitoringData,
+                  features: handleOverlappingPoints([...monitoringData.features])
+                }}
                 pointToLayer={(feature, latlng) => {
                   const isSelected =
                     selectedStation?.properties?.SEC_NAME ===
                     feature.properties.SEC_NAME;
-                  return L.circleMarker(latlng, {
-                    ...MONITORING_STATIONS_CONFIG.style,
-                    fillColor: isSelected
-                      ? MONITORING_STATIONS_CONFIG.style.selectedFillColor
-                      : MONITORING_STATIONS_CONFIG.style.fillColor,
+                  
+                  // Get current discharge from this station's own time series data
+                  let currentDischarge = null;
+                  
+                  // Get the latest discharge value from this station's time series
+                  const gfsData = feature.properties["time_series_discharge_simulated-gfs"];
+                  const iconData = feature.properties["time_series_discharge_simulated-icon"];
+                  
+                  if (gfsData || iconData) {
+                    let latestGfs = 0;
+                    let latestIcon = 0;
+                    
+                    if (gfsData) {
+                      const gfsValues = gfsData.split(",").map(val => Number(val.trim()) || 0);
+                      latestGfs = gfsValues[gfsValues.length - 1] || 0;
+                    }
+                    
+                    if (iconData) {
+                      const iconValues = iconData.split(",").map(val => Number(val.trim()) || 0);
+                      latestIcon = iconValues[iconValues.length - 1] || 0;
+                    }
+                    
+                    currentDischarge = Math.max(latestGfs, latestIcon);
+                  }
+                  
+                  // Determine alert status based on thresholds
+                  const alertStatus = getAlertStatus(feature, currentDischarge);
+                  
+                  // Create marker with appropriate icon
+                  const marker = L.marker(latlng, {
+                    icon: createMarkerIcon(alertStatus, isSelected)
                   });
+                  
+                  // Add alert status as a property for easy access
+                  marker.alertStatus = alertStatus;
+                  marker.currentDischarge = currentDischarge;
+                  
+                  return marker;
                 }}
                 onEachFeature={(feature, layer) => {
                   layer.on({ click: () => handleStationClick(feature) });
                   const props = feature.properties;
                   layer.bindPopup(
-                    `<div class="station-popup"><strong>${props.SEC_NAME || "Station"}</strong><br/>Basin: ${props.BASIN || "N/A"}<br/>Current Status: ${props.status || "Normal"}</div>`,
+                    `<div class="station-popup">
+                      <strong>${props.SEC_NAME || "Station"}</strong><br/>
+                      <strong>Basin:</strong> ${props.BASIN || "N/A"}<br/>
+                      <strong>Current Status:</strong> <span style="color: ${
+                        layer.alertStatus === 'Emergency' ? '#9c27b0' :
+                        layer.alertStatus === 'Alarm' ? '#f44336' :
+                        layer.alertStatus === 'Warning' ? '#ffeb3b' : '#4caf50'
+                      }; font-weight: bold;">${layer.alertStatus}</span><br/>
+                      ${layer.currentDischarge ? `<strong>Current Discharge:</strong> ${layer.currentDischarge.toFixed(1)} m³/s<br/>` : ''}
+                      <strong>Thresholds:</strong><br/>
+                      &nbsp;&nbsp;Alert: ${(props.Q_THR1 || props.q_thr1) ? parseFloat(props.Q_THR1 || props.q_thr1).toFixed(2) : 'N/A'} m³/s<br/>
+                      &nbsp;&nbsp;Alarm: ${(props.Q_THR2 || props.q_thr2) ? parseFloat(props.Q_THR2 || props.q_thr2).toFixed(2) : 'N/A'} m³/s<br/>
+                      &nbsp;&nbsp;Emergency: ${(props.Q_THR3 || props.q_thr3) ? parseFloat(props.Q_THR3 || props.q_thr3).toFixed(2) : 'N/A'} m³/s
+                    </div>`,
                   );
                 }}
               />
+              </MarkerClusterGroup>
             )}
-            {showGeoFSM && geoFSMData?.features && (
-              <GeoJSON
-                key={`geofsm-points-${geoFSMData.features.length}`}
-                data={geoFSMData}
+            {showGeoFSM && geoFSMData?.features && (() => {
+              // Deduplicate GeoSFM features by both station ID and location
+              const uniqueStations = new Map();
+              const uniqueLocations = new Map();
+              
+              geoFSMData.features.forEach(feature => {
+                const stationId = feature.properties.Id;
+                const coords = feature.geometry?.coordinates;
+                
+                if (coords) {
+                  // Create a location key based on coordinates (rounded to avoid floating point issues)
+                  const locationKey = `${coords[1].toFixed(6)}_${coords[0].toFixed(6)}`;
+                  
+                  // Only add if we haven't seen this station ID or location before
+                  if (!uniqueStations.has(stationId) && !uniqueLocations.has(locationKey)) {
+                    uniqueStations.set(stationId, feature);
+                    uniqueLocations.set(locationKey, feature);
+                  }
+                }
+              });
+              
+              const deduplicatedFeatures = Array.from(uniqueStations.values());
+              
+              return (
+              <>
+                <MarkerClusterGroup
+                maxClusterRadius={30}
+                disableClusteringAtZoom={13}
+                spiderfyOnMaxZoom={false}
+                showCoverageOnHover={false}
+                zoomToBoundsOnClick={true}
+                removeOutsideVisibleBounds={false}
+                iconCreateFunction={(cluster) => {
+                  const markers = cluster.getAllChildMarkers();
+                  const alertLevels = markers.map(marker => marker.alertStatus || 'Normal');
+                  
+                  // Count stations by alert level
+                  const emergencyCount = alertLevels.filter(level => level === 'Emergency').length;
+                  const alarmCount = alertLevels.filter(level => level === 'Alarm').length;
+                  const warningCount = alertLevels.filter(level => level === 'Warning').length;
+                  
+                  // Determine highest severity and show count for that level
+                  let alertStatus;
+                  let displayCount;
+                  
+                  if (emergencyCount > 0) {
+                    alertStatus = 'Emergency';
+                    displayCount = emergencyCount;
+                  } else if (alarmCount > 0) {
+                    alertStatus = 'Alarm';
+                    displayCount = alarmCount;
+                  } else if (warningCount > 0) {
+                    alertStatus = 'Warning';
+                    displayCount = warningCount;
+                  } else {
+                    alertStatus = 'Normal';
+                    displayCount = cluster.getChildCount(); // Show total count for normal clusters
+                  }
+                  
+                  // Create cluster icon with threshold-based count
+                  const clusterIcon = createMarkerIcon(alertStatus, false, true, displayCount);
+                  return clusterIcon;
+                }}
+              >
+                <GeoJSON
+                key={`geofsm-points-${deduplicatedFeatures.length}`}
+                data={{
+                  ...geoFSMData,
+                  features: deduplicatedFeatures
+                }}
                 pointToLayer={(feature, latlng) => {
                   const isSelected =
                     selectedStation?.properties?.Id === feature.properties.Id;
-                  return L.circleMarker(latlng, {
-                    ...GEOFSM_CONFIG.style,
-                    fillColor: isSelected
-                      ? GEOFSM_CONFIG.style.selectedFillColor
-                      : GEOFSM_CONFIG.style.fillColor,
+                  
+                  // For now, use Normal status for all GeoSFM stations
+                  // In future, this could be enhanced with threshold-based status
+                  const alertStatus = 'Normal';
+                  
+                  // Create marker with appropriate icon using same system as FloodProofs
+                  const marker = L.marker(latlng, {
+                    icon: createMarkerIcon(alertStatus, isSelected)
                   });
+                  
+                  return marker;
                 }}
                 onEachFeature={(feature, layer) => {
                   const props = feature.properties;
@@ -1542,7 +2007,10 @@ const MapViewer = () => {
                   layer.on({ click: () => handleStationClick(feature) });
                 }}
               />
-            )}
+              </MarkerClusterGroup>
+              </>
+              );
+            })()}
             
             {/* IBEW Popup Handler - replaces old FeatureInfoHandler */}
             <IBEWPopupHandler
@@ -1552,6 +2020,89 @@ const MapViewer = () => {
             />
             
           </MapContainer>
+          
+          {/* Alert Status Legend */}
+          {monitoringData?.features && (
+            <div className="alert-status-legend" style={{
+              position: 'absolute',
+              bottom: '20px',
+              left: '20px',
+              backgroundColor: 'white',
+              border: '1px solid #ccc',
+              borderRadius: '8px',
+              padding: '12px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              fontSize: '12px',
+              zIndex: 1000,
+              minWidth: '150px'
+            }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '13px' }}>
+                FP_EA
+              </div>
+              {(() => {
+                const stats = calculateThresholdStats(monitoringData);
+                
+                // Count GeoSFM stations if available
+                const geoFSMCount = geoFSMData?.features ? 
+                  new Set(geoFSMData.features.map(f => f.properties.Id)).size : 0;
+                
+                return (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                      <img 
+                        src="/assets/map-markers/Normal.svg" 
+                        alt="Normal" 
+                        style={{ width: '16px', height: '16px', marginRight: '8px' }}
+                      />
+                      <span>Normal</span>
+                      <span style={{ marginLeft: 'auto', fontWeight: 'bold' }}>
+                        {stats.normal + (showGeoFSM ? geoFSMCount : 0)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                      <img 
+                        src="/assets/map-markers/Warning.svg" 
+                        alt="Alert" 
+                        style={{ width: '16px', height: '16px', marginRight: '8px' }}
+                      />
+                      <span>Alert</span>
+                      <span style={{ marginLeft: 'auto', fontWeight: 'bold' }}>{stats.warning}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                      <img 
+                        src="/assets/map-markers/Alarm.svg" 
+                        alt="Alarm" 
+                        style={{ width: '16px', height: '16px', marginRight: '8px' }}
+                      />
+                      <span>Alarm</span>
+                      <span style={{ marginLeft: 'auto', fontWeight: 'bold' }}>{stats.alarm}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                      <img 
+                        src="/assets/map-markers/Emergency.svg" 
+                        alt="Emergency" 
+                        style={{ width: '16px', height: '16px', marginRight: '8px' }}
+                      />
+                      <span>Emergency</span>
+                      <span style={{ marginLeft: 'auto', fontWeight: 'bold' }}>{stats.emergency}</span>
+                    </div>
+                    {showGeoFSM && geoFSMCount > 0 && (
+                      <div style={{ 
+                        marginTop: '8px', 
+                        paddingTop: '8px', 
+                        borderTop: '1px solid #eee',
+                        fontSize: '11px',
+                        color: '#666'
+                      }}>
+                        Includes {geoFSMCount} GeoSFM stations
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+          
           {/* Temporarily disabled legend until repaired */}
           {/* {activeLegend && (
             <div className="map-legend" style={{ 
@@ -1771,6 +2322,7 @@ const MapViewer = () => {
                 </h5>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {/* Chart Type Filter for GeoSFM */}
                 {(chartType === "riverdepth" || chartType === "streamflow") && (
                   <div 
                     className="chart-controls" 
@@ -1790,33 +2342,83 @@ const MapViewer = () => {
                         e.stopPropagation();
                       }}
                       onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = "#BBDEFB";
-                        e.target.style.borderColor = "#0D47A1";
+                        e.target.style.backgroundColor = "#FFCC80";
+                        e.target.style.borderColor = "#E65100";
                       }}
                       onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = "#E3F2FD";
-                        e.target.style.borderColor = "#1976D2";
+                        e.target.style.backgroundColor = "#FFF3E0";
+                        e.target.style.borderColor = "#FF9800";
                       }}
                       style={{ 
                         marginRight: "10px", 
-                        padding: "6px 12px",
-                        border: "2px solid #1976D2",
-                        borderRadius: "4px",
-                        backgroundColor: "#E3F2FD",
-                        color: "#1976D2",
+                        padding: "4px 8px",
+                        border: "1px solid #FF9800",
+                        borderRadius: "3px",
+                        backgroundColor: "#FFF3E0",
+                        color: "#E65100",
                         fontWeight: "500",
-                        minWidth: "140px",
-                        fontSize: "14px",
+                        minWidth: "120px",
+                        fontSize: "11px",
                         cursor: "pointer",
                         zIndex: 1001,
                         position: "relative",
                         pointerEvents: "auto",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
                         transition: "all 0.2s ease"
                       }}
                     >
                       <option value="riverdepth">River Depth</option>
                       <option value="streamflow">Streamflow</option>
+                    </select>
+                  </div>
+                )}
+                
+                {/* Series Filter for FloodProofs */}
+                {chartType === "discharge" && (
+                  <div 
+                    className="chart-controls" 
+                    style={{ zIndex: 1000, position: 'relative' }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <select
+                      value={selectedSeries}
+                      onChange={(e) => setSelectedSeries(e.target.value)}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = "#FFCC80";
+                        e.target.style.borderColor = "#E65100";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = "#FFF3E0";
+                        e.target.style.borderColor = "#FF9800";
+                      }}
+                      style={{ 
+                        marginRight: "10px", 
+                        padding: "4px 8px",
+                        border: "1px solid #FF9800",
+                        borderRadius: "3px",
+                        backgroundColor: "#FFF3E0",
+                        color: "#E65100",
+                        fontWeight: "500",
+                        minWidth: "120px",
+                        fontSize: "11px",
+                        cursor: "pointer",
+                        zIndex: 1001,
+                        position: "relative",
+                        pointerEvents: "auto",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      <option value="both">Both GFS & ICON</option>
+                      <option value="gfs">GFS Only</option>
+                      <option value="icon">ICON Only</option>
                     </select>
                   </div>
                 )}
@@ -1872,9 +2474,10 @@ const MapViewer = () => {
                     backgroundColor: '#28a745',
                     color: 'white',
                     border: 'none',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    cursor: 'pointer'
+                    borderRadius: '3px',
+                    fontSize: '10px',
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
                   }}
                 >
                   📊 CSV
@@ -2375,52 +2978,18 @@ const MapViewer = () => {
                   height={Math.max(panelHeight - 65, 135)}
                 />
               ) : (
-                <div>
-                  <div className="chart-controls mb-2" style={{ marginBottom: '10px' }}>
-                    <select
-                      value={selectedSeries}
-                      onChange={(e) => setSelectedSeries(e.target.value)}
-                      className="chart-select"
-                      style={{ 
-                        fontSize: '14px', 
-                        padding: '6px 12px',
-                        border: '2px solid #2196F3',
-                        borderRadius: '4px',
-                        backgroundColor: '#E3F2FD',
-                        color: '#2196F3',
-                        fontWeight: '500',
-                        minWidth: '140px',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = '#BBDEFB';
-                        e.target.style.borderColor = '#1565C0';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = '#E3F2FD';
-                        e.target.style.borderColor = '#2196F3';
-                      }}
-                    >
-                      <option value="both">Both GFS & ICON</option>
-                      <option value="gfs">GFS Only</option>
-                      <option value="icon">ICON Only</option>
-                    </select>
+                timeSeriesData && timeSeriesData.length > 0 ? (
+                  <DischargeChart
+                    timeSeriesData={timeSeriesData}
+                    selectedSeries={selectedSeries}
+                    stationName={selectedStation?.properties?.SEC_NAME || 'FloodProofs Station'}
+                    height={Math.max(panelHeight - 65, 135)}
+                  />
+                ) : (
+                  <div style={{ padding: '20px', textAlign: 'center' }}>
+                    <p>Loading chart data... ({timeSeriesData?.length || 0} data points)</p>
                   </div>
-                  {timeSeriesData && timeSeriesData.length > 0 ? (
-                    <DischargeChart
-                      timeSeriesData={timeSeriesData}
-                      selectedSeries={selectedSeries}
-                      stationName={selectedStation?.properties?.SEC_NAME || 'FloodProofs Station'}
-                      height={Math.max(panelHeight - 105, 115)}
-                    />
-                  ) : (
-                    <div style={{ padding: '20px', textAlign: 'center' }}>
-                      <p>Loading chart data... ({timeSeriesData?.length || 0} data points)</p>
-                    </div>
-                  )}
-                </div>
+                )
               )}
             </div>
           </div>

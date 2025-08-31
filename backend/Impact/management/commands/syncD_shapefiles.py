@@ -20,8 +20,8 @@ class Command(BaseCommand):
     help = 'Sync remote impact layer shapefiles from SFTP and upload to database and MapServer'
     
     TEMP_DIR = './temp_shapefiles'
-    # Updated MapServer directory to use local data directory
-    MAPSERVER_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../data/impact_shapefiles'))
+    # Updated MapServer directory to save to data/shapefiles/impact_shapefiles with date
+    MAPSERVER_DIR = f'../data/shapefiles/impact_shapefiles/{current_date}'
     
     model_configurations = {
         AffectedPopulation: f'{current_date}0000_FPimpacts-Population.shp',
@@ -67,7 +67,8 @@ class Command(BaseCommand):
             
             self.stdout.write(f"Using MapServer directory: {self.MAPSERVER_DIR}")
             self.sync_shapefiles()
-            self.load_shapefiles()
+            # Skip database loading - only save to files
+            # self.load_shapefiles()
             self.copy_to_mapserver()
         except Exception as e:
             self.stderr.write(self.style.ERROR(f'Error: {str(e)}'))

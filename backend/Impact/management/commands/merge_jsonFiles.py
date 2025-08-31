@@ -191,10 +191,21 @@ class Command(BaseCommand):
             except (IOError, PermissionError) as e:
                 raise Exception(f"Cannot write to {output_dir}: {e}. Ensure permissions are correct.")
 
-            # Find the shapefile
-            shapefile_path = next(
-                (os.path.join(shapefile_dir, f) for f in os.listdir(shapefile_dir) if f.endswith('.shp')), None
-            )
+            # Find the shapefile - prioritize base shapefile over timestamped version
+            shapefile_files = [f for f in os.listdir(shapefile_dir) if f.endswith('.shp')]
+            
+            # First try to find the base shapefile (fp_sections_igad.shp)
+            base_shapefile = 'fp_sections_igad.shp'
+            if base_shapefile in shapefile_files:
+                shapefile_path = os.path.join(shapefile_dir, base_shapefile)
+                self.stdout.write(self.style.SUCCESS(f"Using base shapefile: {base_shapefile}"))
+            else:
+                # Fall back to any other shapefile if base not found
+                shapefile_path = next(
+                    (os.path.join(shapefile_dir, f) for f in shapefile_files), None
+                )
+                if shapefile_path:
+                    self.stdout.write(self.style.WARNING(f"Base shapefile not found, using: {os.path.basename(shapefile_path)}"))
 
             if not shapefile_path:
                 raise FileNotFoundError("No .shp file found in the specified directory.")

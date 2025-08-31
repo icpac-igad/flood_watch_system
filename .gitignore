@@ -46,3 +46,4 @@ cogs/
 *.sql.gz
 *.dump
 *.claude
+

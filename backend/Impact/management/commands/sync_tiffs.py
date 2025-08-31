@@ -2,12 +2,18 @@ import os
 import paramiko
 import shutil
 import traceback
-from datetime import datetime, timedelta
-from decouple import config
-from django.core.management.base import BaseCommand
-from django.conf import settings
 import tempfile
 import glob
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from django.core.management.base import BaseCommand
+from django.conf import settings
+
+# Load environment variables
+load_dotenv(os.path.join(os.path.dirname(__file__), '../../../../.env'))
+
+def config(key, default=None):
+    return os.environ.get(key, default)
 
 class Command(BaseCommand):
     help = 'Sync TIFF files from SFTP server and update MapServer raster files'
@@ -22,8 +28,8 @@ class Command(BaseCommand):
         # MapServer configuration - adapt to your project structure
         base_dir = getattr(settings, 'BASE_DIR', None)
         if base_dir:
-            # Local development path
-            default_raster_dir = os.path.join(base_dir, '..', 'mapserver', 'data', 'rasters')
+            # Local development path - now using data/rasters in project root
+            default_raster_dir = os.path.join(base_dir, '..', '..', 'data', 'rasters')
             # Make it absolute
             default_raster_dir = os.path.abspath(default_raster_dir)
         else:
@@ -88,8 +94,12 @@ class Command(BaseCommand):
     def process_date(self, date):
         """Process files for a specific date"""
         date_str = date.strftime('%Y/%m/%d')
-        sftp_base_path = config('REMOTE_FOLDER_BASE', default='fp-eastafrica/storage/impact_assessment')
-        path_pattern = f"{sftp_base_path}/fp_impact_forecast/nwp_gfs-det/{date_str}/00/0000"
+        sftp_base_path = config('REMOTE_FOLDER_BASE', default='fp-eastafrica/storage/impact_assessment/fp_impact_forecast/nwp_gfs-det')
+        path_pattern = f"{sftp_base_path}/{date_str}/00/0000"
+        
+        # Create date-specific directory
+        date_raster_dir = os.path.join(self.mapserver_raster_dir, date.strftime('%Y%m%d'))
+        os.makedirs(date_raster_dir, exist_ok=True)
         
         try:
             # Check if the directory exists
@@ -115,9 +125,9 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"Downloaded flood hazard map to {flood_local_path}"))
                 flood_downloaded = True
                 
-                # Copy to MapServer directory with proper naming
-                flood_target = os.path.join(self.mapserver_raster_dir, f"flood_hazard_{date.strftime('%Y%m%d')}.tif")
-                flood_latest = os.path.join(self.mapserver_raster_dir, "flood_hazard_latest.tif")
+                # Copy to date-specific MapServer directory with proper naming
+                flood_target = os.path.join(date_raster_dir, f"flood_hazard_{date.strftime('%Y%m%d')}.tif")
+                flood_latest = os.path.join(date_raster_dir, "flood_hazard_latest.tif")
                 
                 shutil.copy2(flood_local_path, flood_target)
                 self.stdout.write(self.style.SUCCESS(f"Copied flood hazard map to {flood_target}"))
@@ -147,7 +157,7 @@ class Command(BaseCommand):
                 # Return True if at least the flood hazard file was processed
                 return flood_downloaded
             
-            # Process each group
+            # Process each group and save separately
             alert_files_downloaded = []
             
             for group_name in self.groups:
@@ -173,16 +183,22 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.SUCCESS(f"Downloaded {group_file} to {group_local_path}"))
                     alert_files_downloaded.append(group_local_path)
                     
+                    # Save individual group alert files separately in date directory
+                    group_target = os.path.join(date_raster_dir, f"{group_name.lower().replace(' ', '')}_alert_{date.strftime('%Y%m%d')}.tif")
+                    shutil.copy2(group_local_path, group_target)
+                    self.stdout.write(self.style.SUCCESS(f"Copied {group_name} alert to {group_target}"))
+                    
                 except Exception as e:
                     self.stdout.write(self.style.ERROR(f"Error processing {group_name}: {str(e)}"))
             
+            # Don't merge alert files - save them separately
             # Merge alert files if any were downloaded
             if alert_files_downloaded:
                 merged_alerts_file = self.merge_alert_files(alert_files_downloaded, date)
                 if merged_alerts_file:
-                    # Copy to MapServer directory
-                    alerts_target = os.path.join(self.mapserver_raster_dir, f"alerts_{date.strftime('%Y%m%d')}.tif")
-                    alerts_latest = os.path.join(self.mapserver_raster_dir, "alerts_latest.tif")
+                    # Copy to date-specific MapServer directory
+                    alerts_target = os.path.join(date_raster_dir, f"alerts_{date.strftime('%Y%m%d')}.tif")
+                    alerts_latest = os.path.join(date_raster_dir, "alerts_latest.tif")
                     
                     shutil.copy2(merged_alerts_file, alerts_target)
                     self.stdout.write(self.style.SUCCESS(f"Copied merged alerts to {alerts_target}"))
