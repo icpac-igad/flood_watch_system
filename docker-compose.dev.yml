@@ -50,6 +50,7 @@ services:
 
   mapcache:
     image: hkoros/floodwatch_mapcache:v1.0
+    user: root
 
   frontend:
     build:

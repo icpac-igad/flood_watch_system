@@ -238,7 +238,7 @@ const createMarkerIcon = (alertStatus, isSelected = false, isCluster = false, cl
     const iconUrl = iconMap[alertStatus] || iconMap['Normal'];
     
     // Use same fixed size for all clusters - only label and color differ
-    const size = 28; // Fixed size for all clusters
+    const size = 36; // Fixed size for all clusters
     
     // Only show count label for Warning (yellow) clusters
     const showLabel = alertStatus === 'Warning';
@@ -267,7 +267,7 @@ const createMarkerIcon = (alertStatus, isSelected = false, isCluster = false, cl
     };
     
     const iconUrl = iconMap[alertStatus] || iconMap['Normal'];
-    const iconSize = isSelected ? [20, 20] : [16, 16];
+    const iconSize = isSelected ? [32, 48] : [24, 36];
     
     // Add blinking class for non-normal statuses
     const blinkClass = alertStatus !== 'Normal' ? `marker-${alertStatus.toLowerCase()}` : '';

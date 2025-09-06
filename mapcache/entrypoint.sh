@@ -14,7 +14,9 @@ fi
 
 # Create cache and lock directories if they don't exist
 mkdir -p /var/cache/mapcache /var/lock/mapcache
-chown -R www-data:www-data /var/cache/mapcache /var/lock/mapcache
+
+# Fix permissions - make directories writable by www-data
+chmod -R 777 /var/cache/mapcache /var/lock/mapcache
 
 # Check Apache configuration
 echo "Checking Apache configuration..."
