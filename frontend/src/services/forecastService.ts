@@ -71,10 +71,31 @@ export const useForecastData = ({
 
       const fetchedData: ForecastDataResponse = await response.json();
 
-      // Store in cache for instant future access
-      forecastCache.set(requestedDate, selectedCountry, fetchedData);
+      // Check if API fell back to a different date
+      const actualDate = response.headers.get('X-Forecast-Date') ||
+                        response.headers.get('X-Fallback-Date') ||
+                        requestedDate;
+      const isFallback = response.headers.get('X-Fallback') === 'true';
 
-      setData(fetchedData);
+      // If fallback occurred, log warning and use actual date
+      if (isFallback) {
+        console.warn(`⚠️ Requested date ${requestedDate} not available. Showing data for ${actualDate} instead.`);
+      }
+
+      // Add metadata about the actual date to the response
+      const dataWithMetadata = {
+        ...fetchedData,
+        _metadata: {
+          requestedDate,
+          actualDate,
+          isFallback
+        }
+      };
+
+      // Store in cache for instant future access
+      forecastCache.set(requestedDate, selectedCountry, dataWithMetadata);
+
+      setData(dataWithMetadata);
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch forecast data';
       console.error('❌ Error fetching forecast data:', errorMessage);

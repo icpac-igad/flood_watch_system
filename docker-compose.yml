@@ -248,7 +248,7 @@ services:
       - POSTGRES_DBNAME=${DB_NAME:-floodwatch}
       - POSTGRES_HOST=postgis
       - POSTGRES_PORT=5432
-      - TIPG_DB_SCHEMAS=["pgstac"]  # Look in pgstac schema where all tables are
+      - 'TIPG_DB_SCHEMAS=["pgstac"]'  # JSON array format with proper quoting
       - WEB_CONCURRENCY=4
       # Optimize for dense river networks
       - TIPG_TILE_RESOLUTION=4096  # Higher resolution (default: 4096)
@@ -263,7 +263,7 @@ services:
       - floodwatch_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3

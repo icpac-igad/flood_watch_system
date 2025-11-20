@@ -196,6 +196,11 @@ CELERY_TIMEZONE = 'Africa/Nairobi'
 
 
 CELERY_BEAT_SCHEDULE = {
+    'sync-floodproofs-daily': {
+        'task': 'Impact.tasks.sync_floodproofs_daily',
+        'schedule': crontab(hour=12, minute=15),  # 12:15 PM daily
+        'kwargs': {},
+    },
     'merge-jsonfiles-at-noon': {
         'task': 'Impact.tasks.run_management_command',
         'schedule': crontab(hour=12, minute=0),

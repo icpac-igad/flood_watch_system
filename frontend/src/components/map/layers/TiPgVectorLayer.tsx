@@ -89,13 +89,13 @@ const DEFAULT_STYLES = {
   }
 };
 
-// Collection ID mapping (tables in pgstac schema)
+// Collection ID mapping (tables in pgstac schema - lowercase)
 const COLLECTION_IDS = {
-  admin0: 'pgstac.Impact_admin0',
-  admin1: 'pgstac.Impact_admin1',
-  admin2: 'pgstac.Impact_admin2',
-  rivers: 'pgstac.Impact_hydrorivers',
-  lakes: 'pgstac.Impact_waterbodies'
+  admin0: 'pgstac.impact_admin0',
+  admin1: 'pgstac.impact_admin1',
+  admin2: 'pgstac.impact_admin2',
+  rivers: 'pgstac.impact_hydrorivers',
+  lakes: 'pgstac.impact_waterbodies'
 };
 
 export const TiPgVectorLayer: React.FC<TiPgVectorLayerProps> = ({

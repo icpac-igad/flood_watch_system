@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
             command_timeout=30
         )
         async with db_pool.acquire() as conn:
-            count = await conn.fetchval('SELECT COUNT(*) FROM "Impact_mergeddeterministicgeojson"')
+            count = await conn.fetchval('SELECT COUNT(*) FROM "impact_mergeddeterministicgeojson"')
             logger.info(f"✅ Connected to database: {count} forecast records")
     except Exception as e:
         logger.error(f"❌ Database connection failed: {e}")
@@ -280,7 +280,7 @@ async def get_dates(response: Response):
         async with db_pool.acquire() as conn:
             rows = await conn.fetch('''
                 SELECT data_date, date_string, feature_count, file_count, created_at
-                FROM "Impact_mergeddeterministicgeojson"
+                FROM "impact_mergeddeterministicgeojson"
                 ORDER BY data_date DESC
             ''')
 
@@ -345,7 +345,7 @@ async def get_forecast(
             # Query specific date
             row = await conn.fetchrow('''
                 SELECT geojson_data, data_date, feature_count, updated_at
-                FROM "Impact_mergeddeterministicgeojson"
+                FROM "impact_mergeddeterministicgeojson"
                 WHERE data_date = $1
             ''', date_obj)
 
@@ -353,7 +353,7 @@ async def get_forecast(
                 # Fallback to latest
                 row = await conn.fetchrow('''
                     SELECT geojson_data, data_date, feature_count, updated_at
-                    FROM "Impact_mergeddeterministicgeojson"
+                    FROM "impact_mergeddeterministicgeojson"
                     ORDER BY data_date DESC LIMIT 1
                 ''')
 
@@ -407,7 +407,7 @@ async def get_latest(
         async with db_pool.acquire() as conn:
             row = await conn.fetchrow('''
                 SELECT geojson_data, data_date, feature_count, updated_at
-                FROM "Impact_mergeddeterministicgeojson"
+                FROM "impact_mergeddeterministicgeojson"
                 ORDER BY data_date DESC LIMIT 1
             ''')
 
