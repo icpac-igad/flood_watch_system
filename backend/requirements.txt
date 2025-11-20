@@ -1,5 +1,5 @@
-# Change Django version to be compatible with django-celery-beat
-Django==4.2.24
+# Change Django version to be compatible with django-celery-beat - UPDATED FOR SECURITY
+Django==4.2.25
 # Keep all other dependencies the same
 affine==2.4.0
 anyascii==0.3.2
@@ -72,7 +72,7 @@ telepath==0.3.1
 typing_extensions==4.12.2
 tzdata==2024.2
 uritemplate==4.1.1
-urllib3==2.3.0
+urllib3==2.5.0
 wagtail==6.3.2
 whitenoise==6.8.2
 Willow==1.9.0
