@@ -1,5 +1,5 @@
 # Change Django version to be compatible with django-celery-beat - UPDATED FOR SECURITY
-Django==4.2.25
+Django==4.2.26
 # Keep all other dependencies the same
 affine==2.4.0
 anyascii==0.3.2
