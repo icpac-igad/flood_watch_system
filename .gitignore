@@ -13,6 +13,7 @@ migrations/
 
 # Ignore media files
 media/
+media_local/
 
 # Ignore IDE specific files
 .vscode/
@@ -32,6 +33,7 @@ mapserver/impact_shapefiles/
 mapserver/rasters/
 mapserver/shapefiles/
 mapserver/timeseries_data/
+mapserver/
 data/
 frontend/public/
 frontend/dist/
@@ -75,6 +77,8 @@ archived_scripts/current_scripts/legacy/
 **/.env.sftp
 **/.env.local
 backend/.env
+.envs/
+.envs
 
 # Scripts with hardcoded credentials
 pull_from_sftp.sh
@@ -85,6 +89,12 @@ STAGING_DEPLOY_COMMANDS.txt
 # Archived scripts and files
 archived/
 archives/
+archives
+env_backup/
+env_backup_*/
+.env_backup_*/
+*_backup/
+backup_*/
 
 # Ignore data inside static_data and staticfiles, but keep the folders
 backend/static_data/*
