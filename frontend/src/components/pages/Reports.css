@@ -1,0 +1,43 @@
+.reports-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.reports-container h2 {
+  color: #1B6840;
+  margin-bottom: 20px;
+}
+
+.reports-container .card {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid #e0e0e0;
+}
+
+.reports-container .card-header {
+  background-color: #1B6840;
+  color: white;
+  font-weight: bold;
+}
+
+.reports-container .table {
+  margin-bottom: 0;
+}
+
+.reports-container .table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.reports-container .badge {
+  font-size: 0.9em;
+  padding: 0.35em 0.65em;
+}
+
+.reports-container pre {
+  background-color: transparent;
+  border: none;
+  margin: 0;
+  padding: 0;
+}

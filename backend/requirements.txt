@@ -1,0 +1,107 @@
+# Change Django version to be compatible with django-celery-beat - UPDATED FOR SECURITY
+Django==4.2.25
+# Keep all other dependencies the same
+affine==2.4.0
+anyascii==0.3.2
+asgiref==3.8.1
+attrs==24.3.0
+bcrypt==4.2.1
+beautifulsoup4==4.12.3
+certifi==2024.12.14
+cffi==1.17.1
+charset-normalizer==3.4.1
+click==8.1.8
+click-plugins==1.1.1
+cligj==0.7.2
+cryptography==44.0.1
+defusedxml==0.7.1
+django-cors-headers==4.6.0
+django-environ==0.11.2
+django-filter==24.3
+django-leaflet==0.31.0
+django-modelcluster==6.4
+django-permissionedforms==0.1
+django-taggit==6.1.0
+django-treebeard==4.7.1
+djangorestframework==3.15.2
+djangorestframework-gis==1.1
+djangorestframework-simplejwt==5.5.1
+draftjs-exporter==5.0.0
+drf-spectacular==0.28.0
+et_xmlfile==2.0.0
+filetype==1.2.0
+future==1.0.0
+geopandas==1.0.1
+geoserver-restconfig==2.0.12
+gis==0.2.1
+gisdata==0.5.4
+gunicorn==23.0.0
+idna==3.10
+inflection==0.5.1
+jsonschema==4.23.0
+jsonschema-specifications==2024.10.1
+l18n==2021.3
+laces==0.1.1
+leaflet==0.0.3
+numpy==2.2.1
+openpyxl==3.1.5
+packaging==24.2
+pandas==2.2.3
+paramiko==3.5.0
+pillow==11.1.0
+pillow_heif==0.21.0
+psycopg==3.2.4
+psycopg-binary==3.2.3
+pycparser==2.22
+PyNaCl==1.5.0
+pyogrio==0.10.0
+pyparsing==3.2.1
+pyproj==3.7.0
+python-dateutil==2.9.0.post0
+python-decouple==3.8
+pytz==2024.2
+PyYAML==6.0.2
+rasterio==1.4.3
+referencing==0.35.1
+requests==2.32.4
+rpds-py==0.22.3
+shapely==2.0.6
+six==1.17.0
+soupsieve==2.6
+sqlparse==0.5.3
+telepath==0.3.1
+typing_extensions==4.12.2
+tzdata==2024.2
+uritemplate==4.1.1
+urllib3==2.5.0
+wagtail==6.3.2
+whitenoise==6.8.2
+Willow==1.9.0
+
+# Fix celery dependencies with specific versions instead of >= notation
+celery==5.3.6
+django-celery-beat==2.6.0
+redis==5.0.1
+
+# Add setuptools to fix pkg_resources import error - UPDATED FOR SECURITY
+setuptools==78.1.1
+
+# Add django-redis for caching
+django-redis==5.4.0
+
+# TiTiler for serving raster data
+titiler.core==0.18.4
+titiler.application==0.18.4
+fastapi==0.115.6  # Updated to get starlette 0.41.3+ for security fixes
+uvicorn[standard]==0.32.0
+
+# Google Cloud Storage for GeoSFM data
+google-cloud-storage==2.18.2
+
+# PDF Generation
+reportlab==4.0.9
+weasyprint==62.3
+matplotlib>=3.9.0
+
+# Django Debug Toolbar for performance monitoring
+django-debug-toolbar==4.4.6

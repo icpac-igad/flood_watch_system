@@ -1,0 +1,12 @@
+# Override linguist detection for files incorrectly identified as Roff
+*.css linguist-language=CSS
+backend/staticfiles/** linguist-vendored
+
+# Mark vendor directories
+node_modules/** linguist-vendored
+backend/staticfiles/** linguist-vendored
+static/** linguist-vendored
+
+# Mark generated files
+*.min.js linguist-generated
+*.min.css linguist-generated

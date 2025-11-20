@@ -1,0 +1,94 @@
+# Ignore database files
+*.sqlite3
+*.local
+# Ignore environment variables
+.env
+env/
+# Ignore compiled files
+*.pyc
+__pycache__/
+
+# Ignore Django migrations
+migrations/
+
+# Ignore media files
+media/
+
+# Ignore IDE specific files
+.vscode/
+.idea/
+
+# Ignore cloud IDE specific files
+.replit
+replit.nix
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+node_modules/
+
+mapserver/impact_shapefiles/
+mapserver/rasters/
+mapserver/shapefiles/
+mapserver/timeseries_data/
+data/
+frontend/public/
+frontend/dist/
+Deterministic_forecast/
+deterministic_merged/
+merged/
+Impact_forecast/
+merged_geojson_output/
+merged_geojson_sftp_test/
+# TiPG/TiTiler migration documentation and configuration files
+migration_requirements_tipg_titiler.json
+architecture_tipg_titiler.md
+docker-compose-tipg-titiler.yml
+backend_integration_workflow.md
+one_day_migration_plan.json
+mapserver_data/
+/mapserver/mapfiles/
+gcp/
+# COG files
+*.cog.tif
+cogs/
+
+# PostGIS backup files
+*.sql.gz
+*.dump
+*.claude
+
+# Log files
+*.log
+*.log.*
+logs/
+backend/logs/
+
+# Legacy scripts with potential secrets
+archived_scripts/current_scripts/legacy/
+
+# Environment files with secrets
+.env.local
+.env.staging
+.env.production
+**/.env.sftp
+**/.env.local
+backend/.env
+
+# Scripts with hardcoded credentials
+pull_from_sftp.sh
+push_from_sftp_server.sh
+download_from_sftp.sh
+STAGING_DEPLOY_COMMANDS.txt
+
+# Archived scripts and files
+archived/
+
+# Ignore data inside static_data and staticfiles, but keep the folders
+backend/static_data/*
+!backend/static_data/.gitkeep
+backend/staticfiles/*
+!backend/staticfiles/.gitkeep
+
+.venv

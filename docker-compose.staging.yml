@@ -1,0 +1,279 @@
+services:
+  # PostgreSQL with PostGIS and pgSTAC extensions
+  postgis:
+    image: hkoros/floodwatch-postgis:1.1.0
+    container_name: floodwatch_pgstac_staging
+    environment:
+      POSTGRES_DB: ${DB_NAME:-floodwatch}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-floodwatch_pass}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgis_data_staging:/var/lib/postgresql/data
+    ports:
+      - "8091:5432"
+    networks:
+      - floodwatch_staging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-floodwatch}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis for caching and Celery
+  redis:
+    image: hkoros/floodwatch-redis:1.1.0
+    container_name: floodwatch_redis_staging
+    volumes:
+      - redis_data_staging:/data
+    ports:
+      - "9092:6379"
+    networks:
+      - floodwatch_staging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Django Backend API
+  backend:
+    image: hkoros/floodwatch-backend:1.1.0
+    container_name: floodwatch_backend_staging
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - ./backend/static_data:/app/static:ro,z
+    ports:
+      - "8090:8090"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - SERVICE_TYPE=backend
+      - DJANGO_SETTINGS_MODULE=flood_watch_system.settings.staging
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-this-in-production}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
+      - DB_NAME=${DB_NAME:-floodwatch}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
+      - DB_HOST=postgis
+      - DB_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CORS_ALLOWED_ORIGINS=http://197.254.1.10:8094
+      - HOST_URL=http://197.254.1.10:8090
+      - GCS_PROJECT_ID=${GCS_PROJECT_ID:-}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
+      - GCS_CREDENTIALS_JSON=${GCS_CREDENTIALS_JSON:-}
+      - GCS_GEOSFM_PREFIX=${GCS_GEOSFM_PREFIX:-geosfm_output_icpac_pc/}
+      - SFTP_HOST=${SFTP_HOST:-}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME:-}
+      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
+      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE:-}
+      - FTP_HOST=${FTP_HOST:-}
+      - FTP_PORT=${FTP_PORT:-21}
+      - FTP_USER=${FTP_USER:-}
+      - FTP_PASSWORD=${FTP_PASSWORD:-}
+      - FTP_REMOTE_DIR=${FTP_REMOTE_DIR:-output/Combined}
+    depends_on:
+      postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - floodwatch_staging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/admin/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # FastAPI Service
+  fastapi:
+    image: hkoros/floodwatch-fastapi:1.1.0
+    container_name: floodwatch_fastapi_staging
+    ports:
+      - "8093:8001"
+    environment:
+      - DB_NAME=${DB_NAME:-floodwatch}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
+      - DB_HOST=postgis
+      - DB_PORT=5432
+    depends_on:
+      postgis:
+        condition: service_healthy
+    networks:
+      - floodwatch_staging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Celery Worker
+  celery:
+    image: hkoros/floodwatch-backend:1.1.0
+    container_name: floodwatch_celery_staging
+    volumes:
+      - ./backend/static_data:/app/static:ro,z
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - SERVICE_TYPE=celery
+      - DJANGO_SETTINGS_MODULE=flood_watch_system.settings.staging
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-this-in-production}
+      - DB_NAME=${DB_NAME:-floodwatch}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
+      - DB_HOST=postgis
+      - DB_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - GCS_PROJECT_ID=${GCS_PROJECT_ID:-}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
+      - GCS_CREDENTIALS_JSON=${GCS_CREDENTIALS_JSON:-}
+      - GCS_GEOSFM_PREFIX=${GCS_GEOSFM_PREFIX:-geosfm_output_icpac_pc/}
+      - SFTP_HOST=${SFTP_HOST:-}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME:-}
+      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
+      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE:-}
+      - JSON_REMOTE_DIR=${JSON_REMOTE_DIR:-}
+      - FTP_HOST=${FTP_HOST:-}
+      - FTP_PORT=${FTP_PORT:-21}
+      - FTP_USER=${FTP_USER:-}
+      - FTP_PASSWORD=${FTP_PASSWORD:-}
+      - FTP_REMOTE_DIR=${FTP_REMOTE_DIR:-output/Combined}
+    depends_on:
+      postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - floodwatch_staging
+    restart: unless-stopped
+
+  # Celery Beat for Scheduled Tasks
+  celery-beat:
+    image: hkoros/floodwatch-backend:1.1.0
+    container_name: floodwatch_celery_beat_staging
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - SERVICE_TYPE=celery-beat
+      - DJANGO_SETTINGS_MODULE=flood_watch_system.settings.staging
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-this-in-production}
+      - DB_NAME=${DB_NAME:-floodwatch}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
+      - DB_HOST=postgis
+      - DB_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - SFTP_HOST=${SFTP_HOST:-}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME:-}
+      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
+      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE:-}
+      - JSON_REMOTE_DIR=${JSON_REMOTE_DIR:-}
+      - FTP_HOST=${FTP_HOST:-}
+      - FTP_PORT=${FTP_PORT:-21}
+      - FTP_USER=${FTP_USER:-}
+      - FTP_PASSWORD=${FTP_PASSWORD:-}
+      - FTP_REMOTE_DIR=${FTP_REMOTE_DIR:-output/Combined}
+    depends_on:
+      postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - floodwatch_staging
+    restart: unless-stopped
+
+  # React Frontend
+  frontend:
+    image: hkoros/floodwatch-frontend:1.1.0
+    container_name: floodwatch_frontend_staging
+    ports:
+      - "8094:8080"
+    environment:
+      - VITE_API_URL=/api
+    depends_on:
+      - backend
+    networks:
+      - floodwatch_staging
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # TiPg - Vector Tiles Service (Replaces MapServer/MapCache)
+  tipg:
+    image: hkoros/floodwatch-tipg:1.1.0
+    container_name: floodwatch_tipg_staging
+    ports:
+      - "8095:80"
+    environment:
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASS=${DB_PASSWORD:-floodwatch_pass}
+      - POSTGRES_DBNAME=${DB_NAME:-floodwatch}
+      - POSTGRES_HOST=postgis
+      - POSTGRES_PORT=5432
+      - TIPG_DB_SCHEMAS=["pgstac"]
+      - TIPG_TABLE_PATTERN=^Impact_.*
+      - WEB_CONCURRENCY=4
+      - TIPG_TILE_RESOLUTION=4096
+      - TIPG_TILE_BUFFER=256
+      - TIPG_MAX_FEATURES_PER_TILE=50000
+      - TIPG_DEFAULT_MINZOOM=0
+      - TIPG_DEFAULT_MAXZOOM=22
+    depends_on:
+      postgis:
+        condition: service_healthy
+    networks:
+      - floodwatch_staging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+networks:
+  floodwatch_staging:
+    driver: bridge
+
+volumes:
+  postgis_data_staging:
+    driver: local
+  redis_data_staging:
+    driver: local
+  static_volume:
+    driver: local
+  media_volume:
+    driver: local

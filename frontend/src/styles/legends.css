@@ -1,0 +1,143 @@
+/**
+ * MAP LEGENDS STYLES
+ * Legend boxes showing color codes and classifications for map layers
+ * Includes alert status legend and WMS layer legends
+ */
+
+/* =============================================================================
+   MAP LEGEND CONTAINER
+   Fixed positioned legend box on the map
+   ============================================================================= */
+
+.map-legend {
+  position: fixed !important;
+  bottom: 50px !important; /* Above footer */
+  left: 370px !important; /* To the right of sidebar (350px + 20px gap) */
+  background: white !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
+  z-index: 1005 !important; /* Above map, below popups */
+  max-height: calc(100vh - 200px) !important;
+  overflow-y: auto !important; /* Scrollable if content is long */
+  padding: 15px !important;
+  min-width: 200px !important;
+  max-width: 300px !important;
+}
+
+.map-legend h5 {
+  margin: 0 0 15px 0 !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #034930 !important; /* ICPAC green */
+  border-bottom: 2px solid #034930 !important;
+  padding-bottom: 8px !important;
+}
+
+/* Legend images from WMS GetLegendGraphic */
+.map-legend img {
+  display: block !important;
+  max-width: 100% !important;
+  height: auto !important;
+  margin: 10px 0 !important;
+}
+
+/* =============================================================================
+   CUSTOM LEGEND ITEMS
+   Manual legend items with color boxes and labels
+   ============================================================================= */
+
+.map-legend > div {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* Color box */
+.map-legend > div > div:first-child {
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  border: 1px solid #ddd;
+  flex-shrink: 0; /* Don't shrink color box */
+}
+
+/* Label text */
+.map-legend > div > span {
+  font-size: 13px;
+  color: #333;
+}
+
+/* =============================================================================
+   ALERT STATUS LEGEND
+   Shows color codes for station alert levels
+   Normal (Gray) / Warning (Orange) / Alarm (Red) / Emergency (Dark Red)
+   ============================================================================= */
+
+.alert-status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.alert-status-badge.normal {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.alert-status-badge.warning {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.alert-status-badge.alarm {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.alert-status-badge.emergency {
+  background-color: #f5c6cb;
+  color: #721c24;
+  font-weight: 700;
+}
+
+/* =============================================================================
+   RESPONSIVE LEGENDS
+   Adjust legend position and size on different screens
+   ============================================================================= */
+
+/* Tablet */
+@media (max-width: 991.98px) {
+  .map-legend {
+    bottom: 40px !important;
+    left: 290px !important; /* Adjusted for smaller sidebar (280px + 10px gap) */
+    max-width: 250px !important;
+  }
+}
+
+/* Mobile */
+@media (max-width: 767.98px) {
+  .map-legend {
+    bottom: 40px !important;
+    left: 10px !important; /* Move to left edge on mobile */
+    right: auto !important;
+    max-width: 200px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* Small mobile */
+@media (max-width: 575.98px) {
+  .map-legend {
+    max-width: 180px !important;
+    padding: 10px !important;
+    left: 10px !important;
+    bottom: 40px !important;
+  }
+
+  .map-legend h5 {
+    font-size: 14px !important;
+  }
+}

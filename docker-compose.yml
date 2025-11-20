@@ -1,0 +1,315 @@
+services:
+  # PostgreSQL with PostGIS and pgSTAC extensions
+  postgis:
+    image: hkoros/floodwatch-postgis:1.1.0
+    container_name: floodwatch_pgstac
+    entrypoint: ["docker-entrypoint.sh", "postgres"]
+    environment:
+      POSTGRES_DB: ${DB_NAME:-floodwatch}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-floodwatch_pass}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    ports:
+      - "8091:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-floodwatch}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - floodwatch_network
+
+  # Redis for caching and Celery
+  redis:
+    image: hkoros/floodwatch-redis:1.1.0
+    container_name: floodwatch_redis
+    entrypoint: ["docker-entrypoint.sh", "redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "9092:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - floodwatch_network
+
+  # Django Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: hkoros/floodwatch-backend:1.1.0
+    container_name: floodwatch_backend
+    entrypoint: ["docker-entrypoint.sh"]
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - ./backend/static_data:/app/static_data:ro,z
+    ports:
+      - "8090:8090"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    environment:
+      - SERVICE_TYPE=backend
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-this-in-production}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
+      - DB_NAME=${DB_NAME:-floodwatch}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
+      - DB_HOST=${DB_HOST:-postgis}
+      - DB_PORT=${DB_PORT:-5432}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CORS_ALLOWED_ORIGINS=http://localhost:5000,http://localhost:5173
+      - HOST_URL=http://localhost:5000
+      - GCS_PROJECT_ID=${GCS_PROJECT_ID:-}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
+      - GCS_CREDENTIALS_JSON=${GCS_CREDENTIALS_JSON:-}
+      - GCS_GEOSFM_PREFIX=${GCS_GEOSFM_PREFIX:-geosfm_output_icpac_pc/}
+      - SFTP_HOST=${SFTP_HOST:-}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME:-}
+      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
+      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE:-}
+      - FTP_HOST=${FTP_HOST:-}
+      - FTP_PORT=${FTP_PORT:-21}
+      - FTP_USER=${FTP_USER:-}
+      - FTP_PASSWORD=${FTP_PASSWORD:-}
+      - FTP_REMOTE_DIR=${FTP_REMOTE_DIR:-output/Combined}
+    depends_on:
+      postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - floodwatch_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/admin/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Celery Worker (for background tasks)
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: hkoros/floodwatch-backend:1.1.0
+    container_name: floodwatch_celery
+    entrypoint: ["docker-entrypoint.sh"]
+    volumes:
+      - ./backend/static_data:/app/static_data:ro,z
+    environment:
+      - SERVICE_TYPE=celery
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-this-in-production}
+      - DB_NAME=${DB_NAME:-floodwatch}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
+      - DB_HOST=${DB_HOST:-postgis}
+      - DB_PORT=${DB_PORT:-5432}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - GCS_PROJECT_ID=${GCS_PROJECT_ID:-}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
+      - GCS_CREDENTIALS_JSON=${GCS_CREDENTIALS_JSON:-}
+      - GCS_GEOSFM_PREFIX=${GCS_GEOSFM_PREFIX:-geosfm_output_icpac_pc/}
+      - SFTP_HOST=${SFTP_HOST:-}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME:-}
+      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
+      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE:-}
+      - FTP_HOST=${FTP_HOST:-}
+      - FTP_PORT=${FTP_PORT:-21}
+      - FTP_USER=${FTP_USER:-}
+      - FTP_PASSWORD=${FTP_PASSWORD:-}
+      - FTP_REMOTE_DIR=${FTP_REMOTE_DIR:-output/Combined}
+    depends_on:
+      - postgis
+      - redis
+      - backend
+    networks:
+      - floodwatch_network
+    restart: unless-stopped
+
+  # Celery Beat (for scheduled tasks)
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: hkoros/floodwatch-backend:1.1.0
+    container_name: floodwatch_celery_beat
+    entrypoint: ["docker-entrypoint.sh"]
+    environment:
+      - SERVICE_TYPE=celery-beat
+      - DEBUG=${DEBUG:-False}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-this-in-production}
+      - DB_NAME=${DB_NAME:-floodwatch}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
+      - DB_HOST=${DB_HOST:-postgis}
+      - DB_PORT=${DB_PORT:-5432}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - SFTP_HOST=${SFTP_HOST:-}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME:-}
+      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
+      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE:-}
+      - FTP_HOST=${FTP_HOST:-}
+      - FTP_PORT=${FTP_PORT:-21}
+      - FTP_USER=${FTP_USER:-}
+      - FTP_PASSWORD=${FTP_PASSWORD:-}
+      - FTP_REMOTE_DIR=${FTP_REMOTE_DIR:-output/Combined}
+      - JSON_REMOTE_DIR=${JSON_REMOTE_DIR:-}
+    depends_on:
+      - postgis
+      - redis
+      - backend
+    networks:
+      - floodwatch_network
+    restart: unless-stopped
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    image: hkoros/floodwatch-frontend:1.1.0
+    container_name: floodwatch_frontend
+    ports:
+      - "8094:8080"
+    environment:
+      - VITE_API_URL=/api
+    depends_on:
+      - backend
+    networks:
+      - floodwatch_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # FastAPI service for high-performance forecast data
+  fastapi:
+    build:
+      context: ./fastapi-service
+      dockerfile: Dockerfile
+    image: hkoros/floodwatch-fastapi:1.1.0
+    container_name: floodwatch_fastapi
+    ports:
+      - "9050:8001"
+    environment:
+      - DB_HOST=${DB_HOST:-postgis}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-floodwatch}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
+    depends_on:
+      postgis:
+        condition: service_healthy
+    networks:
+      - floodwatch_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ========================================
+  # TiPg - Vector Tiles Service
+  # ========================================
+  # Serves vector tiles from PostGIS tables for admin boundaries, rivers, and lakes
+  # Replaced MapServer/MapCache for vector data (90% smaller, faster performance)
+
+  tipg:
+    image: hkoros/floodwatch-tipg:1.1.0
+    container_name: floodwatch_tipg
+    ports:
+      - "8095:80"  # Using MapServer's old port
+    environment:
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASS=${DB_PASSWORD:-floodwatch_pass}
+      - POSTGRES_DBNAME=${DB_NAME:-floodwatch}
+      - POSTGRES_HOST=postgis
+      - POSTGRES_PORT=5432
+      - TIPG_DB_SCHEMAS=["pgstac"]  # Look in pgstac schema where all tables are
+      - WEB_CONCURRENCY=4
+      # Optimize for dense river networks
+      - TIPG_TILE_RESOLUTION=4096  # Higher resolution (default: 4096)
+      - TIPG_TILE_BUFFER=256  # Larger buffer to prevent clipping (default: 256)
+      - TIPG_MAX_FEATURES_PER_TILE=50000  # More features per tile (default: 10000)
+      - TIPG_DEFAULT_MINZOOM=0  # Show data from zoom level 0
+      - TIPG_DEFAULT_MAXZOOM=22  # Allow zooming to level 22
+    depends_on:
+      postgis:
+        condition: service_healthy
+    networks:
+      - floodwatch_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========================================
+  # TiTiler - Raster Tiles Service (PLACEHOLDER)
+  # ========================================
+  # TODO: Enable this to serve raster tiles (COG/GeoTIFF) for flood inundation maps
+  # Will replace MapServer for raster data serving
+  # Documentation: https://developmentseed.org/titiler/
+  #
+  # titiler:
+  #   image: ghcr.io/developmentseed/titiler:latest
+  #   container_name: floodwatch_titiler
+  #   ports:
+  #     - "8096:8000"  # Using MapCache's old port
+  #   environment:
+  #     - TITILER_API_DISABLE_STAC=FALSE
+  #     - TITILER_API_DISABLE_MOSAIC=FALSE
+  #     - GDAL_CACHEMAX=512
+  #     - GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR
+  #     - GDAL_HTTP_MERGE_CONSECUTIVE_RANGES=YES
+  #     - GDAL_HTTP_MULTIPLEX=YES
+  #     - VSI_CACHE=TRUE
+  #     - VSI_CACHE_SIZE=536870912
+  #   volumes:
+  #     - ./data/rasters:/data:ro  # Mount your COG/GeoTIFF files here
+  #   networks:
+  #     - floodwatch_network
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+volumes:
+  postgis_data:
+    driver: local
+  redis_data:
+    driver: local
+  static_volume:
+    driver: local
+  media_volume:
+    driver: local
+
+networks:
+  floodwatch_network:
+    driver: bridge

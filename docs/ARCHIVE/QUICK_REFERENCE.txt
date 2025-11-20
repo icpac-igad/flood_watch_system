@@ -1,0 +1,241 @@
+================================================================================
+EAST AFRICA FLOOD WATCH - CURRENT ARCHITECTURE QUICK SUMMARY
+================================================================================
+
+SYSTEM ARCHITECTURE
+===================
+
+Frontend:          React + Vite (Port 8094)
+Django Backend:    REST Framework (Port 8090)
+FastAPI:           Forecast data service (Port 9050)
+STAC API:          Metadata catalog (Port 8081) - NOT YET INTEGRATED
+TiPg:              Vector tiles OGC API (Port 8083) - NOT YET INTEGRATED  
+PostgreSQL:        PostGIS + PgSTAC (Port 8091)
+Redis:             Caching + Celery (Port 9092)
+
+================================================================================
+
+KEY SERVICES & WHAT THEY DO
+============================
+
+1. FASTAPI SERVICE (fastapi-service/main.py)
+   - Serves deterministic forecast GeoJSON from Impact_mergeddeterministicgeojson
+   - Endpoints:
+     GET /api/fast/merged-forecast/dates/           [cached 15 min]
+     GET /api/fast/merged-forecast/{date}/          [cached 1 hour]
+     GET /api/fast/merged-forecast/latest/          [cached 30 min]
+   - Features: AsyncPG pooling, ORJSON serialization, country filtering
+   - Per-request timing logs for monitoring
+   - 979 features per forecast date
+
+2. STAC API SERVICE (stac-api/main.py)
+   - Metadata catalog service using stac-fastapi-pgstac
+   - PgSTAC extension enabled for STAC storage
+   - Currently EMPTY - no collections or items registered
+   - Endpoints:
+     GET /collections
+     GET /collections/{id}/items
+     POST /search (spatial/temporal)
+   - Ready to ingest but not configured yet
+
+3. TIPG SERVICE (tipg-service/main.py)
+   - Vector tiles OGC Features & Tiles API
+   - Auto-discovers PostGIS tables:
+     - Impact_admin0, Impact_admin1, Impact_admin2 (boundaries)
+     - Impact_waterbodies, Impact_hydrorivers (geography)
+     - Impact_monitoringstation (monitoring stations)
+   - Serves MVT vector tiles + GeoJSON features
+   - Built-in tile viewer included
+   - NOT YET EXPOSED in docker-compose
+
+4. DJANGO BACKEND (backend/Impact/)
+   - GeoJSON ViewSets via Django REST Framework
+   - Endpoints: /api/admin0/, /admin1/, /admin2/, /water-bodies/, etc.
+   - Models for spatial data (geometry fields via GeoDjango)
+   - EnsembleControlPoint model for merging forecast data
+   - Authentication: BasicAuth (staging) + JWT (disabled)
+   - CORS enabled for all origins (should restrict in production)
+
+================================================================================
+
+EAOPI ENSEMBLE DATA STATUS
+===========================
+
+PRESENT:
+- Sync scripts: download_ensemble_data.py, sync_ensemble_to_db.py
+- FTP Connection: ENSEMBLE_SFTP_HOST=41.215.21.156 (GeoSFM server)
+- Control Points: EnsembleControlPoint model for spatial reference
+- Management Command: sync_ensemble_to_db (downloads + merges data)
+
+MISSING:
+- STAC Collection definition for ensemble forecasts
+- STAC Items created from ensemble data
+- PgSTAC indexing for searchability
+- Frontend display of ensemble data
+- Integration with STAC /search endpoint
+
+================================================================================
+
+FRONTEND CONFIGURATION (endpoints.ts)
+======================================
+
+Currently Configured:
+- VITE_API_URL              -> Django backend (http://localhost:8090)
+- VITE_FASTAPI_URL          -> FastAPI service (http://localhost:8093)
+- VITE_MAPSERVER_URL        -> MapServer WMS (commented out in docker-compose)
+- VITE_MAPCACHE_WMS_URL     -> MapCache WMS (commented out)
+
+NOT YET USED:
+- API_ENDPOINTS.stac        (http://localhost:8081)
+- API_ENDPOINTS.tipg        (http://localhost:8083)
+
+MISSING:
+- useStacSearch hook
+- useTipgFeatures hook
+- STAC collection selector in MapViewer
+- Ensemble data visualization
+
+================================================================================
+
+DATABASE MODELS & TABLES
+========================
+
+FORECAST DATA:
+- Impact_mergeddeterministicgeojson
+  Columns: id, data_date, date_string, geojson_data (JSONB), feature_count, 
+           file_count, created_at, updated_at, processed_by
+  Use: Stores complete 979-feature forecast GeoJSON per day
+  Indexed by: data_date, date_string, created_at
+
+ENSEMBLE:
+- Impact_ensemblecontrolpoint
+  Columns: id, GRIDCODE (unique), zone, geometry (Point)
+  Use: Reference points for merging ensemble forecast with control points
+
+BOUNDARIES & GEOGRAPHY:
+- Impact_admin0, Impact_admin1, Impact_admin2 (admin boundaries)
+- Impact_waterbodies (lakes, rivers)
+- Impact_hydrorivers (river network - 283,806 segments)
+- Impact_monitoringstation (gauge stations with thresholds)
+
+RASTER:
+- Impact_alertlevelraster (alert level COGs)
+- Impact_floodhazardmapraster (inundation COGs)
+
+================================================================================
+
+DOCKER SERVICES MAPPING
+=======================
+
+RUNNING:
+- postgis (8091:5432)     - Database + PostGIS + PgSTAC schema
+- redis (9092:6379)       - Cache/Celery broker
+- backend (8090:8090)     - Django REST API
+- celery                  - Background tasks
+- celery-beat             - Task scheduler
+- frontend (8094:8080)    - React app
+- fastapi (9050:8001)     - Forecast data service
+- mapserver (8095:80)     [commented out]
+- mapcache (8096:80)      [commented out]
+
+NOT CONFIGURED:
+- stac-api (8081)         - STAC catalog service
+- tipg-service (8083)     - Vector tiles service
+- titiler-pgstac          - Raster tiles (Dockerfile only)
+
+================================================================================
+
+AUTHENTICATION
+==============
+
+BasicAuthMiddleware:
+- Staging only (STAGING_AUTH_ENABLED flag)
+- Credentials: username/password via Authorization header
+- Exemptions: /admin/, /health/
+
+MapAuthMiddleware:
+- JWT-based (rest_framework_simplejwt)
+- Protected: /api/.*geojson.*, /api/.*deterministic.*, /api/.*layers.*
+- Currently DISABLED (returns None immediately)
+
+Production: Both auth systems should be re-enabled and hardened
+
+================================================================================
+
+WHAT TO DO NEXT (PRIORITY ORDER)
+=================================
+
+PRIORITY 1 (Foundation):
+1. Register STAC collections (deterministic, ensemble, raster products)
+2. Create STAC Items from existing forecast data
+3. Enable STAC /search endpoint (temporal + spatial indexing)
+
+PRIORITY 2 (Integration):
+4. Expose TiPg service in docker-compose.yml
+5. Update frontend endpoints.ts for STAC/TiPg URLs
+6. Create frontend hooks for STAC search + TiPg features
+
+PRIORITY 3 (Migration):
+7. Test FastAPI vs TiPg performance
+8. Gradually shift frontend to use TiPg instead of FastAPI
+9. Deprecate FastAPI when TiPg proves reliable
+
+PRIORITY 4 (EAOPI):
+10. Create STAC Collection for ensemble forecasts
+11. Ingest ensemble data as STAC Items
+12. Display ensemble on frontend alongside deterministic
+
+================================================================================
+
+FILES YOU SHOULD REVIEW
+=======================
+
+Core Services:
+- stac-api/main.py                          (STAC implementation)
+- fastapi-service/main.py                   (Forecast data service)
+- tipg-service/main.py                      (Vector tiles service)
+- backend/Impact/views.py                   (Django REST endpoints)
+- backend/Impact/models.py                  (Data models)
+
+Frontend:
+- frontend/src/config/endpoints.ts          (API endpoints config)
+- frontend/src/components/pages/MapViewer.jsx
+
+Infrastructure:
+- docker-compose.yml                        (Services config)
+- .env                                      (Environment variables)
+
+Documentation:
+- COMPREHENSIVE_ARCHITECTURE_OVERVIEW.md    (Full system diagram)
+- STAC_EAOPI_MIGRATION_ROADMAP.md          (Implementation plan)
+- EOAPI_IMPLEMENTATION_GUIDE.md             (API details)
+- ENSEMBLE_DATA_GUIDE.md                    (Ensemble data info)
+
+================================================================================
+
+DATABASE CREDENTIALS (from .env)
+================================
+
+PostgreSQL:
+  Host: postgis (Docker) or localhost:8091 (external)
+  User: postgres
+  Password: floodwatch_pass
+  Database: floodwatch
+
+Redis:
+  Host: redis (Docker) or localhost:9092 (external)
+  Port: 6379
+
+SFTP (Floodproofs Data):
+  Host: 197.254.113.173
+  User: floodproofs
+  Password: IcpaC#254
+
+ENSEMBLE (GeoSFM):
+  Host: 41.215.21.156
+  Port: 21 (FTP)
+  User: geosfm
+  Password: "icpac#254"
+  Path: /ftproot/output/Combined
+
+================================================================================

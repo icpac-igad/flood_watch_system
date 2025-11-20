@@ -1,0 +1,94 @@
+FloodWatch v1.1-staging - Complete Deployment Guide
+====================================================
+
+PART 1: BUILD AND PUSH IMAGES (Local Machine)
+====================================================
+
+Step 1: Login to Docker Hub
+docker login --username hkoros
+
+Step 2: Build Images
+cd "/home/koros/Downloads/MusoknotetabMaranet (3)/MusoknotetabMaranet"
+docker build -t hkoros/floodwatch-backend:v1.1-staging ./backend
+docker build --target production -t hkoros/floodwatch-frontend:v1.1-staging ./frontend
+docker tag postgis/postgis:16-3.4 hkoros/floodwatch-postgis:v1.1-staging
+docker tag redis:7-alpine hkoros/floodwatch-redis:v1.1-staging
+
+Step 3: Push Images to Docker Hub
+docker push hkoros/floodwatch-backend:v1.1-staging
+docker push hkoros/floodwatch-frontend:v1.1-staging
+docker push hkoros/floodwatch-postgis:v1.1-staging
+docker push hkoros/floodwatch-redis:v1.1-staging
+
+====================================================
+
+PART 2: DEPLOY ON STAGING SERVER (197.254.1.10)
+====================================================
+
+Step 1: SSH into Staging Server
+ssh user@197.254.1.10
+
+Step 2: Stop Current FloodWatch Containers (if running)
+docker-compose down
+
+Step 3: Create Staging Folder
+mkdir -p /opt/floodwatch-staging
+cd /opt/floodwatch-staging
+
+Step 4: Copy docker-compose.staging.yml and .env.staging to Server
+scp docker-compose.staging.yml user@197.254.1.10:/opt/floodwatch-staging/
+scp .env.staging user@197.254.1.10:/opt/floodwatch-staging/.env
+
+Step 5: Login to Docker Hub on Server
+docker login --username hkoros
+
+Step 6: Pull New Images
+docker pull hkoros/floodwatch-backend:v1.1-staging
+docker pull hkoros/floodwatch-frontend:v1.1-staging
+docker pull hkoros/floodwatch-postgis:v1.1-staging
+docker pull hkoros/floodwatch-redis:v1.1-staging
+
+Step 7: Start Staging Environment
+docker-compose --env-file .env up -d
+
+Step 8: Check Container Status
+docker-compose ps
+
+Step 9: View Logs
+docker-compose logs -f
+
+Step 10: Run Database Migrations
+docker-compose exec backend python manage.py migrate
+
+Step 11: Create Superuser (if needed)
+docker-compose exec backend python manage.py createsuperuser
+
+Step 12: Load Data (GeoSFM JSONs, Admin, Lakes)
+docker-compose exec backend python manage.py sync_floodproofs_to_db
+
+====================================================
+
+QUICK COMMANDS SUMMARY
+====================================================
+
+LOCAL (Build & Push):
+docker login --username hkoros && docker build -t hkoros/floodwatch-backend:v1.1-staging ./backend && docker build --target production -t hkoros/floodwatch-frontend:v1.1-staging ./frontend && docker tag postgis/postgis:16-3.4 hkoros/floodwatch-postgis:v1.1-staging && docker tag redis:7-alpine hkoros/floodwatch-redis:v1.1-staging && docker push hkoros/floodwatch-backend:v1.1-staging && docker push hkoros/floodwatch-frontend:v1.1-staging && docker push hkoros/floodwatch-postgis:v1.1-staging && docker push hkoros/floodwatch-redis:v1.1-staging
+
+STAGING SERVER (Deploy):
+ssh user@197.254.1.10
+docker-compose down
+mkdir -p /opt/floodwatch-staging && cd /opt/floodwatch-staging
+docker login --username hkoros
+docker pull hkoros/floodwatch-backend:v1.1-staging && docker pull hkoros/floodwatch-frontend:v1.1-staging && docker pull hkoros/floodwatch-postgis:v1.1-staging && docker pull hkoros/floodwatch-redis:v1.1-staging
+docker-compose --env-file .env up -d
+docker-compose ps
+docker-compose exec backend python manage.py migrate
+docker-compose exec backend python manage.py sync_floodproofs_to_db
+
+====================================================
+
+SERVER IPs:
+- External: 197.254.1.10
+- Internal: 10.10.1.13
+
+====================================================
