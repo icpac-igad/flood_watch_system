@@ -36,6 +36,7 @@ mapserver/timeseries_data/
 mapserver/
 data/
 frontend/public/
+!frontend/public/map-markers/
 frontend/dist/
 Deterministic_forecast/
 deterministic_merged/

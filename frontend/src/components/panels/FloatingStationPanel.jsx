@@ -24,7 +24,7 @@ export const FloatingStationPanel = ({
   markerPosition // { x, y } - pixel coordinates of the clicked marker
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState({ x: 20, y: 80 }); // Start below navbar (navbar ~60px + margin)
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const panelRef = useRef(null);

@@ -88,6 +88,7 @@ class WaterBodies(models.Model):
         return self.name_of_wa or f"Water Body {self.af_wtr_id}"
 
     class Meta:
+        db_table = 'impact_waterbodies'
         verbose_name_plural = "Water Bodies"
         indexes = [
             models.Index(fields=['type_of_wa']),
@@ -153,7 +154,7 @@ class Admin0(models.Model):
         return self.country or f"Country {self.gid_0}"
 
     class Meta:
-        db_table = 'Impact_admin0'
+        db_table = 'impact_admin0'
         verbose_name = "Administrative Level 0 (Country)"
         verbose_name_plural = "Administrative Level 0 (Countries)"
 
@@ -173,6 +174,7 @@ class Admin1(models.Model):
         return self.country
 
     class Meta:
+        db_table = 'impact_admin1'
         verbose_name_plural = "Administrative Level 1"  
 
 
@@ -206,6 +208,7 @@ class HydroRivers(models.Model):
         return f"River {self.hyriv_id}"
 
     class Meta:
+        db_table = 'impact_hydrorivers'
         verbose_name = "HydroRIVERS River"
         verbose_name_plural = "HydroRIVERS Rivers"
         indexes = [
@@ -249,6 +252,7 @@ class MonitoringStation(models.Model):
         return f"{self.sec_name} ({self.sec_code})"
     
     class Meta:
+        db_table = 'impact_monitoringstation'
         verbose_name_plural = "Monitoring Stations"
         unique_together = [['sec_name', 'sec_code']]
         indexes = [
@@ -290,6 +294,7 @@ class MergedDeterministicGeoJSON(models.Model):
         return f"Merged GeoJSON - {self.data_date} ({self.feature_count} features)"
     
     class Meta:
+        db_table = 'impact_mergeddeterministicgeojson'  # Lowercase table name
         verbose_name = "Merged Deterministic GeoJSON"
         verbose_name_plural = "Merged Deterministic GeoJSON Files"
         ordering = ['-data_date']
@@ -413,7 +418,7 @@ class Admin2(models.Model):
         return f"{self.country} - {self.adm1_name} - {self.adm2_name}"
 
     class Meta:
-        db_table = 'Impact_admin2'
+        db_table = 'impact_admin2'
         verbose_name = "Admin Level 2 Boundary"
         verbose_name_plural = "Admin Level 2 Boundaries"
 

@@ -26,10 +26,10 @@ export interface MapConfig {
  * Core map configuration
  */
 export const MAP_CONFIG: MapConfig = {
-  // Greater Horn of Africa region
-  initialPosition: [4.6818, 34.9911],
-  initialZoom: 6,
-  maxBounds: [[-13, 20], [25, 52]], // Expanded to include Tanzania
+  // East Africa region - centered to show all admin 0 countries
+  initialPosition: [1.5, 37],  // Centered on East Africa
+  initialZoom: 5.5,  // Zoom level to fit all admin 0 bounds
+  maxBounds: [[-13, 27], [16, 52]], // East Africa/GHA region only
   minZoom: 5,
   maxZoom: 18,
   
@@ -41,10 +41,10 @@ export const MAP_CONFIG: MapConfig = {
   // WMS settings
   getFeatureInfoFormat: "application/json",
   
-  // Regional view presets
+  // Regional view presets - East Africa admin 0 view
   ghaView: {
-    center: [4.6818, 34.9911],
-    zoom: 6,
+    center: [1.5, 37],
+    zoom: 5.5,
   },
 } as const;
 

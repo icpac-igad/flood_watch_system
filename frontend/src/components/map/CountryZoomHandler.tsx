@@ -18,9 +18,20 @@ export const CountryZoomHandler: React.FC<CountryZoomHandlerProps> = ({
 
   useEffect(() => {
     if (!selectedCountry || !adminData) {
-      // Reset to Greater Horn of Africa view when no country selected
-      if (!selectedCountry) {
-        map.setView([2.5, 40], 5);
+      // Reset to East Africa admin 0 bounds when no country selected
+      if (!selectedCountry && adminData) {
+        // Fit to all admin 0 boundaries (East Africa/GHA region only)
+        const eastAfricaBounds: [[number, number], [number, number]] = [
+          [-12, 27],  // Southwest (Tanzania) - narrower west bound
+          [15, 52]    // Northeast (Somalia/Sudan)
+        ];
+
+        map.fitBounds(eastAfricaBounds, {
+          padding: [50, 50],
+          maxZoom: 6,
+          animate: true,
+          duration: 0.5
+        });
       }
       return;
     }

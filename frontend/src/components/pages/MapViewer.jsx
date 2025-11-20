@@ -1341,16 +1341,25 @@ const MapViewer = () => {
 
       const data = await response.json();
       
-      // Check if fallback was used via response headers
-      const actualDate = response.headers.get('X-Actual-Date');
-      const fallbackUsed = response.headers.get('X-Fallback-Used') === 'true';
+      // Check if fallback was used via response headers (FastAPI sends X-Fallback and X-Fallback-Date)
+      const fallbackUsed = response.headers.get('X-Fallback') === 'true';
+      const fallbackDate = response.headers.get('X-Fallback-Date');
+      const actualDate = fallbackDate || response.headers.get('X-Forecast-Date');
 
       if (fallbackUsed && actualDate) {
-        const message = `Data for ${requestedDate} not available. Showing data from ${actualDate}.`;
+        const message = `Data for ${requestedDate} not available. Showing data from ${actualDate} (latest available).`;
 
         setFallbackMessage(message);
         setShowFallbackNotification(true);
-        setTimeout(() => setShowFallbackNotification(false), 4000);
+        setTimeout(() => setShowFallbackNotification(false), 5000);
+
+        // Update the selected date to the actual fallback date
+        setSelectedDates(prev => ({
+          ...prev,
+          global: actualDate
+        }));
+
+        console.warn(`⚠️ Fallback: Requested ${requestedDate}, showing ${actualDate}`);
       }
       
       // Process and set the data
