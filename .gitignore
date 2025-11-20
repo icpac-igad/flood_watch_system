@@ -84,6 +84,7 @@ STAGING_DEPLOY_COMMANDS.txt
 
 # Archived scripts and files
 archived/
+archives/
 
 # Ignore data inside static_data and staticfiles, but keep the folders
 backend/static_data/*
