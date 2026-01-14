@@ -36,10 +36,14 @@ media/
 # Logs (generated)
 *.log
 
-# Backup SQL dumps (large)
+# SQL data files (large - keep only schema files)
 backup.sql
 backups/
 *.sql.gz
+**/ingest_*.sql
+**/backup*.sql
+**/dump*.sql
+**/export*.sql
 
 # Large GeoJSON files (data, not code)
 *.geojson
@@ -61,3 +65,11 @@ google-credentials.json
 htmlcov/
 .coverage
 .pytest_cache/
+
+# Cache directories
+.cache/
+**/cache/
+**/.cache/
+
+# Docker volumes
+**/volumes/
