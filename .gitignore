@@ -1,0 +1,63 @@
+# Python bytecode (generated on build)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments (recreated via uv/pip)
+.venv/
+venv/
+ENV/
+
+# Node (recreated via npm/yarn)
+node_modules/
+.next/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment files with SECRETS only
+.env
+staging.env
+production.env
+# Keep sample files
+!.env.sample
+!.env.example
+
+# Database data volumes (large, machine-specific)
+pgdata/
+data/pgdata/
+
+# Media uploads (user content, not code)
+media/
+
+# Logs (generated)
+*.log
+
+# Backup SQL dumps (large)
+backup.sql
+backups/
+*.sql.gz
+
+# Large GeoJSON files (data, not code)
+*.geojson
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker volume data
+volumes/
+
+# Credentials (secrets)
+credentials/
+*.pem
+*.key
+google-credentials.json
+
+# Test coverage
+htmlcov/
+.coverage
+.pytest_cache/

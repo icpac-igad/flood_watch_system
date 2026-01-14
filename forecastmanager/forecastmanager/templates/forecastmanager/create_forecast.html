@@ -1,0 +1,349 @@
+{% extends "wagtailadmin/base.html" %}
+{% load i18n wagtailadmin_tags static %}
+{% block titletag %}{% blocktrans trimmed with snippet_type_name=model_opts.verbose_name %}New  {{ snippet_type_name }}
+{% endblocktrans %}{% endblock %}
+{% block content %}
+    {% include 'wagtailadmin/shared/headers/slim_header.html' %}
+
+    {% trans "New" as new_str %}
+    {% include "wagtailadmin/shared/header.html" with title=new_str subtitle=model_opts.verbose_name icon=header_icon merged=1 only %}
+
+
+    <div class="nice-padding">
+        <div class="help-block help-info">
+            <svg class="icon icon-warning icon" aria-hidden="true">
+                <use href="#icon-info-circle"></use>
+            </svg>
+            <div>
+                {% trans 'You can' %}
+                <a href="{% url 'download-forecast-template' %}">
+                    <b>{% trans 'download a template' %}</b>
+                </a>
+                {% trans 'of the CSV for offline editing and upload it here. The template comes prepopulated with all pre-exisiting cities.' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row row-flush" style="padding-top:1rem">
+        <div class="col5">
+            <form id="forecast-form"
+                  action="{{ action_url }}"
+                  method="POST"
+                  novalidate{% if form.is_multipart %}
+                  enctype="multipart/form-data"{% endif %}
+                  data-edit-form
+            >
+                {% csrf_token %}
+
+                <div class="nice-padding">
+                    {{ panel.render_form_content }}
+                </div>
+
+                <footer class="footer">
+                    <nav aria-label="{% trans 'Actions' %}">
+                        <ul>
+                            <li class="actions actions--primary footer__container">
+                                <div class="dropdown dropup dropdown-button match-width">
+                                    {{ action_menu.render_html }}
+                                </div>
+                            </li>
+                        </ul>
+                    </nav>
+                </footer>
+            </form>
+            <div class="nice-padding">
+                {% include "forecastmanager/file_input_include.html" %}
+            </div>
+        </div>
+        <div class="col7">
+            <div class="right-panel"
+                 style="margin-right: 40px;">
+                <div id="match-fields" style="display: none">
+                    <h2>Match Fields</h2>
+                    <div class="help-block help-info">
+                        <svg class="icon icon-warning icon" aria-hidden="true">
+                            <use href="#icon-info-circle"></use>
+                        </svg>
+                        <div>
+                            {% trans 'Verify that all columns match correctly' %}
+                        </div>
+                    </div>
+                    <ul class="param-selectors">
+                        <li class="selector">
+                            <label for="city" class="w-field__label">{% trans 'City' %}:</label>
+                            <div class="w-field w-field--file_field w-field--file_input">
+                                <div class="w-field__input" data-field-input="">
+                                    <select id="city">
+                                    </select>
+                                </div>
+                            </div>
+                        </li>
+                        {% for param in parameters %}
+                            <li class="selector">
+                                <label for="{{ param.parameter }}" class="w-field__label">{{ param.name }}:
+                                </label>
+                                <div class="w-field w-field--file_field w-field--file_input">
+                                    <div class="w-field__input" data-field-input="">
+                                        <select id="{{ param.parameter }}">
+                                        </select>
+                                    </div>
+                                </div>
+                            </li>
+                        {% endfor %}
+                        <li class="selector">
+                            <label for="condition" class="w-field__label">{% trans 'Condition' %}: </label>
+                            <div class="w-field w-field--file_field w-field--file_input">
+                                <div class="w-field__input" data-field-input="">
+                                    <select id="condition">
+                                    </select>
+                                </div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div id="table-container" class="hot handsontable"></div>
+            </div>
+        </div>
+
+    </div>
+
+
+
+
+
+{% endblock %}
+
+{% block extra_css %}
+    {{ block.super }}
+    {{ media.css }}
+
+    <link rel="stylesheet" type="text/css" href="{% static 'forecastmanager/css/handsontable.full.min.css' %}">
+
+    <style>
+        .forecast,
+        select {
+            font-size: 14px
+        }
+
+        .param-selectors {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 0;
+
+        }
+
+        .param-selectors .selector {
+            list-style: none;
+            width: 200px;
+            padding-bottom: 20px
+        }
+
+
+    </style>
+
+
+
+{% endblock %}
+{% block extra_js %}
+    {{ block.super }}
+    {% include "wagtailadmin/pages/_editor_js.html" %}
+    {{ media.js }}
+
+    <script src="{% static 'forecastmanager/js/handsontable.full.min.js' %}"></script>
+    <script src="{% static 'forecastmanager/js/data-utils.js' %}"></script>
+    <script src="{% static 'forecastmanager/js/helpers.js' %}"></script>
+
+    <script>
+        const parameters = {{parameters|safe}};
+        const weather_conditions = {{weather_conditions|safe}};
+        const cities = {{cities|safe}};
+
+
+        function HotLoader(options) {
+            const {
+                tableContainerId,
+                fileInputId,
+                matchFieldsId,
+                submitButton,
+                parameters,
+                dataInputId,
+                cities,
+                weatherConditions
+            } = options;
+
+
+            const tableContainer = document.getElementById(tableContainerId);
+            this.fileInput = document.getElementById(fileInputId);
+            this.matchFields = document.getElementById(matchFieldsId);
+            this.dataInput = document.getElementById(dataInputId);
+            this.submitBtn = submitButton;
+
+            this.parameters = parameters;
+
+
+            this.hot = new Handsontable(tableContainer, {
+                autoWrapRow: true,
+                autoWrapCol: true,
+                rowHeaders: true,
+                colHeaders: [
+                    'City',
+                    ...this.parameters.map(p => p.name),
+                    'Condition'
+                ],
+                columns: [
+                    {
+                        type: 'dropdown',
+                        source: cities.map(city => city.name),
+                        allowEmpty: false,
+                        allowInvalid: false,
+                    },
+                    ...this.parameters.map((p) => ({
+                        type: p.parameter_type,
+                        allowEmpty: true,
+                        allowInvalid: false,
+                    })),
+                    {
+                        type: 'dropdown',
+                        source: weatherConditions,
+                        allowEmpty: false,
+                        allowInvalid: false,
+                    },
+                ],
+                contextMenu: true,
+                licenseKey: 'non-commercial-and-evaluation',
+                height: 500,
+                startRows: 1,
+                afterRemoveRow: (index, amount) => {
+                    this.hot.validateCells(this.onValidate.bind(this));
+                },
+
+                afterChange: (changes, source) => {
+                    this.onChange();
+                }
+            });
+
+
+            this.columnSelectors = [
+                {
+                    dom_id: 'city',
+                    index: 0
+                },
+                ...this.parameters.map((p, i) => ({
+                    dom_id: p.parameter,
+                    index: i + 1
+                })),
+                {
+                    dom_id: 'condition',
+                    index: this.parameters.length + 1
+                },
+            ]
+
+            this.fileInput.addEventListener('change', this.onFileChange.bind(this));
+        }
+
+
+        HotLoader.prototype.onFileChange = function (e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.readAsText(file);
+
+            const that = this
+
+            reader.onload = function (event) {
+                DataUtils.parseCSV(event.target.result).then(parsedData => {
+                    const initialData = parsedData.rows
+
+                    that.hot.updateData(initialData);
+
+                    const columnHeaders = parsedData.fields.map(field => field.name);
+
+                    that.columnSelectors.forEach(column => {
+                        generateSelectInput(column.dom_id, columnHeaders, column.index)
+                        document.getElementById(column.dom_id).addEventListener('change', that.onColumnDataSwap.bind(that, column, initialData))
+                        return column
+                    })
+
+                    that.matchFields.style.display = 'block'
+                });
+            };
+        };
+
+        HotLoader.prototype.onColumnDataSwap = function (column, initialData, e) {
+            const tableData = this.hot.getData();
+
+            const columnArray = initialData.map(arr => {
+                return arr[e.target.value]
+            })
+
+            tableData.replace_data(column.index, columnArray)
+
+            this.hot.updateData(tableData)
+        }
+
+        HotLoader.prototype.onChange = function () {
+            if (!this.hot) {
+                return
+            }
+
+            this.hot.validateCells(this.onValidate.bind(this));
+        }
+
+        HotLoader.prototype.onValidate = function (isValid) {
+
+            if (!isValid) {
+                this.submitBtn.disabled = true;
+                return
+            }
+
+            const colHeader = this.hot.getColHeader();
+            const data = this.hot.getData();
+
+            const tableData = {
+                fields: colHeader,
+                rows: data
+            }
+
+            if (data && data.length === 0) {
+                this.submitBtn.disabled = true;
+                return
+            }
+
+            this.dataInput.value = JSON.stringify(tableData)
+            this.submitBtn.disabled = false;
+        }
+
+        $(document).ready(function () {
+            const parameters = {{parameters|safe}};
+            const weatherConditions = {{weather_conditions|safe}};
+            const cities = {{cities|safe}};
+
+
+            const submitBtnSelector = "#forecast-form button[type='submit']";
+            const submitBtn = document.querySelector(submitBtnSelector);
+            // disable submit button by default
+            submitBtn.disabled = true;
+
+            const hotLoader = new HotLoader({
+                tableContainerId: 'table-container',
+                fileInputId: 'id_file',
+                matchFieldsId: 'match-fields',
+                parameters,
+                dataInputId: 'id_data',
+                cities,
+                weatherConditions,
+                submitButton: submitBtn
+            });
+
+
+        });
+    </script>
+    <script>
+        // Set wagtailConfig.ACTIVE_CONTENT_LOCALE if this is a translated page
+        // This value may be used by JS widgets on the form
+        {% if locale %}
+            window.wagtailConfig = window.wagtailConfig || {};
+            window.wagtailConfig.ACTIVE_CONTENT_LOCALE = '{{ locale.language_code|escapejs }}';
+        {% endif %}
+    </script>
+{% endblock %}
+

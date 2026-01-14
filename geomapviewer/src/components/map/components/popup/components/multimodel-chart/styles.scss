@@ -1,0 +1,99 @@
+.c-multimodel-chart {
+  width: 100%;
+  min-width: 380px;
+  padding: 15px;
+  padding-top: 10px;
+  background: #fff;
+  border-radius: 4px;
+  margin-top: 5px;
+
+  .chart-header {
+    margin-bottom: 15px;
+
+    .header-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    h4 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+      flex: 1;
+    }
+
+    .alert-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .date-range {
+      margin: 4px 0 0 0;
+      font-size: 11px;
+      color: #666;
+    }
+  }
+
+  .custom-tooltip {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 8px 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-size: 11px;
+    max-width: 200px;
+
+    .tooltip-date {
+      font-weight: 600;
+      margin: 0 0 5px 0;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #eee;
+      color: #333;
+    }
+
+    p {
+      margin: 2px 0;
+      font-size: 10px;
+    }
+  }
+
+  .chart-legend-note {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #eee;
+    text-align: center;
+
+    .note-text {
+      font-size: 9px;
+      color: #888;
+      font-style: italic;
+    }
+  }
+}
+
+.c-multimodel-chart-empty,
+.c-multimodel-chart-loading,
+.c-multimodel-chart-error {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+
+  p {
+    margin: 0;
+    font-size: 12px;
+  }
+}
+
+.c-multimodel-chart-error {
+  color: #d32f2f;
+}

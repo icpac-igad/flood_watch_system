@@ -1,0 +1,17 @@
+{% load wagtailimages_tags %}
+<div class="report-section image-section mb-4 {% if value.full_width %}full-width{% endif %}">
+    {% if value.full_width %}
+        {% image value.image width-1200 as img %}
+    {% else %}
+        {% image value.image width-800 as img %}
+    {% endif %}
+
+    <figure class="figure {% if value.full_width %}w-100{% endif %}">
+        <img src="{{ img.url }}"
+             alt="{{ value.alt_text|default:value.caption|default:'Report image' }}"
+             class="figure-img img-fluid rounded {% if value.full_width %}w-100{% endif %}">
+        {% if value.caption %}
+            <figcaption class="figure-caption text-center">{{ value.caption }}</figcaption>
+        {% endif %}
+    </figure>
+</div>

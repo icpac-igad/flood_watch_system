@@ -1,0 +1,16 @@
+LAYER
+    INCLUDE "config/database.map"
+    DATA "geom from (select id, alert_level, geom from alerts.get_daily_hmc_alerts('%time%')) as subq using unique id using srid=4326"
+    INCLUDE "shared/common-layer-properties.map"
+    INCLUDE "classifications/hmc-alert-levels.classes.map"
+    METADATA
+        "wms_title" "FP Discharges"
+        "wms_abstract" "Daily discharge levels from FloodProofs hydrological model"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+    NAME "daily_hmc_alert"
+    VALIDATION
+        "time" "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        "default_time" "2024-11-28"
+    END
+END

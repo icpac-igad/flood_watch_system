@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+{% load static wagtailimages_tags cms_tags %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<section class="partners-page">
+  <div class="container">
+    <!-- Page Header -->
+    <div class="partners-header">
+      <h1 class="partners-title">{{ page_title }}</h1>
+      <p class="partners-subtitle">
+        Working together to monitor and respond to flood risks across the East Africa region
+      </p>
+    </div>
+
+    {% if footer %}
+    <!-- Partners Section -->
+    {% if footer.partners %}
+    <div class="partners-section">
+      <h2 class="section-title">
+        <i class="fas fa-handshake"></i>
+        Our Partners
+      </h2>
+      <p class="section-description">
+        We collaborate with leading organizations to provide comprehensive flood monitoring and early warning services.
+      </p>
+      <div class="partners-grid">
+        {% for item in footer.partners %}
+          <div class="partner-card">
+            {% if item.value.url %}
+            <a href="{{ item.value.url }}" target="_blank" rel="noopener noreferrer" class="partner-link">
+            {% endif %}
+              <div class="partner-logo-wrapper">
+                {% image item.value.image max-280x120 class="partner-logo" %}
+              </div>
+              <div class="partner-info">
+                <div class="partner-name">{{ item.value.name }}</div>
+                {% if item.value.description %}
+                <div class="partner-description">{{ item.value.description }}</div>
+                {% endif %}
+              </div>
+            {% if item.value.url %}
+            </a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Member Countries Section -->
+    {% if footer.member_countries %}
+    <div class="countries-section">
+      <h2 class="section-title">
+        <i class="fas fa-globe-africa"></i>
+        Member Countries
+      </h2>
+      <p class="section-description">
+        The East Africa Flood Watch system serves the following IGAD member countries.
+      </p>
+      <div class="countries-grid">
+        {% for item in footer.member_countries %}
+          <div class="country-card">
+            {% if item.value.url %}
+            <a href="{{ item.value.url }}" target="_blank" rel="noopener noreferrer" class="country-link">
+            {% endif %}
+              <div class="country-flag-wrapper">
+                <img src="https://flagcdn.com/h80/{{ item.value.country|lower }}.png"
+                     alt="{{ item.value.country|country_name }}"
+                     class="country-flag">
+              </div>
+              <div class="country-name">{{ item.value.country|country_name }}</div>
+            {% if item.value.url %}
+            </a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="no-data">
+      <i class="fas fa-info-circle"></i>
+      <p>Partner information is not yet configured. Please check back later.</p>
+    </div>
+    {% endif %}
+
+    <!-- Call to Action -->
+    <div class="partners-cta">
+      <h3>Interested in Partnering?</h3>
+      <p>We welcome collaboration with organizations committed to flood risk management and disaster preparedness in East Africa.</p>
+      <a href="mailto:disaster-risk-management@igad.int" class="cta-button">
+        <i class="fas fa-envelope"></i>
+        Contact Us
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+.partners-page {
+  padding: 2rem 1rem;
+  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+  min-height: 60vh;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.partners-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  padding: 2rem 0;
+}
+
+.partners-title {
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: var(--primary-color, #034930);
+  margin-bottom: 1rem;
+}
+
+.partners-subtitle {
+  font-size: 1.1rem;
+  color: #666;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--primary-color, #034930);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-title i {
+  color: var(--secondary-color, #198754);
+}
+
+.section-description {
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+/* Partners Grid */
+.partners-section {
+  margin-bottom: 3rem;
+}
+
+.partners-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.partner-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.partner-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+.partner-link {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.partner-logo-wrapper {
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+}
+
+.partner-logo {
+  max-height: 100px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.partner-info {
+  width: 100%;
+}
+
+.partner-name {
+  font-weight: 600;
+  color: var(--primary-color, #034930);
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.partner-description {
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Countries Grid */
+.countries-section {
+  margin-bottom: 3rem;
+}
+
+.countries-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1.5rem;
+}
+
+.country-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+  text-align: center;
+}
+
+.country-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+.country-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.country-flag-wrapper {
+  margin-bottom: 0.75rem;
+}
+
+.country-flag {
+  height: 50px;
+  width: auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.country-name {
+  font-weight: 500;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+/* No Data */
+.no-data {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+}
+
+.no-data i {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: var(--secondary-color, #198754);
+}
+
+/* Call to Action */
+.partners-cta {
+  background: var(--primary-color, #034930);
+  color: white;
+  border-radius: 16px;
+  padding: 2.5rem;
+  text-align: center;
+  margin-top: 2rem;
+}
+
+.partners-cta h3 {
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+.partners-cta p {
+  opacity: 0.9;
+  max-width: 500px;
+  margin: 0 auto 1.5rem;
+}
+
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--accent-color, #fbc02d);
+  color: #333;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.cta-button:hover {
+  background: var(--accent-hover, #e0a800);
+  transform: translateY(-2px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .partners-title {
+    font-size: 2rem;
+  }
+
+  .partners-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+
+  .countries-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .partners-cta {
+    padding: 1.5rem;
+  }
+}
+</style>
+{% endblock %}

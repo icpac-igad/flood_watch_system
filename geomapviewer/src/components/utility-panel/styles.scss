@@ -1,0 +1,149 @@
+@import "@/styles/settings.scss";
+
+.c-utility-panel {
+  display: flex;
+  flex-flow: column;
+  max-height: calc(100vh - 70px);
+  width: 100%;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.25);
+  background: $white;
+  transition: transform 0.3s linear;
+  position: relative;
+  z-index: 1;
+  padding: rem(10px) 0 rem(27px);
+
+  @media screen and (min-width: $screen-m) {
+    width: rem(290px);
+  }
+
+  .utility-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 rem(15px) rem(10px);
+    margin-bottom: rem(15px);
+    gap: rem(8px);
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .utility-icon {
+      width: rem(16px);
+      height: rem(16px);
+      fill: $greyish-brown;
+    }
+
+    .utility-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: $greyish-brown;
+      text-align: center;
+    }
+  }
+
+  &.collapsed {
+    padding-bottom: 0;
+
+    .utility-header {
+      margin-bottom: 0;
+      padding-bottom: rem(10px);
+      border-bottom: 1px solid #ddd;
+    }
+  }
+
+  &.hide-header {
+    padding-top: 0;
+    box-shadow: none;
+    max-height: 100%;
+
+    .options {
+      padding-top: rem(15px);
+    }
+
+    .utility-content {
+      max-height: 100%;
+    }
+  }
+
+  .options {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0;
+    padding: 0 rem(15px) rem(15px);
+
+    button {
+      position: relative;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      width: 48%;
+
+      .button-wrapper {
+        height: 100%;
+        width: 100%;
+      }
+
+      svg,
+      .c-icon {
+        fill: $ashes-grey;
+      }
+
+      svg.icon-filter,
+      .c-icon.icon-filter {
+        width: rem(21px);
+        height: rem(21px);
+        margin-bottom: rem(12px);
+      }
+
+      svg.icon-polygon,
+      .c-icon.icon-polygon {
+        width: rem(25px);
+        height: rem(25px);
+        margin-bottom: rem(8px);
+      }
+
+      .label {
+        font-size: 11px;
+        line-height: 1.18;
+        color: $ashes-grey;
+      }
+
+      &.selected {
+        &::before {
+          content: "";
+          position: absolute;
+          bottom: rem(-15px);
+          left: rem(10px);
+          width: calc(100% - #{rem(20px)});
+          height: rem(2px);
+          background-color: $primary-color;
+        }
+
+        svg,
+        .c-icon,
+        .icon-filter,
+        .icon-polygon {
+          fill: $primary-color !important;
+        }
+
+        .label {
+          color: $primary-color;
+        }
+      }
+    }
+  }
+
+  .utility-content {
+    position: relative;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex: 1;
+    max-height: calc(100vh - 200px);
+    z-index: 1;
+  }
+}

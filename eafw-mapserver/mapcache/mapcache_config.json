@@ -1,0 +1,123 @@
+{
+  "metadata": {
+    "title": "East Africa Flood Watch Map Service",
+    "abstract": "East Africa Flood Watch System Tile Cache Service",
+    "defaultlanguage": "eng",
+    "fees": "No fees for this service",
+    "accessconstraints": "No access restrictions",
+    "providername": "IGAD Climate Prediction and Applications Center - ICPAC",
+    "providerurl": "https://www.icpac.net/",
+    "contactorganization": "disaster-risk-management@igad.int",
+    "contactname": "IGAD DRM Programme",
+    "contactcountry": "Kenya",
+    "contactcity": "Nairobi",
+    "url": "${SERVICE_URL}"
+  },
+  "global_url_definitions": {
+    "eafw_mapserver": "${MAPSERVER_URL}"
+  },
+  "global_options": {
+    "num_threads": "${NUM_THREADS}",
+    "log_level": "${LOG_LEVEL}",
+    "threaded_fetching": "${THREADED_FETCHING}",
+    "errors": "${ERROR_REPORTING}",
+    "default_format": "png_fast"
+  },
+  "caches": [
+    {
+      "name": "disk_cache",
+      "type": "disk",
+      "layout": "template",
+      "options": {
+        "template": "${TILES_DIR}/{tileset}/{grid}/{dim}/{z}/{x}/{y}.{ext}",
+        "detect_blank": null,
+        "symlink_blank": null,
+        "max_usage": "20G"
+      }
+    }
+  ],
+  "locker": {
+    "type": "disk",
+    "directory": "/tmp",
+    "timeout": 300,
+    "retry": 0.1
+  },
+  "connection_pool": {
+    "max_connections": 1024,
+    "time_to_live_us": 1800000
+  },
+  "image_formats": [
+    {
+      "name": "png_fast",
+      "type": "PNG",
+      "details": {
+        "compression": "fast",
+        "color": "256"
+      }
+    },
+    {
+      "name": "true_jpeg",
+      "type": "JPEG",
+      "details": {
+        "color": "truecolor",
+        "quality": 75,
+        "photometric": "RGB",
+        "optimize": true
+      }
+    }
+  ],
+  "sources": [
+    {
+      "name": "daily_hmc_alert_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "daily_hmc_alert",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    }
+  ],
+  "tileset_attrs": {
+    "grids": {
+      "WGS84": {
+        "restricted_extent": "${WGS84_GRID_EXTENTS}",
+        "minzoom": "4",
+        "maxzoom": "14"
+      },
+      "g": {
+        "restricted_extent": "${WEB_GRID_EXTENTS}",
+        "minzoom": "4",
+        "maxzoom": "14"
+      }
+    },
+    "cache": "disk_cache",
+    "metatile": "5 5",
+    "metabuffer": 10,
+    "expires": "${TILESET_EXPIRE_SEC}",
+    "dimensions": [
+      {
+        "name": "time",
+        "type": "regex",
+        "default": "2024-11-28",
+        "regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      }
+    ]
+  },
+  "tilesets": [
+    {
+      "name": "daily_hmc_alert",
+      "source": "daily_hmc_alert_source",
+      "format_ref": "png_fast",
+      "metadata": {
+        "title": "Daily HMC Flood Alert Tiles"
+      }
+    }
+  ],
+  "services": [
+    { "type": "wms", "enabled": "true" },
+    { "type": "wmts", "enabled": "true" },
+    { "type": "tms", "enabled": "false" },
+    { "type": "demo", "enabled": "true" }
+  ]
+}

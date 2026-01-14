@@ -1,0 +1,36 @@
+MAP
+    NAME "EAFW_MapServer"
+    STATUS ON
+    SIZE 800 600
+    UNITS DD
+    DEBUG [MS_DEBUGLEVEL]
+    EXTENT [MS_MAP_EXTENT]
+    IMAGECOLOR 255 255 255
+    IMAGETYPE PNG
+    FONTSET "fonts/fonts.txt"
+    SYMBOLSET "symbols/symbols.sym"
+
+    WEB
+        METADATA
+            INCLUDE "config/wms-metadata.map"
+        END
+    END
+
+    PROJECTION
+        "init=epsg:4326"
+    END
+
+    OUTPUTFORMAT
+        NAME "png"
+        DRIVER AGG/PNG
+        MIMETYPE "image/png"
+        IMAGEMODE RGBA
+        EXTENSION "png"
+        FORMATOPTION "INTERLACE=OFF"
+        TRANSPARENT ON
+    END
+
+    INCLUDE "layers/daily-hmc-alert.map"
+    INCLUDE "layers/flood-hazard.map"
+    INCLUDE "layers/wrf-streamflow.map"
+END

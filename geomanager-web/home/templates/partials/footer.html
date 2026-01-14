@@ -1,0 +1,194 @@
+{% load wagtailimages_tags cms_tags %}
+
+{% if footer %}
+<footer class="footer-compact">
+  <!-- Top row: Logo+Desc and Sections -->
+  <div class="footer-grid">
+    <div class="footer-brand-col">
+      {% if footer.logo %}
+        {% image footer.logo max-100x100 class="footer-logo" %}
+      {% endif %}
+      <div class="footer-desc">{{ footer.description }}</div>
+    </div>
+
+    <div class="footer-sections">
+      {% for section in footer.sections %}
+        <div class="footer-section">
+          <strong>{{ section.value.title|upper }}</strong>
+          {% for link in section.value.links %}
+            <a href="{{ link.url }}" {% if link.open_in_new_tab %}target="_blank"{% endif %}>{{ link.name }}</a>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Divider -->
+  <hr class="footer-divider">
+
+  <!-- Member Countries & Partners - centered -->
+  <div class="footer-logos-row">
+    {% if footer.member_countries %}
+      <span class="row-label">MEMBER COUNTRIES:</span>
+      {% for item in footer.member_countries %}
+        <img src="https://flagcdn.com/h20/{{ item.value.country|lower }}.png" alt="{{ item.value.country|country_name }}" title="{{ item.value.country|country_name }}" class="flag-tiny">
+      {% endfor %}
+    {% endif %}
+    {% if footer.partners %}
+      <span class="row-label">PARTNERS:</span>
+      {% for item in footer.partners %}
+        {% if item.value.url %}<a href="{{ item.value.url }}" target="_blank">{% endif %}
+          {% image item.value.image height-20 class="partner-tiny" %}
+        {% if item.value.url %}</a>{% endif %}
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- Copyright row -->
+  <div class="footer-bottom">
+    <span class="copyright">&copy; {{ footer.copyright_organization }} {% now "Y" %}</span>
+    <div class="social-icons">
+      {% for social in footer.social_links %}
+        <a href="{{ social.value.url }}" title="{{ social.value.name }}" target="_blank">
+          {% image social.value.icon max-18x18 %}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</footer>
+{% endif %}
+
+<style>
+  .footer-compact {
+    background-color: var(--footer-bg);
+    color: var(--footer-text);
+    padding: 0.75rem 1rem;
+    margin-top: auto;
+  }
+
+  .footer-grid {
+    display: flex;
+    justify-content: flex-start;
+    gap: 2rem;
+  }
+
+  .footer-brand-col {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+  }
+
+  .footer-logo {
+    height: 70px;
+    width: auto;
+  }
+
+  .footer-desc {
+    font-size: 0.8rem;
+    color: color-mix(in srgb, var(--footer-text) 90%, white);
+    max-width: 280px;
+    line-height: 1.3;
+  }
+
+  .footer-sections {
+    display: flex;
+    gap: 2rem;
+  }
+
+  .footer-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .footer-section strong {
+    font-size: 0.85rem;
+    color: var(--footer-text);
+    margin-bottom: 0.1rem;
+  }
+
+  .footer-section a {
+    color: color-mix(in srgb, var(--footer-text) 90%, white);
+    text-decoration: none;
+    font-size: 0.85rem;
+  }
+
+  .footer-section a:hover {
+    text-decoration: underline;
+  }
+
+  .footer-divider {
+    border: none;
+    border-top: 1px solid color-mix(in srgb, var(--footer-text) 25%, transparent);
+    margin: 0.5rem 0;
+  }
+
+  .footer-logos-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.4rem 0;
+  }
+
+  .row-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--footer-text);
+    margin-left: 1rem;
+  }
+
+  .row-label:first-child {
+    margin-left: 0;
+  }
+
+  .flag-tiny {
+    height: 16px;
+    width: auto;
+    border-radius: 2px;
+  }
+
+  .partner-tiny {
+    height: 20px;
+    width: auto;
+  }
+
+  .footer-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.3rem;
+  }
+
+  .copyright {
+    font-size: 0.8rem;
+    color: color-mix(in srgb, var(--footer-text) 85%, white);
+  }
+
+  .social-icons {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .social-icons img {
+    width: 18px;
+    height: 18px;
+    filter: brightness(0) invert(1);
+  }
+
+  @media screen and (max-width: 768px) {
+    .footer-grid {
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .footer-desc {
+      max-width: 100%;
+    }
+    .footer-logos-row {
+      padding: 0.4rem 0;
+    }
+  }
+</style>

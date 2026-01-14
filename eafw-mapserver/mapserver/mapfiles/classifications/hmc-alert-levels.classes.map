@@ -1,0 +1,39 @@
+# FP Discharge Level Classifications
+# Discharge levels: 1=Normal, 2=Moderate, 3=High, 4=Very High
+# Water color scheme - deeper blue = higher discharge
+
+CLASS
+    NAME "Normal"
+    EXPRESSION ([alert_level] = 1)
+    STYLE
+        COLOR 173 216 230
+        OPACITY 60
+    END
+END
+
+CLASS
+    NAME "Watch"
+    EXPRESSION ([alert_level] = 2)
+    STYLE
+        COLOR 100 149 237
+        OPACITY 70
+    END
+END
+
+CLASS
+    NAME "Warning"
+    EXPRESSION ([alert_level] = 3)
+    STYLE
+        COLOR 65 105 225
+        OPACITY 80
+    END
+END
+
+CLASS
+    NAME "Emergency"
+    EXPRESSION ([alert_level] = 4)
+    STYLE
+        COLOR 0 0 139
+        OPACITY 90
+    END
+END

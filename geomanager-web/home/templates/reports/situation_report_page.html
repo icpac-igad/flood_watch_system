@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load wagtailcore_tags wagtailimages_tags static %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'home/css/report-detail.css' %}">
+{% endblock %}
+
+{% block content %}
+<section class="report-detail-hero">
+    <div class="container">
+        {% if page.header_logo %}
+            {% image page.header_logo height-80 as hero_logo %}
+            <img src="{{ hero_logo.url }}" alt="logo" class="report-detail-hero__logo">
+        {% endif %}
+        <p class="report-detail-hero__eyebrow">East Africa Flood Watch</p>
+        <h1 class="report-detail-hero__title">{{ page.title }}</h1>
+        <p class="report-detail-hero__authority">{{ page.issuing_authority }}</p>
+        <div class="report-detail-hero__status report-detail-status--warning">
+            Situation Report – {{ page.event_type|title }}
+        </div>
+        <div class="report-detail-meta">
+            <div>
+                <span class="meta-label">Report Number</span>
+                <span class="meta-value">{{ page.report_number|default:"N/A" }}</span>
+            </div>
+            <div>
+                <span class="meta-label">Report Date</span>
+                <span class="meta-value">{{ page.report_date|date:"F d, Y" }}</span>
+            </div>
+            {% if page.reporting_period_start and page.reporting_period_end %}
+            <div>
+                <span class="meta-label">Reporting Period</span>
+                <span class="meta-value">{{ page.reporting_period_start|date:"M d" }} - {{ page.reporting_period_end|date:"M d, Y" }}</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<section class="report-detail-summary">
+    <div class="container">
+        {% if page.situation_overview %}
+        <div class="summary-card">
+            <div class="summary-card__title">
+                <i class="bi bi-clipboard-data me-2"></i>
+                Situation Overview
+            </div>
+            <div class="summary-card__body">
+                {{ page.situation_overview|richtext }}
+            </div>
+        </div>
+        {% endif %}
+        {% if page.recommendations %}
+        <div class="summary-card summary-card--light">
+            <div class="summary-card__title">
+                <i class="bi bi-lightbulb me-2"></i>
+                Recommendations
+            </div>
+            <div class="summary-card__body">
+                {{ page.recommendations|richtext }}
+            </div>
+        </div>
+        {% endif %}
+        {% if page.disclaimer %}
+        <div class="summary-card summary-card--light">
+            <div class="summary-card__title">
+                <i class="bi bi-exclamation-circle me-2"></i>
+                Disclaimer
+            </div>
+            <div class="summary-card__body">
+                {{ page.disclaimer }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<section class="report-detail-body">
+    <div class="container">
+        {% for block in page.content %}
+            {% include_block block %}
+        {% endfor %}
+    </div>
+</section>
+
+<button class="report-print-btn" onclick="window.print()" title="Print Report">
+    <i class="bi bi-printer"></i>
+</button>
+{% endblock %}

@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "pyfloodwatch"
+version = "0.2.0"
+description = "FloodWatch data jobs - automated data syncing and ingestion"
+authors = ["ICPAC <info@icpac.net>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+psycopg2-binary = "^2.9.9"
+paramiko = "^3.4.0"
+python-dotenv = "^1.0.0"
+watchdog = "^4.0.0"
+# Google Drive API
+google-api-python-client = "^2.100.0"
+google-auth = "^2.25.0"
+# Scheduler (like Celery Beat)
+apscheduler = "^3.10.0"
+# GeoParquet support
+numpy = "<2"
+geopandas = "^0.14.0"
+pyarrow = "^14.0.0"
+
+[tool.poetry.scripts]
+floodwatch-scheduler = "pyfloodwatch.scheduler:start_scheduler"
+floodwatch-drive-sync = "pyfloodwatch.drive_sync:run_drive_sync"
+floodwatch-ftp-sync = "pyfloodwatch.ensemble_sync:run_ensemble_sync"
+floodwatch-sftp-sync = "pyfloodwatch.floodproofs_sync:run_floodproofs_sync"
+floodwatch-drive-merge = "pyfloodwatch.drive_merge_job:run_drive_merge"
+floodwatch-drive-ingest = "pyfloodwatch.drive_ingest_job:run_drive_ingest"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,561 @@
+{% load static wagtailimages_tags i18n %}
+
+{% if navbar %}
+<nav id="navbar" class="navbar is-fixed-top" role="navigation" aria-label="main navigation">
+  <div class="container">
+    <!-- Logo positioned on the left -->
+    <div class="logo-container">
+      {% if navbar.logo %}
+        <a href="/">
+          {% image navbar.logo max-150x60 class="logo-img" %}
+        </a>
+      {% endif %}
+    </div>
+
+     <!-- Hamburger icon (visible only on small screens) -->
+    <div class="navbar-burger" id="navbar-burger">
+      <img id="burger-icon" src="{% static 'images/menu.svg' %}" alt="Open menu" style="width:32px;height:32px;">
+      <img id="close-icon" src="{% static 'images/close.svg' %}" alt="Close menu" style="width:32px;height:32px;display:none;">
+    </div>
+    <!-- Menu links centered -->
+    <ul class="navbar-menu" id="navbar-menu">
+      {% for item in navbar.menu_items %}
+        {% if item.block_type == 'link' %}
+          <li>
+            <a class="navbar-item nav-main-item {% if item.value.name|upper == 'MAPVIEWER' %}mapviewer-link{% endif %}"
+               href="{{ item.value.url }}"
+               {% if item.value.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>
+              {{ item.value.name }}
+            </a>
+          </li>
+        {% elif item.block_type == 'dropdown' %}
+          <li class="navbar-dropdown-wrapper">
+            <a class="navbar-item nav-main-item navbar-dropdown-trigger" href="javascript:void(0);">
+              {{ item.value.title }}
+              <svg class="dropdown-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+            <div class="navbar-dropdown-menu">
+              {% for link in item.value.links %}
+                <a class="navbar-dropdown-item"
+                   href="{{ link.url }}"
+                   {% if link.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                  {{ link.name }}
+                </a>
+              {% endfor %}
+            </div>
+          </li>
+        {% endif %}
+      {% endfor %}
+
+      <!-- Language Switcher as navbar item -->
+      <li class="language-switcher">
+        <div class="language-dropdown-wrapper">
+          <button class="language-dropdown-trigger" aria-label="{% trans 'Select language' %}">
+            <svg class="globe-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+              <ellipse cx="12" cy="12" rx="4" ry="10" stroke="currentColor" stroke-width="2"/>
+              <path d="M2 12h20" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <span class="current-lang">{{ current_language|upper }}</span>
+            <svg class="dropdown-arrow" width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="language-dropdown-menu">
+            {% for lang_code, lang_name in cms_languages %}
+              <a href="?language={{ lang_code }}"
+                 class="language-dropdown-item {% if lang_code == current_language %}is-active{% endif %}"
+                 data-lang="{{ lang_code }}">
+                {{ lang_name }}
+              </a>
+            {% endfor %}
+          </div>
+        </div>
+      </li>
+    </ul>
+  </div>
+</nav>
+{% endif %}
+
+<style>
+  .navbar{
+      background-color: var(--navbar-bg);
+  }
+
+  .logo-container {
+    display: flex;
+    align-items: center;
+    margin: 0.5rem 1.5rem 0.5rem 0.5rem;
+    min-width: 150px;
+  }
+
+  .logo-img {
+    max-height: 60px;
+    max-width: 150px;
+    width: auto;
+    height: auto;
+    display: block;
+    object-fit: contain;
+  }
+
+  /* Navbar menu styling */
+  .navbar-menu {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .navbar-menu li {
+    margin: 0 0.5rem;
+    text-align: center;
+  }
+
+  .navbar-item.nav-main-item {
+    color: var(--navbar-text) !important;
+    font-weight: 600;
+    font-size: 1.1rem;
+    padding: 0.75rem 1.5rem;
+    background-color: transparent !important;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: background-color 0.3s, color 0.3s;
+    border-radius: 4px;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .navbar-item.nav-main-item:hover,
+  .navbar-item.nav-main-item.is-active {
+    background-color: color-mix(in srgb, var(--navbar-text) 15%, transparent) !important;
+    color: var(--navbar-text) !important;
+  }
+
+  /* Dropdown styling */
+  .navbar-dropdown-wrapper {
+    position: relative;
+  }
+
+  .navbar-dropdown-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 11px;
+    background: transparent;
+  }
+
+  .navbar-dropdown-trigger {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .dropdown-arrow {
+    transition: transform 0.3s ease;
+    margin-left: 0.25rem;
+  }
+
+  .navbar-dropdown-wrapper.is-active .dropdown-arrow {
+    transform: rotate(180deg);
+  }
+
+  .navbar-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 11px);
+    left: 0;
+    min-width: 220px;
+    background-color: var(--navbar-bg);
+    border: 1px solid color-mix(in srgb, var(--navbar-text) 20%, transparent);
+    border-radius: 6px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    padding: 0.75rem 0;
+    animation: fadeInDown 0.2s ease-out;
+  }
+
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .navbar-dropdown-wrapper.is-active .navbar-dropdown-menu {
+    display: block;
+  }
+
+  .navbar-dropdown-item {
+    display: block;
+    padding: 0.875rem 1.5rem;
+    color: var(--navbar-text);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    text-align: left;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+  }
+
+  .navbar-dropdown-item:hover {
+    background-color: color-mix(in srgb, var(--navbar-text) 12%, transparent);
+    color: var(--navbar-text);
+    border-left-color: var(--accent-color);
+    padding-left: 1.75rem;
+  }
+
+  /* Special styling for MAPVIEWER link */
+  .navbar-item.nav-main-item.mapviewer-link {
+    background-color: var(--accent-color) !important;
+    border-radius: 64px;
+    color: var(--button-accent-text) !important;
+  }
+
+  .navbar-item.nav-main-item.mapviewer-link:hover {
+    background-color: var(--accent-hover) !important;
+    color: var(--button-accent-text) !important;
+  }
+
+  .navbar-burger {
+    display: none;
+    cursor: pointer;
+    padding: 0.5rem;
+  }
+
+  /* Responsive adjustments */
+  @media screen and (max-width: 1023px) {
+    .navbar-menu {
+      display: none;
+    }
+
+    .navbar-menu li {
+      margin: 0.5rem 1rem;
+    }
+
+    .navbar-burger {
+      display: block;
+      position: absolute;
+      right: 30px;
+      top: 6px;
+    }
+
+    .navbar-menu.active {
+      display: flex;
+      margin-top: 10px;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      background-color: var(--navbar-bg);
+      transition: all 0.3s ease-in-out;
+    }
+
+    .logo-container {
+      margin: 2rem 0 1.5rem 3rem;
+    }
+
+    /* Mobile menu items */
+    .navbar-menu.active .navbar-item.nav-main-item {
+      margin: 0.5rem 0;
+      width: 100%;
+      text-align: center;
+    }
+
+    /* Mobile dropdown adjustments */
+    .navbar-dropdown-wrapper {
+      width: 100%;
+    }
+
+    .navbar-dropdown-menu {
+      position: static;
+      width: 100%;
+      margin-top: 0;
+      border: none;
+      box-shadow: none;
+      background-color: color-mix(in srgb, var(--navbar-bg) 95%, black);
+    }
+
+    .navbar-dropdown-item {
+      text-align: center;
+    }
+  }
+
+  /* Burger icon colors for mobile */
+  #burger-icon,
+  #close-icon {
+    filter: brightness(0) invert(1); /* Makes SVG icons white to match navbar text */
+  }
+
+  /* Language Switcher Styles */
+  .language-switcher {
+    margin-left: auto !important;
+  }
+
+  .language-switcher .language-dropdown-wrapper {
+    position: relative;
+  }
+
+  .language-switcher .language-dropdown-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    height: 11px;
+    background: transparent;
+  }
+
+  .language-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    background: color-mix(in srgb, var(--navbar-text) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--navbar-text) 25%, transparent);
+    border-radius: 20px;
+    color: var(--navbar-text);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+
+  .language-dropdown-trigger:hover {
+    background: color-mix(in srgb, var(--navbar-text) 15%, transparent);
+    border-color: color-mix(in srgb, var(--navbar-text) 40%, transparent);
+  }
+
+  .globe-icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .current-lang {
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .language-switcher .language-dropdown-wrapper .dropdown-arrow {
+    transition: transform 0.3s ease;
+    width: 10px;
+    height: 10px;
+  }
+
+  .language-switcher .language-dropdown-wrapper.is-active .dropdown-arrow {
+    transform: rotate(180deg);
+  }
+
+  .language-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 11px);
+    right: 0;
+    min-width: 160px;
+    background-color: var(--navbar-bg);
+    border: 1px solid color-mix(in srgb, var(--navbar-text) 20%, transparent);
+    border-radius: 6px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 1001;
+    padding: 0.5rem 0;
+    animation: fadeInDown 0.2s ease-out;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .language-switcher .language-dropdown-wrapper.is-active .language-dropdown-menu {
+    display: block;
+  }
+
+  .language-dropdown-item {
+    display: block;
+    padding: 0.6rem 1rem;
+    color: var(--navbar-text);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    font-weight: 400;
+    border-left: 3px solid transparent;
+  }
+
+  .language-dropdown-item:hover {
+    background-color: color-mix(in srgb, var(--navbar-text) 12%, transparent);
+    color: var(--navbar-text);
+    border-left-color: var(--accent-color);
+    padding-left: 1.25rem;
+  }
+
+  .language-dropdown-item.is-active {
+    background-color: color-mix(in srgb, var(--navbar-text) 8%, transparent);
+    font-weight: 600;
+    border-left-color: var(--secondary-color);
+  }
+
+  /* Mobile adjustments for language switcher */
+  @media screen and (max-width: 1023px) {
+    .language-switcher {
+      position: absolute !important;
+      right: 70px;
+      top: 18px;
+      margin: 0 !important;
+    }
+
+    .language-dropdown-trigger {
+      padding: 0.35rem 0.5rem;
+      font-size: 0.75rem;
+    }
+
+    .globe-icon {
+      width: 14px;
+      height: 14px;
+    }
+
+    .language-dropdown-menu {
+      right: 0;
+      min-width: 140px;
+    }
+  }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const burger = document.getElementById("navbar-burger");
+  const menu = document.getElementById("navbar-menu");
+  const burgerIcon = document.getElementById("burger-icon");
+  const closeIcon = document.getElementById("close-icon");
+
+  // Mobile menu toggle
+  burger.addEventListener("click", function () {
+    const isActive = menu.classList.toggle("active");
+    if(isActive){
+      burgerIcon.style.display = "none";
+      closeIcon.style.display = "block";
+    } else {
+      burgerIcon.style.display = "block";
+      closeIcon.style.display = "none";
+    }
+  });
+
+  // Dropdown hover functionality
+  const dropdownWrappers = document.querySelectorAll(".navbar-dropdown-wrapper");
+
+  dropdownWrappers.forEach(function(wrapper) {
+    // Desktop: hover behavior
+    wrapper.addEventListener("mouseenter", function() {
+      if (window.innerWidth > 1023) {
+        wrapper.classList.add("is-active");
+      }
+    });
+
+    wrapper.addEventListener("mouseleave", function() {
+      if (window.innerWidth > 1023) {
+        wrapper.classList.remove("is-active");
+      }
+    });
+
+    // Mobile: click behavior
+    const trigger = wrapper.querySelector(".navbar-dropdown-trigger");
+    if (trigger) {
+      trigger.addEventListener("click", function(e) {
+        if (window.innerWidth <= 1023) {
+          e.preventDefault();
+          wrapper.classList.toggle("is-active");
+        }
+      });
+    }
+  });
+
+  // Language Switcher functionality
+  const langWrapper = document.querySelector(".language-dropdown-wrapper");
+  const langTrigger = document.querySelector(".language-dropdown-trigger");
+
+  if (langWrapper && langTrigger) {
+    // Desktop: hover behavior
+    langWrapper.addEventListener("mouseenter", function() {
+      if (window.innerWidth > 1023) {
+        langWrapper.classList.add("is-active");
+      }
+    });
+
+    langWrapper.addEventListener("mouseleave", function() {
+      if (window.innerWidth > 1023) {
+        langWrapper.classList.remove("is-active");
+      }
+    });
+
+    // Click behavior (both mobile and desktop)
+    langTrigger.addEventListener("click", function(e) {
+      e.preventDefault();
+      langWrapper.classList.toggle("is-active");
+    });
+
+    // Language selection - use Django's set_language view
+    const langItems = document.querySelectorAll(".language-dropdown-item");
+    langItems.forEach(function(item) {
+      item.addEventListener("click", function(e) {
+        e.preventDefault();
+        const lang = this.getAttribute("data-lang");
+        // Create a form to submit to Django's set_language view
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "/i18n/setlang/";
+
+        const csrfInput = document.createElement("input");
+        csrfInput.type = "hidden";
+        csrfInput.name = "csrfmiddlewaretoken";
+        csrfInput.value = getCookie("csrftoken");
+
+        const langInput = document.createElement("input");
+        langInput.type = "hidden";
+        langInput.name = "language";
+        langInput.value = lang;
+
+        const nextInput = document.createElement("input");
+        nextInput.type = "hidden";
+        nextInput.name = "next";
+        nextInput.value = window.location.pathname;
+
+        form.appendChild(csrfInput);
+        form.appendChild(langInput);
+        form.appendChild(nextInput);
+        document.body.appendChild(form);
+        form.submit();
+      });
+    });
+  }
+
+  // Helper function to get cookie value
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  // Close language dropdown when clicking outside
+  document.addEventListener("click", function(e) {
+    if (langWrapper && !langWrapper.contains(e.target)) {
+      langWrapper.classList.remove("is-active");
+    }
+  });
+});
+</script>

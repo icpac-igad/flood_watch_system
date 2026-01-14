@@ -1,0 +1,11 @@
+{% extends "wagtailadmin/login.html" %}
+{% load cms_tags wagtailimages_tags wagtailsettings_tags %}
+{% get_settings use_default_site=True %}
+
+{% block branding_login %}
+    {% if 'WAGTAIL_SITE_NAME'|django_settings %}
+        Sign in to {{ 'WAGTAIL_SITE_NAME'|django_settings }}
+    {% else %}
+        Sign in
+    {% endif %}
+{% endblock %}

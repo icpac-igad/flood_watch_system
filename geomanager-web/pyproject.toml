@@ -1,0 +1,72 @@
+[project]
+name = "geomanager-web"
+version = "0.5.7"
+description = "A wraper package for geomanager and geomapviewer"
+authors = [
+    { name = "Erick Otenyo", email = "otenyo.erick@gmail.com" },
+    { name = "Jason Kinyua", email = "jaysnmury@gmail.com" },
+]
+license = "CC-BY-4.0"
+readme = "README.md"
+requires-python = ">=3.11, <3.14"
+dependencies = [
+    "channels==4.0.0",
+    "daphne==4.0.0",
+    "django==4.2.16",
+    "django-cleanup==8.0.0",
+    "django-cors-headers==4.3.1",
+    "django-deep-translator==1.5.1",
+    "django-environ==0.12.0",
+    #"django-nextjs>=2.2.3",
+    "paramiko>=3.0.0",
+    "psycopg2-binary==2.9.10",
+    "pymemcache==4.0.0",
+    "wagtail-lazyimages==0.1.5",
+    "wagtail-metadata==5.0.0",
+    "wagtail-adminsortable @ git+https://github.com/wmo-raf/wagtail-admin-sortable.git@master",
+    "geomanager",
+    "forecastmanager",
+    "wagtail==6.3.2",
+    "wagtail-color-panel>=1.4.0",
+    "django-countries>=7.6",
+    "wagtail-localize>=1.12.2",
+    # Google Drive API for multimodal data sync
+    "google-api-python-client>=2.100.0",
+    "google-auth>=2.25.0",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+fix = true
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "B", "F", "Q"]
+fixable = ["ALL"]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F401", "F403", "F405"]
+"dev.py" = ["F403", "F405"]
+"production.py" = ["F403", "F405"]
+"**/{tests,docs,tools}/*" = ["E402"]
+
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = []
+
+[tool.uv.sources]
+geomanager = { path = "../geomanager" }
+forecastmanager = { path = "../forecastmanager" }

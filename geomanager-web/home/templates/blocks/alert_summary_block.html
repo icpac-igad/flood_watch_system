@@ -1,0 +1,30 @@
+<div class="report-section alert-summary-section mb-4">
+    <h3 class="section-heading">{{ value.heading }}</h3>
+    {% if value.summary_text %}
+        <p class="summary-text">{{ value.summary_text }}</p>
+    {% endif %}
+
+    <div class="alert-list">
+        {% for alert in value.alerts %}
+            <div class="alert-item d-flex align-items-center mb-2 p-2 rounded
+                {% if alert.alert_level == 'emergency' %}bg-danger text-white
+                {% elif alert.alert_level == 'alarm' %}bg-warning
+                {% elif alert.alert_level == 'warning' %}bg-warning-subtle
+                {% else %}bg-success-subtle{% endif %}">
+                <span class="alert-badge me-2">
+                    {% if alert.alert_level == 'emergency' %}🔴
+                    {% elif alert.alert_level == 'alarm' %}🟠
+                    {% elif alert.alert_level == 'warning' %}🟡
+                    {% else %}🟢{% endif %}
+                </span>
+                <div class="flex-grow-1">
+                    <strong>{{ alert.region }}</strong>
+                    {% if alert.description %} - {{ alert.description }}{% endif %}
+                </div>
+                {% if alert.population_affected %}
+                    <span class="badge bg-secondary">{{ alert.population_affected|intcomma }} affected</span>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</div>
