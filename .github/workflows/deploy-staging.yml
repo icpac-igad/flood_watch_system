@@ -25,14 +25,22 @@ jobs:
         include:
           - image: eafw-cms
             dockerfile: eafw_docker/cms/Dockerfile
+            build-args: ""
           - image: eafw-mapviewer
             dockerfile: eafw_docker/mapviewer/Dockerfile
+            build-args: |
+              CMS_API=/api
+              BASE_PATH=/
+              ASSET_PREFIX=
           - image: eafw-mapserver
             dockerfile: eafw_docker/mapserver/Dockerfile
+            build-args: ""
           - image: eafw-mapcache
             dockerfile: eafw_docker/mapcache/Dockerfile
+            build-args: ""
           - image: eafw-jobs
             dockerfile: eafw_docker/jobs/Dockerfile
+            build-args: ""
 
     steps:
       - name: Checkout
@@ -57,6 +65,7 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:latest
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.sha }}
+          build-args: ${{ matrix.build-args }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
