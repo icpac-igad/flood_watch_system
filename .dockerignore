@@ -4,8 +4,8 @@
 .git
 .gitignore
 
-# Data directories
-data/
+# Data directories (root level only, not src/data)
+/data
 *.tif
 *.nc
 *.geojson
