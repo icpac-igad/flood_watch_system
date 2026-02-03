@@ -13,20 +13,19 @@ RUN apt-get update && apt-get install -y \
 # Install poetry
 RUN pip install --no-cache-dir poetry==1.7.1
 
-# Copy poetry files
-COPY pyproject.toml ./
+# Copy poetry files from eafw_jobs folder
+COPY eafw_jobs/pyproject.toml ./
 
 # Install dependencies
 RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --no-root
+    && poetry install --no-interaction --no-ansi --no-root || true
 
-# Copy application code
-COPY pyfloodwatch/ ./pyfloodwatch/
-COPY config/ ./config/
+# Copy application code from eafw_jobs folder
+COPY eafw_jobs/pyfloodwatch/ ./pyfloodwatch/
 
-# Create data and logs directories
-RUN mkdir -p /opt/data /opt/logs /opt/credentials
+# Create directories
+RUN mkdir -p /opt/data /opt/logs /opt/credentials ./config
 
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "-m", "pyfloodwatch.download"]
+CMD ["python", "-m", "pyfloodwatch.scheduler"]

@@ -13,8 +13,8 @@ ARG NGINX_VERISON=1.24.0
 RUN mkdir /src /etc/mapcache && cd /src && wget -qO- https://nginx.org/download/nginx-${NGINX_VERISON}.tar.gz | tar -xzvf - && \
     wget -qO- https://github.com/MapServer/mapcache/archive/refs/heads/${MAPCACHE_BRANCH}.tar.gz | tar -xzvf - && \
     mkdir /src/mapcache-${MAPCACHE_BRANCH}/build && cd /src/mapcache-${MAPCACHE_BRANCH}/build && \
-    cmake -DCMAKE_BUILD_TYPE=Release -DWITH_APACHE=0 -DWITH_NGINX=1 -DWITH_FCGI=1 -DWITH_CGI=1 \ 
-    -DWITH_GDAL=1 -DWITH_GEOS=1 -DWITH_OGR=1 -DWITH_PIXMAN=1 -DWITH_PCRE=1 -DWITH_POSTGRESQL=1 \ 
+    cmake -DCMAKE_BUILD_TYPE=Release -DWITH_APACHE=0 -DWITH_NGINX=1 -DWITH_FCGI=1 -DWITH_CGI=1 \
+    -DWITH_GDAL=1 -DWITH_GEOS=1 -DWITH_OGR=1 -DWITH_PIXMAN=1 -DWITH_PCRE=1 -DWITH_POSTGRESQL=1 \
     -DWITH_MEMCACHE=0 -DWITH_VERSION_STRING=0 -DCMAKE_INSTALL_PREFIX=/usr/local .. && make -j$(nproc) && make install && ldconfig &&\
     cd /src/nginx-${NGINX_VERISON} && ./configure --add-module=/src/mapcache-${MAPCACHE_BRANCH}/build/nginx --prefix=/etc/nginx \
     --with-pcre --with-debug --with-http_ssl_module --with-http_gzip_static_module --with-http_realip_module && make -j$(nproc) && make install
@@ -31,7 +31,7 @@ ARG USER_NAME=starship
 ENV APACHE_RUN_USER=${USER_NAME} \
     TERM=linux \
     LANG=C \
-    MAX_PROCESSES=10 
+    MAX_PROCESSES=10
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes --no-install-recommends ca-certificates \
@@ -46,9 +46,11 @@ COPY --from=builder /usr/local/bin /usr/local/bin/
 COPY --from=builder /usr/local/lib /usr/local/lib/
 COPY --from=builder --chown=${USER_NAME}:root /etc/nginx /etc/nginx
 
-COPY --chown=${USER_NAME}:root generate_mapcache_config.py mapcache_config.json seeder.py ${HOME_DIR}/
-COPY --chown=${USER_NAME}:root nginx.conf /etc/nginx/conf/nginx.conf
-COPY --chown=${USER_NAME}:root docker-entrypoint.sh /entrypoint.sh
+# Copy from eafw_docker/mapcache folder (repo root context)
+COPY --chown=${USER_NAME}:root eafw_docker/mapcache/generate_mapcache_config.py eafw_docker/mapcache/mapcache_config.json eafw_docker/mapcache/seeder.py ${HOME_DIR}/
+COPY --chown=${USER_NAME}:root eafw_docker/mapcache/nginx.conf /etc/nginx/conf/nginx.conf
+COPY --chown=${USER_NAME}:root eafw_docker/mapcache/docker-entrypoint.sh /entrypoint.sh
+
 RUN ln --symbolic ${HOME_DIR} /etc/mapcache && \
     ln --symbolic /etc/nginx/sbin/nginx /usr/local/bin && \
     chown -Rf ${USER_NAME}:root /etc/nginx && ldconfig && chmod 0755 /entrypoint.sh

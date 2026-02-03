@@ -21,9 +21,10 @@ RUN apt-get update -y && apt-get install nginx -y &&  groupadd --gid ${USER_ID} 
     mkdir -p --mode=g+w ${MAPFILES_DIR} && ldconfig && \
     chown -Rf ${USER_NAME}:root /var/lib/nginx /var/log/nginx /etc/nginx ${PROJ_DATA} ${GDAL_DATA}
 
-COPY --chown=${USER_NAME}:root mapfiles/ ${MAPFILES_DIR}
-COPY --chown=${USER_NAME}:root docker-entrypoint.sh /entrypoint.sh
-COPY --chown=${USER_NAME}:root nginx.conf /etc/nginx/nginx.conf
+# Copy from eafw_docker/mapserver folder (repo root context)
+COPY --chown=${USER_NAME}:root eafw_docker/mapserver/mapfiles/ ${MAPFILES_DIR}
+COPY --chown=${USER_NAME}:root eafw_docker/mapserver/docker-entrypoint.sh /entrypoint.sh
+COPY --chown=${USER_NAME}:root eafw_docker/mapserver/nginx.conf /etc/nginx/nginx.conf
 
 USER ${USER_NAME}
 WORKDIR ${MAPFILES_DIR}
