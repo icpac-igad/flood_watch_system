@@ -78,7 +78,7 @@ htmlcov/
 **/cache/
 **/.cache/
 
-# Runtime data
-data/
+# Runtime data (root level only, not src/data)
+/data
 eafw_jobs/data/
 eafw_jobs/logs/
