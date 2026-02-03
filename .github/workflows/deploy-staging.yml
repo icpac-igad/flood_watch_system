@@ -1,0 +1,118 @@
+# EAFW FloodWatch - Build & Deploy to Staging
+# Triggers on push to eafw branch
+
+name: Build & Deploy to Staging
+
+on:
+  push:
+    branches:
+      - eafw
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - image: eafw-cms
+            dockerfile: eafw_docker/cms/Dockerfile
+          - image: eafw-mapviewer
+            dockerfile: eafw_docker/mapviewer/Dockerfile
+          - image: eafw-mapserver
+            dockerfile: eafw_docker/mapserver/Dockerfile
+          - image: eafw-mapcache
+            dockerfile: eafw_docker/mapcache/Dockerfile
+          - image: eafw-jobs
+            dockerfile: eafw_docker/jobs/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.image }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+  deploy:
+    name: Deploy to Staging
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          port: ${{ secrets.STAGING_SSH_PORT }}
+          script: |
+            set -e
+            cd ${{ secrets.STAGING_PATH }}
+
+            echo "=== Logging in to GHCR ==="
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER }} --password-stdin
+
+            echo "=== Downloading docker-compose.staging.yml ==="
+            curl -sL https://raw.githubusercontent.com/${{ github.repository }}/eafw/docker-compose.staging.yml -o docker-compose.staging.yml
+
+            echo "=== Downloading eafw_docker folder ==="
+            rm -rf eafw_docker
+            curl -sL https://github.com/${{ github.repository }}/archive/refs/heads/eafw.tar.gz -o repo.tar.gz
+            tar -xzf repo.tar.gz --strip-components=1 flood_watch_system-eafw/eafw_docker
+            rm -f repo.tar.gz
+
+            echo "=== Ensuring GHCR image names in staging.env ==="
+            grep -q "WEB_IMAGE_NAME" staging.env || echo "WEB_IMAGE_NAME=ghcr.io/icpac-igad/eafw-cms:latest" >> staging.env
+            grep -q "MAPVIEWER_IMAGE_NAME" staging.env || echo "MAPVIEWER_IMAGE_NAME=ghcr.io/icpac-igad/eafw-mapviewer:latest" >> staging.env
+            grep -q "MAPSERVER_IMAGE_NAME" staging.env || echo "MAPSERVER_IMAGE_NAME=ghcr.io/icpac-igad/eafw-mapserver:latest" >> staging.env
+            grep -q "MAPCACHE_IMAGE_NAME" staging.env || echo "MAPCACHE_IMAGE_NAME=ghcr.io/icpac-igad/eafw-mapcache:latest" >> staging.env
+            grep -q "JOBS_IMAGE_NAME" staging.env || echo "JOBS_IMAGE_NAME=ghcr.io/icpac-igad/eafw-jobs:latest" >> staging.env
+
+            echo "=== Creating directories ==="
+            mkdir -p data/{postgres,static,media,geomanager,mapviewer-static,mapfiles,mapcache/tiles,jobs,jobs-logs}
+
+            echo "=== Stopping old containers ==="
+            docker compose --env-file staging.env -f docker-compose.staging.yml down 2>/dev/null || true
+
+            echo "=== Pulling latest images ==="
+            docker compose --env-file staging.env -f docker-compose.staging.yml pull
+
+            echo "=== Starting services ==="
+            docker compose --env-file staging.env -f docker-compose.staging.yml up -d
+
+            echo "=== Cleaning old images ==="
+            docker image prune -f
+
+            echo "=== Status ==="
+            docker compose --env-file staging.env -f docker-compose.staging.yml ps
+
+            echo "✅ Deployment complete!"

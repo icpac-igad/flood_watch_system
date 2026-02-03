@@ -1,0 +1,317 @@
+services:
+  geomanager_db:
+    container_name: ${DB_CNTR_NAME:-eafw-pgdb}
+    command: postgres -c 'max_connections=${PG_MAX_CONNECTIONS:-120}'
+    image: postgis/postgis:${PG_VERSION:-v1.0.0}
+    restart: ${RESTART_POLICY:-always}
+    environment:
+      - POSTGRES_USER=${CMS_DB_USER}
+      - POSTGRES_DB=${CMS_DB_NAME}
+      - POSTGRES_PASSWORD=${CMS_DB_PASSWORD}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${DB_HOST_PORT:-5431}:5432
+    volumes:
+      - ${CMS_DB_VOLUME}:/var/lib/postgresql/data/:z
+  pgbouncer:
+    image: edoburu/pgbouncer:${PGB_VERSION:-v1.23.1-p3}
+    container_name: ${PGBOUNCER_CNTR_NAME:-eafw-pgbouncer}
+    restart: ${RESTART_POLICY:-always}
+    shm_size: "4gb"
+    depends_on:
+      - geomanager_db
+    ports:
+      - ${PGB_HOST_IP:-${HOST_IP:-127.0.0.1}}:${PGB_HOST_PORT:-5463}:${PGB_LISTEN_PORT:-6432}
+    environment:
+      - LISTEN_PORT=${PGB_LISTEN_PORT:-6432}
+      - DB_HOST=${PG_HOST:-geomanager_db}
+      - DB_PORT=${PG_PORT:-5432}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_USER=${CMS_DB_USER}
+      - DB_PASSWORD=${CMS_DB_PASSWORD}
+      - AUTH_USER=${CMS_DB_USER}
+      - AUTH_TYPE=${PG_AUTH_METHOD:-scram-sha-256}
+      - AUTH_DBNAME=${CMS_DB_NAME}
+      - ADMIN_USERS=${CMS_DB_USER}
+      - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-1024}
+      - POOL_MODE=${PGB_POOL_MODE:-session}
+      - DEFAULT_POOL_SIZE=${PGB_DEFAULT_POOL_SIZE:-120}
+      - SERVER_IDLE_TIMEOUT=${PGB_SERVER_IDLE_TIMEOUT:-600}
+      - CLIENT_IDLE_TIMEOUT=${PGB_CLIENT_IDLE_TIMEOUT:-1500}
+      - IDLE_TRANSACTION_TIMEOUT=${PGB_IDLE_TRANSACTION_TIMEOUT:-1200}
+      - VERBOSE=${PGB_VERBOSE:-1}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+  geomanager_memcached:
+    image: memcached:${MEMCACHED_VERSION:-v1.0.0}
+    container_name: ${MEMCACHED_CNTR_NAME:-eafw-memcached}
+    restart: ${RESTART_POLICY:-always}
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${CACHE_HOST_PORT:-11211}:11211
+    entrypoint:
+      - memcached
+      - -m 1024
+      - -I 10m
+  geomanager_web:
+    platform: linux/x86_64
+    container_name: ${WEB_CNTR_NAME:-eafw-cms-web}
+    image: ${WEB_IMAGE_NAME:-icpac/eafw-cms-web:v1.0.0}
+    build:
+      context: ..
+      dockerfile: geomanager-web/docker/cms/Dockerfile
+    restart: ${RESTART_POLICY:-always}
+    command: >
+      sh -c "/wait
+      && ./docker-entrypoint.sh
+      && /opt/venv/bin/gunicorn geomanagerweb.asgi
+      --bind 0.0.0.0:8000 --workers=${CMS_NUM_OF_WORKERS} --worker-class=uvicorn.workers.UvicornWorker"
+    expose:
+      - "8000"
+    environment:
+      - WAIT_HOSTS=geomanager_db:5432,geomanager_memcached:11211
+      - WAIT_TIMEOUT=${WEB_WAIT_TIME:-120}
+      - DEBUG=${CMS_DEBUG:-False}
+      - WAGTAIL_SITE_NAME=${CMS_SITE_NAME:-localhost}
+      - ADMIN_URL_PATH=${ADMIN_URL_PATH:-cms-admin}
+      - TIME_ZONE=${TIME_ZONE:-Nairobi/Africa}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
+      # connect to pgbouncer instead of connecting to db directly
+      - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@${PGB_HOST:-pgbouncer}:${PGB_PORT:-6432}/${CMS_DB_NAME}
+      - MEMCACHED_URI=${MEMCACHED_URI:-geomanager_memcached:11211}
+      - MAPVIEWER_SERVER_URL=${MAPVIEWER_SERVER_URL:-http://geomanager_mapviewer:3000}
+      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://localhost:8000}
+      - LANGUAGE_CODE=${CMS_DEFAULT_LANGUAGE_CODE:-en}
+      - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
+      - GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-geomanagerweb.settings.production}
+      - DJANGO_ALLOW_ASYNC_UNSAFE=${ALLOW_ASYNC_UNSAFE:-true}
+      # FTP credentials for data sync
+      - SFTP_HOST=${SFTP_HOST}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME}
+      - SFTP_PASSWORD=${SFTP_PASSWORD}
+      - ENSEMBLE_FTP_HOST=${ENSEMBLE_FTP_HOST}
+      - ENSEMBLE_FTP_PORT=${ENSEMBLE_FTP_PORT:-21}
+      - ENSEMBLE_FTP_USER=${ENSEMBLE_FTP_USER}
+      - ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}
+      - ENSEMBLE_FTP_DIR=${ENSEMBLE_FTP_DIR}
+    depends_on:
+      - geomanager_db
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${WEB_HOST_PORT:-8181}:8000
+    volumes:
+      - ${CMS_STATIC_VOLUME}:/home/app/static:z
+      - ${CMS_MEDIA_VOLUME}:/home/app/media:z
+      - ${GEOMANAGER_AUTO_INGEST_DATA_VOLUME}:/geomanager/data:z
+      - ./docker/volumes/cms/.cache:/root/.cache:z
+      - ${CMS_LOG_FILE:-./logs/cms-web.log}:/home/app/cms-web.log:z
+      - ./home/templates:/app/home/templates:z
+  geomanager_mapviewer:
+    platform: linux/x86_64
+    container_name: ${MAPVIEWER_CNTR_NAME:-eafw-mapviewer}
+    image: ${MAPVIEWER_IMAGE_NAME:-icpac/eafw-mapviewer:v1.0.1}
+    restart: ${RESTART_POLICY:-always}
+    build:
+      context: ../eafw_mapviewer
+      dockerfile: Dockerfile
+      args:
+        - CMS_API=${MAPVIEWER_CMS_API}
+        - BASE_PATH=${MAPVIEWER_BASE_PATH}
+        - ASSET_PREFIX=${MAPVIEWER_ASSET_PREFIX}
+        - ANALYTICS_PROPERTY_ID=${ANALYTICS_PROPERTY_ID}
+        - BITLY_TOKEN=${BITLY_TOKEN}
+        - GOOGLE_CUSTOM_SEARCH_CX=${GOOGLE_CUSTOM_SEARCH_CX}
+        - GOOGLE_SEARCH_API_KEY=${GOOGLE_SEARCH_API_KEY}
+        - ADMIN_BOUNDARY_API=${ADMIN_BOUNDARY_API}
+        - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - ${MAPVIEWER_NEXT_STATIC_VOLUME}:/app/nginx/.next/static:z
+      - ./docker/volumes/mapviewer/.cache:/root/.cache:z
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${UI_HOST_PORT:-3130}:3000
+  geomanager_mapserver:
+    build:
+      context: ../eafw-mapserver/mapserver
+      dockerfile: Dockerfile
+      args:
+        - MAPFILES_DIR=${MS_MAPFILES_DIR:-/opt/mapfiles}
+        - PROJ_DATA=${PROJ_DATA_DIR:-/usr/local/share/proj/}
+        - GDAL_DATA=${GDAL_DATA_DIR:-/usr/share/gdal}
+    container_name: ${MAPSERVER_CNTR_NAME:-eafw-mapserver}
+    image: ${MAPSERVER_IMAGE_NAME:-icpac/eafw-mapserver:v1.0.0}
+    restart: ${RESTART_POLICY:-always}
+    depends_on:
+      - pgbouncer
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${MS_HOST_PORT:-8482}:${MS_APP_PORT:-80}
+    environment:
+      - MS_DEBUGLEVEL=${MS_DEBUGLEVEL:-2}
+      - MS_ERRORFILE=${MS_ERRORFILE:-stderr}
+      - MAPFILES_DIR=${MS_MAPFILES_DIR:-/opt/mapfiles}
+      - MS_MAPFILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.map
+      - MAPSERVER_CONFIG_FILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.conf
+      - MAX_PROCESSES=${MS_MAX_PROCESSES:-10}
+      - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
+      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://localhost:8482/mapserver/}
+      - DB_HOST=${PGB_HOST:-pgbouncer}
+      - DB_MAP_USER=${CMS_DB_USER}
+      - DB_MAP_USER_PASSWORD=${CMS_DB_PASSWORD}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_PORT=${PGB_PORT:-6432}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    volumes:
+      - ${MS_MAPFILES_VOLUME:-./data/mapfiles}:/opt/mapfiles:z
+  geomanager_mapcache:
+    build:
+      context: ../eafw-mapserver/mapcache
+      dockerfile: Dockerfile
+      args:
+        - HOME_DIR=${APP_HOME_DIR:-/opt/mapcache}
+        - USER_ID=${APP_USER_ID:-1024}
+        - MAPCACHE_BRANCH=${MAPCACHE_BRANCH:-main}
+        - NGINX_VERISON=${NGINX_VERISON:-1.24.0}
+    image: ${MAPCACHE_IMAGE_NAME:-icpac/eafw-mapcache:v1.0.0}
+    container_name: ${MAPCACHE_CNTR_NAME:-eafw-mapcache}
+    restart: ${RESTART_POLICY:-always}
+    depends_on:
+      - geomanager_mapserver
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${MC_HOST_PORT:-8483}:${MC_APP_PORT:-80}
+    volumes:
+      - ${MC_TILES_DIR:-./data/mapcache/tiles}:${APP_TILES_DIR:-/opt/tiles}:z
+    environment:
+      - SERVICE_URL=${MC_SERVICE_URL:-http://localhost:8483/mapcache/}
+      - SOURCE_URL=${MC_SOURCE_URL:-http://geomanager_mapserver/mapserver/?}
+      - MAPCACHE_CONFIG_FILE=${MC_CONFIG_FILE:-/opt/mapcache/mapcache.xml}
+      - WEB_GRID_EXTENTS=${WEB_GRID_EXTENTS:-2337709 -1329087 5792092 2632018}
+      - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
+      - TILES_DIR=${APP_TILES_DIR:-/opt/tiles}
+      - MAX_PROCESSES=${MC_MAX_PROCESSES:-10}
+      - TILESET_EXPIRE_SEC=${MC_TILESET_EXPIRE_SEC:-3600}
+      - THREADED_FETCHING=${MC_THREADED_FETCHING:-true}
+      - NUM_THREADS=${MC_THREADS:-10}
+      - ERROR_REPORTING=${MC_ERROR_REPORTING:-empty_img}
+      - LOG_LEVEL=${MC_LOG_LEVEL:-debug}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+  geomanager_tileserv:
+    container_name: ${TILESERV_CNTR_NAME:-eafw-tileserv}
+    image: pramsey/pg_tileserv:${TILESERV_VERSION:-v1.0.0}
+    restart: ${RESTART_POLICY:-always}
+    depends_on:
+      - pgbouncer
+    environment:
+      - DATABASE_URL=postgresql://${CMS_DB_USER}:${CMS_DB_PASSWORD}@geomanager_db:5432/${CMS_DB_NAME}
+      - TS_BASEPATH=/pg/tileserv
+      - TS_DEBUG=${TILESERV_DEBUG:-false}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${TILESERV_HOST_PORT:-7471}:7800
+  geomanager_nginx:
+    container_name: ${NGINX_CNTR_NAME:-eafw-nginx}
+    image: nginx:${NGINX_VERSION:-v1.0.0}
+    restart: ${RESTART_POLICY:-always}
+    volumes:
+      - ${CMS_STATIC_VOLUME}:/wagtail_static:z
+      - ${CMS_MEDIA_VOLUME}:/wagtail_media:z
+      - ${MAPVIEWER_NEXT_STATIC_VOLUME}:/mapviewer/static:z
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:z
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${CMS_HOST_PORT:-8180}:80
+    depends_on:
+      - geomanager_web
+  # FloodWatch Jobs Scheduler - runs scheduled data sync jobs
+  floodwatch_jobs:
+    platform: linux/x86_64
+    container_name: ${JOBS_CNTR_NAME:-eafw-floodwatch-jobs}
+    image: ${JOBS_IMAGE_NAME:-icpac/eafw-floodwatch-jobs:v1.0.0}
+    build:
+      context: ./floodwatch-jobs
+      dockerfile: Dockerfile
+    restart: ${RESTART_POLICY:-always}
+    depends_on:
+      - geomanager_db
+    environment:
+      # Database connection (direct to DB, not pgbouncer for long-running connections)
+      - DB_HOST=${DB_JOBS_HOST:-geomanager_db}
+      - DB_PORT=${DB_JOBS_PORT:-5432}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_USER=${CMS_DB_USER}
+      - DB_PASSWORD=${CMS_DB_PASSWORD}
+      # FloodProofs SFTP
+      - FLOODPROOFS_SFTP_HOST=${FLOODPROOFS_SFTP_HOST:-197.254.113.173}
+      - FLOODPROOFS_SFTP_PORT=${FLOODPROOFS_SFTP_PORT:-22}
+      - FLOODPROOFS_SFTP_USER=${FLOODPROOFS_SFTP_USER:-floodproofs}
+      - FLOODPROOFS_SFTP_PASSWORD=${FLOODPROOFS_SFTP_PASSWORD}
+      - FLOODPROOFS_REMOTE_DIR=${FLOODPROOFS_REMOTE_DIR:-/home/floodproofs/merged_forecasts}
+      # Google Drive sync
+      - DRIVE_FOLDER_ID=${DRIVE_FOLDER_ID}
+      - GOOGLE_CREDENTIALS_FILE=/app/credentials/google-credentials.json
+      - SYNC_SOURCE=${SYNC_SOURCE:-drive}
+      # Sync settings
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-21600}
+      - SYNC_DAYS=${SYNC_DAYS:-7}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    volumes:
+      - ${JOBS_DATA_VOLUME:-./floodwatch-jobs/data}:/app/data:z
+      - ${JOBS_LOGS_VOLUME:-./floodwatch-jobs/logs}:/app/logs:z
+      - ./floodwatch-jobs/credentials:/app/credentials:z
+  # Redis for Celery message broker (uncomment when ready to enable scheduled tasks)
+  # geomanager_redis:
+  #   container_name: ${REDIS_CNTR_NAME:-eafw-redis}
+  #   image: redis:${REDIS_VERSION:-7-alpine}
+  #   restart: ${RESTART_POLICY:-always}
+  #   ports:
+  #     - ${HOST_IP:-127.0.0.1}:${REDIS_HOST_PORT:-6379}:6379
+  #   volumes:
+  #     - ${REDIS_DATA_VOLUME:-./docker/volumes/redis}:/data:z
+  # Celery worker for background tasks
+  # geomanager_celery_worker:
+  #   platform: linux/x86_64
+  #   container_name: ${CELERY_WORKER_CNTR_NAME:-eafw-celery-worker}
+  #   image: ${WEB_IMAGE_NAME:-icpac/eafw-cms-web:v1.0.0}
+  #   restart: ${RESTART_POLICY:-always}
+  #   command: >
+  #     sh -c "/wait && /opt/venv/bin/celery -A geomanagerweb worker -l INFO"
+  #   environment:
+  #     - WAIT_HOSTS=geomanager_db:5432,geomanager_redis:6379
+  #     - WAIT_TIMEOUT=${WEB_WAIT_TIME:-120}
+  #     - DEBUG=${CMS_DEBUG:-False}
+  #     - SECRET_KEY=${SECRET_KEY}
+  #     - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@${PGB_HOST:-pgbouncer}:${PGB_PORT:-6432}/${CMS_DB_NAME}
+  #     - CELERY_BROKER_URL=redis://geomanager_redis:6379/0
+  #     - CELERY_RESULT_BACKEND=redis://geomanager_redis:6379/0
+  #     - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-geomanagerweb.settings.production}
+  #     - TIME_ZONE=${TIME_ZONE:-Africa/Nairobi}
+  #     # FTP credentials for multimodal sync
+  #     - ENSEMBLE_FTP_HOST=${ENSEMBLE_FTP_HOST}
+  #     - ENSEMBLE_FTP_PORT=${ENSEMBLE_FTP_PORT:-21}
+  #     - ENSEMBLE_FTP_USER=${ENSEMBLE_FTP_USER}
+  #     - ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}
+  #     - ENSEMBLE_FTP_DIR=${ENSEMBLE_FTP_DIR}
+  #   depends_on:
+  #     - geomanager_db
+  #     - geomanager_redis
+  #   volumes:
+  #     - ${CMS_MEDIA_VOLUME}:/home/app/media:z
+  # Celery beat scheduler for periodic tasks
+  # geomanager_celery_beat:
+  #   platform: linux/x86_64
+  #   container_name: ${CELERY_BEAT_CNTR_NAME:-eafw-celery-beat}
+  #   image: ${WEB_IMAGE_NAME:-icpac/eafw-cms-web:v1.0.0}
+  #   restart: ${RESTART_POLICY:-always}
+  #   command: >
+  #     sh -c "/wait && /opt/venv/bin/celery -A geomanagerweb beat -l INFO"
+  #   environment:
+  #     - WAIT_HOSTS=geomanager_db:5432,geomanager_redis:6379
+  #     - WAIT_TIMEOUT=${WEB_WAIT_TIME:-120}
+  #     - DEBUG=${CMS_DEBUG:-False}
+  #     - SECRET_KEY=${SECRET_KEY}
+  #     - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@${PGB_HOST:-pgbouncer}:${PGB_PORT:-6432}/${CMS_DB_NAME}
+  #     - CELERY_BROKER_URL=redis://geomanager_redis:6379/0
+  #     - CELERY_RESULT_BACKEND=redis://geomanager_redis:6379/0
+  #     - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-geomanagerweb.settings.production}
+  #     - TIME_ZONE=${TIME_ZONE:-Africa/Nairobi}
+  #   depends_on:
+  #     - geomanager_db
+  #     - geomanager_redis

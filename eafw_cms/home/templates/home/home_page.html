@@ -1,0 +1,827 @@
+{% extends "base.html" %}
+{% load wagtailimages_tags static lazyimages_tags wagtailcore_tags wagtailiconchooser_tags i18n %}
+
+{% block body_class %}homepage{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ============================================
+       CLEAN DASHBOARD LAYOUT (Drought-style)
+       ============================================ */
+
+    body.homepage {
+        background: #f8f9fa;
+    }
+
+    body.homepage .content-wrapper {
+        padding: 0 !important;
+        margin-top: 60px;
+    }
+
+    /* Main Dashboard Container */
+    .dashboard-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 30px 40px;
+    }
+
+    /* Section Title */
+    .dashboard-title {
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 20px;
+    }
+
+    /* Dashboard Grid - Map Left, Cards Right */
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 30px;
+        align-items: start;
+    }
+
+    /* ============================================
+       MAP SECTION
+       ============================================ */
+    .map-section {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .map-wrapper {
+        position: relative;
+        height: 480px;
+    }
+
+    #mini-map {
+        width: 100%;
+        height: 100%;
+    }
+
+    .map-loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        color: #666;
+        z-index: 5;
+    }
+
+    .map-loading .spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid #e0e0e0;
+        border-top-color: #1976d2;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Map Legend - Bottom Left Inside Map */
+    .map-legend {
+        position: absolute;
+        bottom: 50px;
+        left: 15px;
+        background: white;
+        padding: 12px 15px;
+        border-radius: 4px;
+        box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+        font-size: 0.8rem;
+        z-index: 10;
+        max-width: 200px;
+    }
+
+    .map-legend-title {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #333;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 6px;
+    }
+
+    .map-legend-items {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .map-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.75rem;
+        color: #555;
+    }
+
+    .map-legend-item .legend-box {
+        width: 18px;
+        height: 12px;
+        border-radius: 2px;
+    }
+
+    .map-legend-item .legend-box.emergency { background: #d32f2f; }
+    .map-legend-item .legend-box.alarm { background: #ff9800; }
+    .map-legend-item .legend-box.warning { background: #ffc107; }
+    .map-legend-item .legend-box.normal { background: #4caf50; }
+
+    /* Go to Mapviewer Button - Bottom Right Inside Map */
+    .map-cta-btn {
+        position: absolute;
+        bottom: 15px;
+        right: 15px;
+        background: #1976d2;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        z-index: 10;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        transition: background 0.2s;
+    }
+
+    .map-cta-btn:hover {
+        background: #1565c0;
+        color: white;
+    }
+
+    .map-cta-btn svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+    }
+
+    /* Attribution */
+    .map-attribution {
+        position: absolute;
+        bottom: 15px;
+        right: 180px;
+        font-size: 0.65rem;
+        color: #666;
+        z-index: 10;
+    }
+
+    .map-attribution a {
+        color: #666;
+    }
+
+    /* External Links Below Map */
+    .map-external-links {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        padding: 12px;
+        background: #f5f5f5;
+        border-top: 1px solid #ddd;
+    }
+
+    .external-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        background: #ff9800;
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-decoration: none;
+        border-radius: 3px;
+        transition: background 0.2s;
+    }
+
+    .external-link:hover {
+        background: #f57c00;
+        color: white;
+    }
+
+    .external-link svg {
+        width: 12px;
+        height: 12px;
+        fill: currentColor;
+    }
+
+    /* ============================================
+       COUNTRY CARDS SECTION
+       ============================================ */
+    .country-section {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .country-section-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .country-section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #333;
+        margin: 0 0 10px 0;
+    }
+
+    /* Alert Level Legend Pills */
+    .alert-legend-pills {
+        display: flex;
+        gap: 8px;
+    }
+
+    .alert-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        border-radius: 3px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: white;
+    }
+
+    .alert-pill.emergency { background: #d32f2f; }
+    .alert-pill.alarm { background: #ff9800; }
+    .alert-pill.warning { background: #ffc107; color: #333; }
+
+    /* Country List */
+    .country-list {
+        max-height: 420px;
+        overflow-y: auto;
+    }
+
+    .country-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 20px;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .country-item:hover {
+        background: #f8f9fa;
+    }
+
+    .country-item:last-child {
+        border-bottom: none;
+    }
+
+    .country-item.selected {
+        background: #e3f2fd;
+    }
+
+    /* Country Flag */
+    .country-flag {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        overflow: hidden;
+        margin-right: 12px;
+        flex-shrink: 0;
+        border: 2px solid #e0e0e0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f5f5f5;
+    }
+
+    .country-flag img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Country Info */
+    .country-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .country-name {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 6px;
+    }
+
+    /* Stacked Horizontal Bar */
+    .country-bar {
+        display: flex;
+        height: 8px;
+        background: #e8e8e8;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .country-bar-segment {
+        height: 100%;
+        transition: width 0.3s ease;
+    }
+
+    .country-bar-segment.emergency { background: #d32f2f; }
+    .country-bar-segment.alarm { background: #ff9800; }
+    .country-bar-segment.warning { background: #ffc107; }
+
+    /* Country Loading */
+    .country-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+        color: #666;
+    }
+
+    /* ============================================
+       HIDE MAPLIBRE CONTROLS (EXCEPT ZOOM)
+       ============================================ */
+    .maplibregl-ctrl-attrib {
+        display: none !important;
+    }
+
+    /* Simple zoom controls */
+    .maplibregl-ctrl-group {
+        border-radius: 4px !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important;
+    }
+
+    .maplibregl-ctrl-group button {
+        width: 30px !important;
+        height: 30px !important;
+    }
+
+    /* Popup styles */
+    .maplibregl-popup-content {
+        padding: 10px 14px;
+        border-radius: 6px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        font-size: 0.85rem;
+    }
+
+    .popup-title {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 6px;
+    }
+
+    .popup-value {
+        font-size: 0.8rem;
+        color: #666;
+    }
+
+    .popup-value span {
+        font-weight: 600;
+    }
+
+    .popup-value span.emergency { color: #d32f2f; }
+    .popup-value span.alarm { color: #ff9800; }
+    .popup-value span.warning { color: #c79100; }
+
+    /* ============================================
+       RESPONSIVE
+       ============================================ */
+    @media screen and (max-width: 1024px) {
+        .dashboard-container {
+            padding: 20px;
+        }
+
+        .dashboard-grid {
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+        }
+    }
+
+    @media screen and (max-width: 768px) {
+        .dashboard-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .map-wrapper {
+            height: 350px;
+        }
+
+        .country-list {
+            max-height: 300px;
+        }
+
+        .map-external-links {
+            flex-wrap: wrap;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <!-- Dashboard Title -->
+    <h1 class="dashboard-title" id="dashboard-title">
+        {% trans "Latest Situation of Flood Conditions" %} - <span id="title-date">{% trans "Loading..." %}</span>
+    </h1>
+
+    <div class="dashboard-grid">
+        <!-- Map Section -->
+        {% if page.show_mini_map %}
+        <div class="map-section">
+            <div class="map-wrapper">
+                <div id="mini-map"></div>
+                <div class="map-loading" id="map-loading">
+                    <div class="spinner"></div>
+                    <span>{% trans "Loading map..." %}</span>
+                </div>
+
+                <!-- Map Legend -->
+                <div class="map-legend">
+                    <div class="map-legend-title">{% trans "Flood Alert Level" %}</div>
+                    <div class="map-legend-items">
+                        <div class="map-legend-item">
+                            <span class="legend-box emergency"></span>
+                            <span>{% trans "Emergency: Extreme flood risk" %}</span>
+                        </div>
+                        <div class="map-legend-item">
+                            <span class="legend-box alarm"></span>
+                            <span>{% trans "Alarm: High flood risk" %}</span>
+                        </div>
+                        <div class="map-legend-item">
+                            <span class="legend-box warning"></span>
+                            <span>{% trans "Warning: Moderate flood risk" %}</span>
+                        </div>
+                        <div class="map-legend-item">
+                            <span class="legend-box normal"></span>
+                            <span>{% trans "Normal: Low/no risk" %}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Attribution -->
+                <div class="map-attribution">
+                    &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors
+                </div>
+
+                <!-- Go to Mapviewer Button -->
+                <a href="/mapviewer/" class="map-cta-btn">
+                    {% trans "Go to mapviewer" %}
+                    <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
+                </a>
+            </div>
+
+            <!-- External Links -->
+            <div class="map-external-links">
+                <a href="https://www.icpac.net/" target="_blank" rel="noopener" class="external-link">
+                    ICPAC Climate Portal
+                    <svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                </a>
+                <a href="/reports/" class="external-link">
+                    {% trans "Flood Bulletins" %}
+                    <svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Country Cards Section -->
+        {% if page.show_country_cards %}
+        <div class="country-section">
+            <div class="country-section-header">
+                <h2 class="country-section-title">{{ page.country_cards_title|default:"Flood Alert Level per Country proportion" }}</h2>
+                <div class="alert-legend-pills">
+                    <span class="alert-pill emergency">{% trans "Emergency" %}</span>
+                    <span class="alert-pill alarm">{% trans "Alarm" %}</span>
+                    <span class="alert-pill warning">{% trans "Warning" %}</span>
+                </div>
+            </div>
+
+            <div class="country-list" id="country-list">
+                <div class="country-loading">
+                    <div class="spinner"></div>
+                    <span>{% trans "Loading country data..." %}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{# MapLibre GL JS from CDN #}
+<link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
+
+<script>
+    // Global variables
+    let miniMap = null;
+    let countriesData = [];
+    let selectedCountry = null;
+
+    // CMS Configuration
+    const mapConfig = {
+        centerLat: {{ page.mini_map_center_lat|default:5.0 }},
+        centerLng: {{ page.mini_map_center_lng|default:38.0 }},
+        zoom: {{ page.mini_map_initial_zoom|default:5 }},
+        maxCards: {{ page.max_country_cards|default:11 }},
+        bounds: [[21.8, -12.0], [52.0, 18.0]]
+    };
+
+    // Alert colors
+    const alertColors = {
+        emergency: '{{ multimodal_settings.emergency_color|default:"#d32f2f" }}',
+        alarm: '{{ multimodal_settings.alarm_color|default:"#ff9800" }}',
+        warning: '{{ multimodal_settings.warning_color|default:"#ffc107" }}',
+        normal: '{{ multimodal_settings.normal_color|default:"#4caf50" }}'
+    };
+
+    // Country flag URLs (using flagcdn.com)
+    const flagUrls = {
+        'ET': 'https://flagcdn.com/w80/et.png',
+        'SD': 'https://flagcdn.com/w80/sd.png',
+        'SS': 'https://flagcdn.com/w80/ss.png',
+        'UG': 'https://flagcdn.com/w80/ug.png',
+        'RW': 'https://flagcdn.com/w80/rw.png',
+        'KE': 'https://flagcdn.com/w80/ke.png',
+        'TZ': 'https://flagcdn.com/w80/tz.png',
+        'SO': 'https://flagcdn.com/w80/so.png',
+        'DJ': 'https://flagcdn.com/w80/dj.png',
+        'ER': 'https://flagcdn.com/w80/er.png',
+        'BI': 'https://flagcdn.com/w80/bi.png'
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initMiniMap();
+        loadCountryData();
+        loadSituationSummary();
+
+        // Refresh every 5 minutes
+        setInterval(() => {
+            loadCountryData();
+            loadSituationSummary();
+            if (miniMap) loadMapPoints();
+        }, 5 * 60 * 1000);
+    });
+
+    // ========================================
+    // MINI-MAP INITIALIZATION
+    // ========================================
+    function initMiniMap() {
+        const mapContainer = document.getElementById('mini-map');
+        if (!mapContainer) return;
+
+        try {
+            miniMap = new maplibregl.Map({
+                container: 'mini-map',
+                style: {
+                    version: 8,
+                    sources: {
+                        'carto-light': {
+                            type: 'raster',
+                            tiles: ['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'],
+                            tileSize: 256
+                        }
+                    },
+                    layers: [{
+                        id: 'carto-light-layer',
+                        type: 'raster',
+                        source: 'carto-light',
+                        minzoom: 0,
+                        maxzoom: 19
+                    }]
+                },
+                center: [mapConfig.centerLng, mapConfig.centerLat],
+                zoom: mapConfig.zoom,
+                attributionControl: false
+            });
+
+            // Simple zoom controls only
+            miniMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+            miniMap.on('load', function() {
+                document.getElementById('map-loading').style.display = 'none';
+
+                // Fit to East Africa bounds
+                miniMap.fitBounds(mapConfig.bounds, { padding: 30, duration: 0 });
+
+                loadMapPoints();
+            });
+
+        } catch (error) {
+            console.error('Failed to initialize map:', error);
+            document.getElementById('map-loading').innerHTML = '<span style="color: #c62828;">Failed to load map</span>';
+        }
+    }
+
+    // ========================================
+    // LOAD MAP POINTS
+    // ========================================
+    async function loadMapPoints() {
+        if (!miniMap) return;
+
+        try {
+            const response = await fetch('/api/multimodal/geojson/');
+            if (!response.ok) throw new Error('Failed to fetch points');
+
+            const geojson = await response.json();
+
+            // Add alert_level based on thresholds
+            const thresholds = {
+                warning: {{ multimodal_settings.warning_threshold|default:150 }},
+                alarm: {{ multimodal_settings.alarm_threshold|default:300 }},
+                emergency: {{ multimodal_settings.emergency_threshold|default:450 }}
+            };
+
+            geojson.features = geojson.features.map(f => {
+                const dailyAvg = f.properties.daily_avg || 0;
+                let alertLevel = 'normal';
+
+                if (dailyAvg >= thresholds.emergency) alertLevel = 'emergency';
+                else if (dailyAvg >= thresholds.alarm) alertLevel = 'alarm';
+                else if (dailyAvg >= thresholds.warning) alertLevel = 'warning';
+
+                f.properties.alert_level = alertLevel;
+                return f;
+            });
+
+            // Remove existing
+            if (miniMap.getSource('forecast-points')) {
+                miniMap.removeLayer('forecast-points-layer');
+                miniMap.removeSource('forecast-points');
+            }
+
+            miniMap.addSource('forecast-points', { type: 'geojson', data: geojson });
+
+            miniMap.addLayer({
+                id: 'forecast-points-layer',
+                type: 'circle',
+                source: 'forecast-points',
+                paint: {
+                    'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 4, 8, 7, 12, 10],
+                    'circle-color': [
+                        'match', ['get', 'alert_level'],
+                        'emergency', alertColors.emergency,
+                        'alarm', alertColors.alarm,
+                        'warning', alertColors.warning,
+                        alertColors.normal
+                    ],
+                    'circle-stroke-width': 1.5,
+                    'circle-stroke-color': 'white',
+                    'circle-opacity': 0.9
+                }
+            });
+
+            // Click popup
+            miniMap.on('click', 'forecast-points-layer', function(e) {
+                const props = e.features[0].properties;
+                const coords = e.features[0].geometry.coordinates.slice();
+
+                new maplibregl.Popup({ closeButton: true, maxWidth: '220px' })
+                    .setLngLat(coords)
+                    .setHTML(`
+                        <div class="popup-title">${props.admin_name || 'Forecast Point'}</div>
+                        <div class="popup-value">Alert: <span class="${props.alert_level}">${props.alert_level.toUpperCase()}</span></div>
+                        <div class="popup-value">Discharge: <span>${Math.round(props.daily_avg || 0)} m³/s</span></div>
+                    `)
+                    .addTo(miniMap);
+            });
+
+            miniMap.on('mouseenter', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = 'pointer');
+            miniMap.on('mouseleave', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = '');
+
+        } catch (error) {
+            console.error('Error loading map points:', error);
+        }
+    }
+
+    // ========================================
+    // LOAD COUNTRY DATA
+    // ========================================
+    async function loadCountryData() {
+        try {
+            const response = await fetch('/api/country-summary-with-bounds/');
+            if (!response.ok) throw new Error('Failed to fetch country data');
+
+            const data = await response.json();
+            countriesData = data.countries || [];
+
+            renderCountryList(countriesData);
+
+        } catch (error) {
+            console.error('Error loading country data:', error);
+            document.getElementById('country-list').innerHTML = '<div class="country-loading"><span style="color:#c62828;">Failed to load data</span></div>';
+        }
+    }
+
+    // ========================================
+    // RENDER COUNTRY LIST
+    // ========================================
+    function renderCountryList(countries) {
+        const container = document.getElementById('country-list');
+        if (!container) return;
+
+        // Filter out "Unknown" country
+        countries = countries.filter(c => c.code !== 'UN' && c.name !== 'Unknown');
+
+        if (!countries || countries.length === 0) {
+            container.innerHTML = '<div class="country-loading"><span style="color:#4caf50;">No flood alerts</span></div>';
+            return;
+        }
+
+        // Calculate max for bar scaling
+        const maxTotal = Math.max(...countries.map(c => c.emergency + c.alarm + c.warning), 1);
+
+        let html = '';
+        countries.slice(0, mapConfig.maxCards).forEach(country => {
+            const name = country.name || country.code;
+            const flagUrl = flagUrls[country.code] || `https://flagcdn.com/w80/${country.code.toLowerCase()}.png`;
+
+            const total = country.emergency + country.alarm + country.warning;
+            const emergencyPct = total > 0 ? (country.emergency / maxTotal * 100) : 0;
+            const alarmPct = total > 0 ? (country.alarm / maxTotal * 100) : 0;
+            const warningPct = total > 0 ? (country.warning / maxTotal * 100) : 0;
+
+            html += `
+                <div class="country-item" data-code="${country.code}" data-bounds='${JSON.stringify(country.bounds)}' onclick="selectCountry('${country.code}')">
+                    <div class="country-flag">
+                        <img src="${flagUrl}" alt="${name}" onerror="this.style.display='none'">
+                    </div>
+                    <div class="country-info">
+                        <div class="country-name">${name}</div>
+                        <div class="country-bar">
+                            ${emergencyPct > 0 ? `<div class="country-bar-segment emergency" style="width:${emergencyPct}%"></div>` : ''}
+                            ${alarmPct > 0 ? `<div class="country-bar-segment alarm" style="width:${alarmPct}%"></div>` : ''}
+                            ${warningPct > 0 ? `<div class="country-bar-segment warning" style="width:${warningPct}%"></div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // ========================================
+    // SELECT COUNTRY - ZOOM MAP
+    // ========================================
+    function selectCountry(code) {
+        document.querySelectorAll('.country-item').forEach(el => el.classList.remove('selected'));
+
+        const item = document.querySelector(`[data-code="${code}"]`);
+        if (item) {
+            item.classList.add('selected');
+
+            const boundsStr = item.getAttribute('data-bounds');
+            if (boundsStr && boundsStr !== 'null') {
+                try {
+                    const bounds = JSON.parse(boundsStr);
+                    if (bounds && miniMap) {
+                        miniMap.fitBounds([[bounds.west, bounds.south], [bounds.east, bounds.north]], {
+                            padding: 40,
+                            duration: 800
+                        });
+                    }
+                } catch (e) {}
+            }
+        }
+
+        selectedCountry = code;
+    }
+
+    // ========================================
+    // LOAD SITUATION SUMMARY
+    // ========================================
+    async function loadSituationSummary() {
+        try {
+            const response = await fetch('/api/situation-summary/');
+            if (!response.ok) throw new Error('Failed');
+
+            const data = await response.json();
+
+            if (data.data_date) {
+                const date = new Date(data.data_date);
+                const options = { day: 'numeric', month: 'long', year: 'numeric' };
+
+                // Format like "1st Ten Day Period of February 2026" or just the date
+                const dateStr = date.toLocaleDateString('en-US', options);
+                document.getElementById('title-date').textContent = `(${dateStr})`;
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('title-date').textContent = '';
+        }
+    }
+</script>
+{% endblock %}

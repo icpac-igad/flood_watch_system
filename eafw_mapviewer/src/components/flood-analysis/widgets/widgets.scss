@@ -1,0 +1,331 @@
+/**
+ * Flood Widgets Styles
+ */
+
+.c-flood-widgets {
+  margin-top: 2rem;
+
+  .widget-loader {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    padding: 2rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: #666;
+    background: #f9fafb;
+    border-radius: 8px;
+    border: 1px dashed #ddd;
+
+    p {
+      margin: 0;
+      font-size: 1rem;
+    }
+  }
+
+  .widgets-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+}
+
+// Individual Widget Card
+.c-flood-widget {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  .widget-header {
+    margin-bottom: 1.5rem;
+
+    .widget-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1e3a5f;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .widget-description {
+      font-size: 0.9rem;
+      color: #666;
+      line-height: 1.5;
+
+      a {
+        color: #0c5a27;
+        text-decoration: none;
+        font-weight: 500;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+
+  .widget-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .chart-container {
+    min-height: 350px;
+    background: #fafafa;
+    border-radius: 4px;
+    padding: 1rem;
+  }
+
+  .map-container {
+    min-height: 300px;
+    border-radius: 4px;
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+
+    .map-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+
+      .map-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #333;
+      }
+
+      .download-btn {
+        background: none;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+        cursor: pointer;
+        font-size: 0.8rem;
+        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+
+        &:hover {
+          background: #f5f5f5;
+          border-color: #bbb;
+        }
+      }
+    }
+
+    .map-subtitle {
+      font-size: 0.8rem;
+      color: #666;
+      margin-top: 0.5rem;
+    }
+  }
+}
+
+// Section Header - matching drought report style
+.section-header {
+  margin-bottom: 16px;
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+    margin: 0;
+    padding-left: 16px;
+    border-left: 4px solid #FF9800;
+  }
+
+  .section-description {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.5;
+    margin: 8px 0 0 0;
+
+    a {
+      color: #0066cc;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+}
+
+// Data Note - matching drought report style
+.data-note {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #fff3cd;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #856404;
+}
+
+// Alert Summary Widget - matching drought report statistics table
+.c-alert-summary {
+  margin-bottom: 30px;
+
+  .c-stats-table {
+    margin-top: 16px;
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+
+      th, td {
+        padding: 12px 16px;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+      }
+
+      th {
+        background: #f5f5f5;
+        font-weight: 600;
+        color: #333;
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.5px;
+      }
+
+      td {
+        color: #555;
+      }
+
+      .level-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+
+        .level-dot {
+          width: 14px;
+          height: 14px;
+          border-radius: 3px;
+        }
+      }
+    }
+  }
+}
+
+// Alert Level Badges
+.alert-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  &.normal {
+    background: rgba(128, 128, 128, 0.15);
+    color: #666;
+  }
+
+  &.warning {
+    background: rgba(255, 193, 7, 0.2);
+    color: #b8860b;
+  }
+
+  &.alarm {
+    background: rgba(255, 152, 0, 0.2);
+    color: #e65100;
+  }
+
+  &.emergency {
+    background: rgba(211, 47, 47, 0.2);
+    color: #c62828;
+  }
+}
+
+// Statistics Table
+.c-stats-table {
+  width: 100%;
+  overflow-x: auto;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+
+    th,
+    td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    th {
+      background: #f3f4f6;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    tr:hover {
+      background: #f9fafb;
+    }
+  }
+}
+
+// Model Tabs
+.model-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+
+  .model-tab {
+    padding: 0.5rem 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: #f0f0f0;
+    }
+
+    &.active {
+      background: #0c5a27;
+      color: #fff;
+      border-color: #0c5a27;
+    }
+  }
+}
+
+// Info Alert
+.info-alert {
+  padding: 1rem;
+  background: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #1565c0;
+}
+
+.error-alert {
+  padding: 1rem;
+  background: #ffebee;
+  border-left: 4px solid #f44336;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #c62828;
+}

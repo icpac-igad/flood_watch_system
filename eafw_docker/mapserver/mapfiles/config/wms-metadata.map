@@ -1,0 +1,7 @@
+# WMS Service Metadata
+"wms_title" "East Africa Flood Watch WMS Service"
+"wms_abstract" "WMS service for East Africa Flood Watch System"
+"wms_enable_request" "*"
+"wms_encoding" "UTF-8"
+"wms_onlineresource" "[MS_SERVICE_URL]"
+"wms_srs" "EPSG:4326 EPSG:900913 EPSG:3857"

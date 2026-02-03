@@ -1,0 +1,18 @@
+LAYER
+    INCLUDE "config/database.map"
+    DATA "geom from (select id, hazard_level, geom from alerts.get_flood_hazard('%time%', NULLIF('%country%', ''))) as subq using unique id using srid=4326"
+    INCLUDE "shared/common-layer-properties.map"
+    INCLUDE "classifications/flood-hazard.classes.map"
+    METADATA
+        "wms_title" "FP Flood Hazard"
+        "wms_abstract" "Daily flood hazard extent maps from FloodProofs model"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+    NAME "flood_hazard"
+    VALIDATION
+        "time" "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        "default_time" "2025-09-01"
+        "country" "^[A-Za-z ]+$"
+        "default_country" ""
+    END
+END

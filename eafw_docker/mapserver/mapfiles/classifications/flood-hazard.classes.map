@@ -1,0 +1,11 @@
+# FloodProofs Flood Hazard Classifications
+# Hazard level 1 = Flooded area (dark blue)
+
+CLASS
+    NAME "Flooded"
+    EXPRESSION ([hazard_level] >= 1)
+    STYLE
+        COLOR 0 0 139
+        OPACITY 85
+    END
+END
