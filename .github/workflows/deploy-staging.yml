@@ -88,7 +88,7 @@ jobs:
             cd ${{ secrets.STAGING_PATH }}
 
             echo "=== Logging in to GHCR ==="
-            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ secrets.GHCR_USER }} --password-stdin
+            echo "${{ secrets.GHCR_PAT }}" | sudo docker login ghcr.io -u ${{ secrets.GHCR_USER }} --password-stdin
 
             echo "=== Downloading docker-compose.staging.yml ==="
             curl -sL https://raw.githubusercontent.com/${{ github.repository }}/eafw/docker-compose.staging.yml -o docker-compose.staging.yml
@@ -110,18 +110,18 @@ jobs:
             mkdir -p data/{postgres,static,media,geomanager,mapviewer-static,mapfiles,mapcache/tiles,jobs,jobs-logs}
 
             echo "=== Stopping old containers ==="
-            docker compose --env-file staging.env -f docker-compose.staging.yml down 2>/dev/null || true
+            sudo docker compose --env-file staging.env -f docker-compose.staging.yml down 2>/dev/null || true
 
             echo "=== Pulling latest images ==="
-            docker compose --env-file staging.env -f docker-compose.staging.yml pull
+            sudo docker compose --env-file staging.env -f docker-compose.staging.yml pull
 
             echo "=== Starting services ==="
-            docker compose --env-file staging.env -f docker-compose.staging.yml up -d
+            sudo docker compose --env-file staging.env -f docker-compose.staging.yml up -d
 
             echo "=== Cleaning old images ==="
-            docker image prune -f
+            sudo docker image prune -f
 
             echo "=== Status ==="
-            docker compose --env-file staging.env -f docker-compose.staging.yml ps
+            sudo docker compose --env-file staging.env -f docker-compose.staging.yml ps
 
             echo "✅ Deployment complete!"
