@@ -255,17 +255,19 @@ jobs:
               git reset --hard origin/eafw
             else
               echo "Cloning fresh repo..."
-              rm -rf eafw data
+              rm -rf eafw
               git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
               cd ~/eafw
-              if [ -f ~/eafw_env_backup ]; then
-                cp ~/eafw_env_backup .env
-                echo ".env restored from backup"
-              fi
-              mkdir -p data/pgdata data/static data/media data/next data/mapfiles data/mapcache/tiles data/geomanager-data data/jobs/data data/jobs/logs
             fi
 
             echo "Current directory: $(pwd)"
+
+            # Create data directories
+            mkdir -p data/postgres data/static data/media data/mapviewer-static data/mapfiles data/mapcache/tiles data/geomanager data/jobs data/jobs-logs
+
+            # Always use staging.env.example as .env (fully automated)
+            cp staging.env.example .env
+            echo ".env created from staging.env.example"
 
             # Pull latest images
             docker compose -f docker-compose.staging.yml --env-file .env pull
