@@ -85,22 +85,32 @@ jobs:
           key: ${{ secrets.STAGING_SSH_KEY }}
           port: 22
           script: |
+            set -e
             cd ~
 
             # Clone or update repo
             if [ -d "eafw/.git" ]; then
+              echo "Updating existing repo..."
               cd eafw
               git fetch origin
               git reset --hard origin/eafw
             else
-              rm -rf eafw
+              echo "Cloning fresh repo..."
+              rm -rf eafw data
               git clone -b eafw https://github.com/icpac-igad/flood_watch_system.git eafw
-              cd eafw
+              cd ~/eafw
               # Restore .env if backed up
-              [ -f ~/eafw_env_backup ] && cp ~/eafw_env_backup .env
+              if [ -f ~/eafw_env_backup ]; then
+                cp ~/eafw_env_backup .env
+                echo ".env restored from backup"
+              fi
               # Create data directories
-              mkdir -p data/{pgdata,static,media,next,mapfiles,mapcache/tiles,geomanager-data,jobs/data,jobs/logs}
+              mkdir -p data/pgdata data/static data/media data/next data/mapfiles data/mapcache/tiles data/geomanager-data data/jobs/data data/jobs/logs
+              echo "Data directories created"
             fi
+
+            echo "Current directory: $(pwd)"
+            ls -la
 
             # Pull latest images
             docker compose -f docker-compose.staging.yml --env-file .env pull
