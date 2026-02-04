@@ -51,6 +51,7 @@ services:
       - CLIENT_IDLE_TIMEOUT=${PGB_CLIENT_IDLE_TIMEOUT:-1500}
       - IDLE_TRANSACTION_TIMEOUT=${PGB_IDLE_TRANSACTION_TIMEOUT:-1200}
       - VERBOSE=${PGB_VERBOSE:-1}
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits,search_path
       - TZ=${TIME_ZONE:-Africa/Nairobi}
 
   eafw_memcached:
@@ -67,7 +68,7 @@ services:
   eafw_cms:
     platform: linux/x86_64
     container_name: ${WEB_CNTR_NAME:-eafw-cms}
-    image: ${WEB_IMAGE_NAME:-icpac/eafw-cms:v1.0.0}
+    image: ${WEB_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-cms:latest}
     restart: ${RESTART_POLICY:-always}
     command: >
       sh -c "/wait
@@ -114,14 +115,13 @@ services:
       - ${CMS_MEDIA_VOLUME}:/opt/eafw_cms/media:z
       - ${GEOMANAGER_AUTO_INGEST_DATA_VOLUME}:/geomanager/data:z
       - ./eafw_docker/volumes/cms/.cache:/root/.cache:z
-      - ${CMS_LOG_FILE:-./logs/cms-web.log}:/opt/eafw_cms/cms-web.log:z
       - ./eafw_cms/home/templates:/opt/eafw_cms/home/templates:z
       - ./eafw_docker/cms/seed:/opt/eafw_cms/seed:z
 
   eafw_mapviewer:
     platform: linux/x86_64
     container_name: ${MAPVIEWER_CNTR_NAME:-eafw-mapviewer}
-    image: ${MAPVIEWER_IMAGE_NAME:-icpac/eafw-mapviewer:v1.0.1}
+    image: ${MAPVIEWER_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-mapviewer:latest}
     restart: ${RESTART_POLICY:-always}
     volumes:
       - ${MAPVIEWER_NEXT_STATIC_VOLUME}:/app/nginx/.next/static:z
@@ -131,8 +131,9 @@ services:
 
   eafw_mapserver:
     container_name: ${MAPSERVER_CNTR_NAME:-eafw-mapserver}
-    image: ${MAPSERVER_IMAGE_NAME:-icpac/eafw-mapserver:v1.0.0}
+    image: ${MAPSERVER_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-mapserver:latest}
     restart: ${RESTART_POLICY:-always}
+    user: "0:0"
     depends_on:
       - eafw_pgbouncer
     ports:
@@ -156,9 +157,10 @@ services:
       - ${MS_MAPFILES_VOLUME:-./data/mapfiles}:/opt/mapfiles:z
 
   eafw_mapcache:
-    image: ${MAPCACHE_IMAGE_NAME:-icpac/eafw-mapcache:v1.0.0}
+    image: ${MAPCACHE_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-mapcache:latest}
     container_name: ${MAPCACHE_CNTR_NAME:-eafw-mapcache}
     restart: ${RESTART_POLICY:-always}
+    user: "0:0"
     depends_on:
       - eafw_mapserver
     ports:
@@ -211,7 +213,7 @@ services:
   eafw_jobs:
     platform: linux/x86_64
     container_name: ${JOBS_CNTR_NAME:-eafw-jobs}
-    image: ${JOBS_IMAGE_NAME:-icpac/eafw-jobs:v1.0.0}
+    image: ${JOBS_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-jobs:latest}
     restart: ${RESTART_POLICY:-always}
     depends_on:
       - eafw_db
