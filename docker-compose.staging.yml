@@ -1,5 +1,6 @@
 # EAFW FloodWatch - Staging
 # Hosts: 197.254.1.10, 10.10.1.13, 0.0.0.0, 127.0.0.1
+# Ports: 9060-9069 (nginx entry: 9068)
 # Usage: docker compose -f docker-compose.staging.yml up -d
 
 networks:
@@ -19,7 +20,7 @@ services:
       - POSTGRES_PASSWORD=${CMS_DB_PASSWORD}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     ports:
-      - ${HOST_IP:-0.0.0.0}:${DB_HOST_PORT:-5431}:5432
+      - ${HOST_IP:-0.0.0.0}:${DB_HOST_PORT:-9060}:5432
     volumes:
       - ${CMS_DB_VOLUME}:/var/lib/postgresql/data/:z
       - ./eafw_docker/db-init:/docker-entrypoint-initdb.d/:z
@@ -32,7 +33,7 @@ services:
     depends_on:
       - eafw_db
     ports:
-      - ${PGB_HOST_IP:-${HOST_IP:-0.0.0.0}}:${PGB_HOST_PORT:-5463}:${PGB_LISTEN_PORT:-6432}
+      - ${PGB_HOST_IP:-${HOST_IP:-0.0.0.0}}:${PGB_HOST_PORT:-9061}:${PGB_LISTEN_PORT:-6432}
     environment:
       - LISTEN_PORT=${PGB_LISTEN_PORT:-6432}
       - DB_HOST=${PG_HOST:-eafw_db}
@@ -59,7 +60,7 @@ services:
     container_name: ${MEMCACHED_CNTR_NAME:-eafw-memcached}
     restart: ${RESTART_POLICY:-always}
     ports:
-      - ${HOST_IP:-0.0.0.0}:${CACHE_HOST_PORT:-11211}:11211
+      - ${HOST_IP:-0.0.0.0}:${CACHE_HOST_PORT:-9062}:11211
     entrypoint:
       - memcached
       - -m 1024
@@ -86,12 +87,12 @@ services:
       - TIME_ZONE=${TIME_ZONE:-Africa/Nairobi}
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-197.254.1.10,10.10.1.13,0.0.0.0,127.0.0.1,localhost}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://197.254.1.10,http://10.10.1.13,http://127.0.0.1,http://localhost,http://197.254.1.10:8180,http://10.10.1.13:8180}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://197.254.1.10,http://10.10.1.13,http://127.0.0.1,http://localhost,http://197.254.1.10:9068,http://10.10.1.13:9068}
       - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@${PGB_HOST:-eafw_pgbouncer}:${PGB_PORT:-6432}/${CMS_DB_NAME}
       - MEMCACHED_URI=${MEMCACHED_URI:-eafw_memcached:11211}
       - MAPVIEWER_SERVER_URL=${MAPVIEWER_SERVER_URL:-http://eafw_mapviewer:3000}
-      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://197.254.1.10:8180}
-      - CMS_BASE_URL=${CMS_BASE_URL:-http://197.254.1.10:8180}
+      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://197.254.1.10:9068}
+      - CMS_BASE_URL=${CMS_BASE_URL:-http://197.254.1.10:9068}
       - LANGUAGE_CODE=${CMS_DEFAULT_LANGUAGE_CODE:-en}
       - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
       - GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
@@ -109,7 +110,7 @@ services:
     depends_on:
       - eafw_db
     ports:
-      - ${HOST_IP:-0.0.0.0}:${WEB_HOST_PORT:-8181}:8000
+      - ${HOST_IP:-0.0.0.0}:${WEB_HOST_PORT:-9063}:8000
     volumes:
       - ${CMS_STATIC_VOLUME}:/opt/eafw_cms/static:z
       - ${CMS_MEDIA_VOLUME}:/opt/eafw_cms/media:z
@@ -127,7 +128,7 @@ services:
       - ${MAPVIEWER_NEXT_STATIC_VOLUME}:/app/nginx/.next/static:z
       - ./eafw_docker/volumes/mapviewer/.cache:/root/.cache:z
     ports:
-      - ${HOST_IP:-0.0.0.0}:${UI_HOST_PORT:-3130}:3000
+      - ${HOST_IP:-0.0.0.0}:${UI_HOST_PORT:-9064}:3000
 
   eafw_mapserver:
     container_name: ${MAPSERVER_CNTR_NAME:-eafw-mapserver}
@@ -137,7 +138,7 @@ services:
     depends_on:
       - eafw_pgbouncer
     ports:
-      - ${HOST_IP:-0.0.0.0}:${MS_HOST_PORT:-8482}:${MS_APP_PORT:-80}
+      - ${HOST_IP:-0.0.0.0}:${MS_HOST_PORT:-9065}:${MS_APP_PORT:-80}
     environment:
       - MS_DEBUGLEVEL=${MS_DEBUGLEVEL:-2}
       - MS_ERRORFILE=${MS_ERRORFILE:-stderr}
@@ -146,7 +147,7 @@ services:
       - MAPSERVER_CONFIG_FILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.conf
       - MAX_PROCESSES=${MS_MAX_PROCESSES:-10}
       - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
-      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://197.254.1.10:8482/mapserver/}
+      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://197.254.1.10:9065/mapserver/}
       - DB_HOST=${PGB_HOST:-eafw_pgbouncer}
       - DB_MAP_USER=${CMS_DB_USER}
       - DB_MAP_USER_PASSWORD=${CMS_DB_PASSWORD}
@@ -164,11 +165,11 @@ services:
     depends_on:
       - eafw_mapserver
     ports:
-      - ${HOST_IP:-0.0.0.0}:${MC_HOST_PORT:-8483}:${MC_APP_PORT:-80}
+      - ${HOST_IP:-0.0.0.0}:${MC_HOST_PORT:-9066}:${MC_APP_PORT:-80}
     volumes:
       - ${MC_TILES_DIR:-./data/mapcache/tiles}:${APP_TILES_DIR:-/opt/tiles}:z
     environment:
-      - SERVICE_URL=${MC_SERVICE_URL:-http://197.254.1.10:8483/mapcache/}
+      - SERVICE_URL=${MC_SERVICE_URL:-http://197.254.1.10:9066/mapcache/}
       - SOURCE_URL=${MC_SOURCE_URL:-http://eafw_mapserver/mapserver/?}
       - MAPCACHE_CONFIG_FILE=${MC_CONFIG_FILE:-/opt/mapcache/mapcache.xml}
       - WEB_GRID_EXTENTS=${WEB_GRID_EXTENTS:-2337709 -1329087 5792092 2632018}
@@ -194,7 +195,7 @@ services:
       - TS_DEBUG=${TILESERV_DEBUG:-false}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     ports:
-      - ${HOST_IP:-0.0.0.0}:${TILESERV_HOST_PORT:-7471}:7800
+      - ${HOST_IP:-0.0.0.0}:${TILESERV_HOST_PORT:-9067}:7800
 
   eafw_nginx:
     container_name: ${NGINX_CNTR_NAME:-eafw-nginx}
@@ -206,7 +207,7 @@ services:
       - ${MAPVIEWER_NEXT_STATIC_VOLUME}:/mapviewer/static:z
       - ./eafw_docker/nginx/nginx.staging.conf:/etc/nginx/nginx.conf:z
     ports:
-      - ${HOST_IP:-0.0.0.0}:${CMS_HOST_PORT:-8180}:80
+      - ${HOST_IP:-0.0.0.0}:${CMS_HOST_PORT:-9068}:80
     depends_on:
       - eafw_cms
 
