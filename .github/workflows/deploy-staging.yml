@@ -1,5 +1,6 @@
 # EAFW FloodWatch - Build & Deploy to Staging
 # Triggers on push to eafw branch
+# Only builds images when their source files change
 
 name: Build & Deploy to Staging
 
@@ -8,74 +9,226 @@ on:
     branches:
       - eafw
   workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force rebuild all images'
+        type: boolean
+        default: false
 
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
 
 jobs:
-  build-and-push:
-    name: Build & Push Images
+  detect-changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
+    outputs:
+      cms: ${{ steps.changes.outputs.cms }}
+      mapviewer: ${{ steps.changes.outputs.mapviewer }}
+      mapserver: ${{ steps.changes.outputs.mapserver }}
+      mapcache: ${{ steps.changes.outputs.mapcache }}
+      jobs: ${{ steps.changes.outputs.jobs }}
+      deploy_only: ${{ steps.changes.outputs.deploy_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for changes
+        id: changes
+        run: |
+          # Get changed files
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+          echo "Changed files: $CHANGED"
+
+          # Check each component
+          if echo "$CHANGED" | grep -qE "^eafw_cms/|^eafw_docker/cms/"; then
+            echo "cms=true" >> $GITHUB_OUTPUT
+          else
+            echo "cms=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE "^eafw_mapviewer/|^eafw_docker/mapviewer/"; then
+            echo "mapviewer=true" >> $GITHUB_OUTPUT
+          else
+            echo "mapviewer=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE "^eafw_docker/mapserver/"; then
+            echo "mapserver=true" >> $GITHUB_OUTPUT
+          else
+            echo "mapserver=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE "^eafw_docker/mapcache/"; then
+            echo "mapcache=true" >> $GITHUB_OUTPUT
+          else
+            echo "mapcache=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE "^eafw_jobs/|^eafw_docker/jobs/"; then
+            echo "jobs=true" >> $GITHUB_OUTPUT
+          else
+            echo "jobs=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check if only config/deploy files changed (no build needed)
+          if echo "$CHANGED" | grep -qvE "^eafw_cms/|^eafw_docker/cms/|^eafw_mapviewer/|^eafw_docker/mapviewer/|^eafw_docker/mapserver/|^eafw_docker/mapcache/|^eafw_jobs/|^eafw_docker/jobs/"; then
+            echo "deploy_only=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_only=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-cms:
+    name: Build CMS
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.cms == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
       packages: write
-
-    strategy:
-      matrix:
-        include:
-          - image: eafw-cms
-            dockerfile: eafw_docker/cms/Dockerfile
-            build-args: ""
-          - image: eafw-mapviewer
-            dockerfile: eafw_docker/mapviewer/Dockerfile
-            build-args: |
-              CMS_API=/api
-              BASE_PATH=/
-              ASSET_PREFIX=
-          - image: eafw-mapserver
-            dockerfile: eafw_docker/mapserver/Dockerfile
-            build-args: ""
-          - image: eafw-mapcache
-            dockerfile: eafw_docker/mapcache/Dockerfile
-            build-args: ""
-          - image: eafw-jobs
-            dockerfile: eafw_docker/jobs/Dockerfile
-            build-args: ""
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push ${{ matrix.image }}
+      - name: Build and push CMS
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: eafw_docker/cms/Dockerfile
           push: true
           tags: |
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.image }}:latest
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.image }}:${{ github.sha }}
-          build-args: ${{ matrix.build-args }}
+            ${{ env.IMAGE_PREFIX }}/eafw-cms:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-cms:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64
+
+  build-mapviewer:
+    name: Build Mapviewer
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mapviewer == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Mapviewer
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: eafw_docker/mapviewer/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-mapviewer:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-mapviewer:${{ github.sha }}
+          build-args: |
+            CMS_API=/api
+            BASE_PATH=/
+            ASSET_PREFIX=
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-mapserver:
+    name: Build Mapserver
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mapserver == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Mapserver
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: eafw_docker/mapserver/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-mapserver:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-mapserver:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-mapcache:
+    name: Build Mapcache
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mapcache == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Mapcache
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: eafw_docker/mapcache/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-mapcache:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-mapcache:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-jobs:
+    name: Build Jobs
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.jobs == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Jobs
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: eafw_docker/jobs/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-jobs:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-jobs:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: build-and-push
-
+    needs: [detect-changes, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs]
+    if: always() && !cancelled()
     steps:
       - name: Deploy to staging server
         uses: appleboy/ssh-action@v1.0.3
@@ -102,27 +255,23 @@ jobs:
               rm -rf eafw data
               git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
               cd ~/eafw
-              # Restore .env if backed up
               if [ -f ~/eafw_env_backup ]; then
                 cp ~/eafw_env_backup .env
                 echo ".env restored from backup"
               fi
-              # Create data directories
               mkdir -p data/pgdata data/static data/media data/next data/mapfiles data/mapcache/tiles data/geomanager-data data/jobs/data data/jobs/logs
-              echo "Data directories created"
             fi
 
             echo "Current directory: $(pwd)"
-            ls -la
 
             # Pull latest images
             docker compose -f docker-compose.staging.yml --env-file .env pull
 
-            # Restart services with new images
+            # Restart services
             docker compose -f docker-compose.staging.yml --env-file .env up -d
 
-            # Clean up old images
+            # Cleanup
             docker image prune -f
 
-            # Show running containers
+            # Status
             docker ps --format "table {{.Names}}\t{{.Status}}"
