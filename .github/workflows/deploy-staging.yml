@@ -79,11 +79,14 @@ jobs:
     steps:
       - name: Deploy to staging server
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_KEY }}
           port: 22
+          envs: GH_TOKEN
           script: |
             set -e
             cd ~
@@ -97,7 +100,7 @@ jobs:
             else
               echo "Cloning fresh repo..."
               rm -rf eafw data
-              git clone -b eafw https://github.com/icpac-igad/flood_watch_system.git eafw
+              git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
               cd ~/eafw
               # Restore .env if backed up
               if [ -f ~/eafw_env_backup ]; then
