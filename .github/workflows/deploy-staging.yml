@@ -85,19 +85,21 @@ jobs:
           key: ${{ secrets.STAGING_SSH_KEY }}
           port: 22
           script: |
-            cd ~/eafw
+            cd ~
 
             # Clone or update repo
-            if [ ! -d ".git" ]; then
-              cd ~
+            if [ -d "eafw/.git" ]; then
+              cd eafw
+              git fetch origin
+              git reset --hard origin/eafw
+            else
               rm -rf eafw
               git clone -b eafw https://github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
               # Restore .env if backed up
               [ -f ~/eafw_env_backup ] && cp ~/eafw_env_backup .env
-            else
-              git fetch origin
-              git reset --hard origin/eafw
+              # Create data directories
+              mkdir -p data/{pgdata,static,media,next,mapfiles,mapcache/tiles,geomanager-data,jobs/data,jobs/logs}
             fi
 
             # Pull latest images
