@@ -149,8 +149,8 @@ services:
 
   eafw_mapserver:
     build:
-      context: ./eafw_docker/mapserver
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: eafw_docker/mapserver/Dockerfile
       args:
         - MAPFILES_DIR=${MS_MAPFILES_DIR:-/opt/mapfiles}
         - PROJ_DATA=${PROJ_DATA_DIR:-/usr/local/share/proj/}
@@ -183,8 +183,8 @@ services:
 
   eafw_mapcache:
     build:
-      context: ./eafw_docker/mapcache
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: eafw_docker/mapcache/Dockerfile
       args:
         - HOME_DIR=${APP_HOME_DIR:-/opt/mapcache}
         - USER_ID=${APP_USER_ID:-1024}
@@ -249,8 +249,8 @@ services:
     image: ${JOBS_IMAGE_NAME:-icpac/eafw-jobs:local}
     pull_policy: never
     build:
-      context: ./eafw_jobs
-      dockerfile: ../eafw_docker/jobs/Dockerfile
+      context: .
+      dockerfile: eafw_docker/jobs/Dockerfile
     restart: ${RESTART_POLICY:-unless-stopped}
     depends_on:
       - eafw_db
