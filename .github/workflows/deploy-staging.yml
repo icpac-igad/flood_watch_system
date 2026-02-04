@@ -244,6 +244,9 @@ jobs:
             set -e
             cd ~
 
+            # Login to GitHub Container Registry
+            echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
+
             # Clone or update repo
             if [ -d "eafw/.git" ]; then
               echo "Updating existing repo..."
