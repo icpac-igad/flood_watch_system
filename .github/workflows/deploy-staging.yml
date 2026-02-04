@@ -87,6 +87,19 @@ jobs:
           script: |
             cd ~/eafw
 
+            # Clone or update repo
+            if [ ! -d ".git" ]; then
+              cd ~
+              rm -rf eafw
+              git clone -b eafw https://github.com/icpac-igad/flood_watch_system.git eafw
+              cd eafw
+              # Restore .env if backed up
+              [ -f ~/eafw_env_backup ] && cp ~/eafw_env_backup .env
+            else
+              git fetch origin
+              git reset --hard origin/eafw
+            fi
+
             # Pull latest images
             docker compose -f docker-compose.staging.yml --env-file .env pull
 
