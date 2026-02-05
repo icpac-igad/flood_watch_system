@@ -270,6 +270,11 @@ services:
       - SYNC_SOURCE=${SYNC_SOURCE:-drive}
       - SYNC_INTERVAL=${SYNC_INTERVAL:-21600}
       - SYNC_DAYS=${SYNC_DAYS:-7}
+      - WRF_FTP_HOST=${WRF_FTP_HOST:-197.254.13.228}
+      - WRF_FTP_PORT=${WRF_FTP_PORT:-21}
+      - WRF_FTP_USER=${WRF_FTP_USER}
+      - WRF_FTP_PASSWORD=${WRF_FTP_PASSWORD}
+      - WRF_REMOTE_DIR=${WRF_REMOTE_DIR:-/SharedData/wrf/weekly}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     volumes:
       - ${JOBS_DATA_VOLUME:-./eafw_jobs/data}:/opt/data:z

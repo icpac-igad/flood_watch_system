@@ -9,23 +9,6 @@
   position: relative;
   transition: all 0.2s ease;
 
-  &.expanded {
-    position: fixed;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 90vw;
-    max-width: 1200px;
-    min-height: 500px;
-    z-index: 9999;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-    border: 1px solid #ddd;
-
-    .chart-container {
-      height: 450px;
-    }
-  }
-
   &.dragging {
     cursor: grabbing;
     user-select: none;
@@ -81,20 +64,7 @@
       align-items: center;
     }
 
-    .alert-badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      color: #fff;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      white-space: nowrap;
-    }
-
-    .expand-btn,
-    .close-expanded-btn {
+    .reset-zoom-btn {
       padding: 4px 8px;
       font-size: 10px;
       cursor: pointer;
@@ -109,16 +79,6 @@
       &:hover {
         background: #e8e8e8;
         border-color: #bbb;
-      }
-    }
-
-    .close-expanded-btn {
-      background: #ff5722;
-      color: #fff;
-      border-color: #ff5722;
-
-      &:hover {
-        background: #e64a19;
       }
     }
 
@@ -141,31 +101,10 @@
     height: 300px;
     width: 100%;
     transition: height 0.2s ease;
+    cursor: crosshair;
+    user-select: none;
   }
 
-  .resize-handle {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 20px;
-    height: 20px;
-    cursor: se-resize;
-
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: 4px;
-      right: 4px;
-      width: 10px;
-      height: 10px;
-      border-right: 2px solid #ccc;
-      border-bottom: 2px solid #ccc;
-    }
-
-    &:hover::after {
-      border-color: #999;
-    }
-  }
 
   .custom-tooltip {
     background: rgba(255, 255, 255, 0.98);
@@ -211,17 +150,6 @@
       font-style: italic;
     }
   }
-}
-
-// Overlay when chart is expanded
-.chart-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 9998;
 }
 
 .c-multimodel-chart-empty,

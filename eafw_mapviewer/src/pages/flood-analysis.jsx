@@ -21,8 +21,8 @@ import "./flood-analysis.scss";
 // Default parameters
 const DEFAULT_PARAMS = {
   reporting_unit: "East Africa Region",
-  forecast_date: new Date().toISOString().split("T")[0],
-  forecast_period: "7-day",
+  forecast_date: null, // Will be set from available dates in DB
+  alert_filter: "all", // Filter points by alert level
   admin_level: null,
   unit_id: null,
   placename: "East Africa Region",
@@ -35,7 +35,6 @@ const DEFAULT_SETTINGS = {
     "Administrative Boundary",
     "River Basin",
   ],
-  forecast_periods: ["3-day", "5-day", "7-day", "10-day"],
   pdf: { loading: false, url: null },
 };
 
@@ -85,7 +84,6 @@ const FloodAnalysisPage = () => {
     try {
       const queryParams = new URLSearchParams({
         date: params.forecast_date,
-        period: params.forecast_period || "7-day",
         ...(params.unit_id && { unit_id: params.unit_id }),
         ...(params.admin_level && { admin_level: params.admin_level }),
       });
@@ -139,7 +137,7 @@ const FloodAnalysisPage = () => {
     if (!isEmpty(params)) {
       fetchForecastData();
     }
-  }, [params.forecast_date, params.forecast_period, params.unit_id, fetchForecastData]);
+  }, [params.forecast_date, params.unit_id, fetchForecastData]);
 
   // Update params
   const updateParams = useCallback((newParams) => {

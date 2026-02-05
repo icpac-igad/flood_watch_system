@@ -134,7 +134,7 @@ def get_mapviewer_config(request):
         # Settings not configured - cluster layer will use its own defaults
         pass
 
-    # Add boundary layer config for filter types
+    # Add boundary layer config
     response.update({
         "boundaryLayerConfig": {
             "default": {
@@ -142,30 +142,15 @@ def get_mapviewer_config(request):
                 "admin1": "02453614-2716-4ca3-bc82-589b364fe47e",
                 "admin2": "c47279f5-8481-4529-86f3-f58810f7d567",
             },
-            "whca": {
-                "admin0": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
-                "admin1": "b2c3d4e5-f6a7-5b6c-9d0e-1f2a3b4c5d6e",
-            },
         }
     })
 
-    # Add multimodal layer URL config for filter types
-    # When WHCA filter is selected, use the WHCA-specific function that filters by whca_selected=true
-    # IMPORTANT: sourceLayer must match the layer name in ST_AsMVT output for frontend styles to work
-    # Note: renderLayers removed - layer styles come from database (render_layers_json) to avoid duplication
+    # Add multimodal layer URL config
     response.update({
         "multimodalLayerConfig": {
             "default": {
-                "baseUrl": "/pg/tileserv/public.multimodal_points_clustered/{z}/{x}/{y}.pbf",
-                "sourceLayer": "public.multimodal_points_clustered",
-            },
-            "whca": {
-                "baseUrl": "/pg/tileserv/public.multimodal_points_clustered_whca/{z}/{x}/{y}.pbf",
-                "sourceLayer": "public.multimodal_points_clustered_whca",
-            },
-            "admin": {
-                "baseUrl": "/pg/tileserv/public.multimodal_points_by_admin/{z}/{x}/{y}.pbf",
-                "sourceLayer": "public.multimodal_points_by_admin",
+                "baseUrl": "/pg/tileserv/gha.multimodal_points_clustered/{z}/{x}/{y}.pbf",
+                "sourceLayer": "gha.multimodal_points_clustered",
             },
         }
     })

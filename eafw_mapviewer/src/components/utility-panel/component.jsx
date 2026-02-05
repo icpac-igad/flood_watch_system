@@ -24,6 +24,7 @@ class UtilityPanel extends PureComponent {
     setUtilityActiveTab: PropTypes.func,
     setSelectedFilterType: PropTypes.func,
     setUtilityPanelSettings: PropTypes.func,
+    setParamInteractions: PropTypes.func,
     // Drawing props
     drawing: PropTypes.bool,
     drawingMode: PropTypes.string,
@@ -56,6 +57,7 @@ class UtilityPanel extends PureComponent {
       className,
       setUtilityActiveTab,
       setSelectedFilterType,
+      setParamInteractions,
       drawing,
       drawingMode,
       setMapSettings,
@@ -111,6 +113,7 @@ class UtilityPanel extends PureComponent {
             <FilterSection
               selectedFilterType={selectedFilterType}
               setSelectedFilterType={setSelectedFilterType}
+              setParamInteractions={setParamInteractions}
             />
           </div>
         )}

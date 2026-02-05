@@ -72,7 +72,8 @@ class Command(BaseCommand):
             defaults={
                 "title": "Multi Model",
                 "default": True,
-                "base_url": f"{tileserv_url}/pg/tileserv/public.multimodal_points_clustered/{{z}}/{{x}}/{{y}}.pbf?cluster_zoom=7",
+                # Disable clustering by forcing cluster_zoom=0 so tiles always return individual points
+                "base_url": f"{tileserv_url}/pg/tileserv/gha.multimodal_points_clustered/{{z}}/{{x}}/{{y}}.pbf?cluster_zoom=0",
                 "query_params_static": [],
                 "query_params_selectable": [],
                 "params_selectors_side_by_side": False,
@@ -117,37 +118,37 @@ class Command(BaseCommand):
                 "date_format": "yyyy-MM-dd",
                 "render_layers_json": [
                     {
-                        "type": "symbol",
-                        "paint": {"icon-opacity": 0.9},
-                        "layout": {
-                            "icon-size": [
-                                "case",
-                                [">", ["get", "point_count"], 50],
-                                0.9,
-                                [">", ["get", "point_count"], 10],
-                                0.7,
-                                [">", ["get", "point_count"], 1],
-                                0.6,
-                                0.5,
+                        "id": "multimodal-circles",
+                        "type": "circle",
+                        "paint": {
+                            "circle-radius": [
+                                "interpolate",
+                                ["linear"],
+                                ["zoom"],
+                                3, 4,
+                                6, 5,
+                                9, 7,
+                                12, 9
                             ],
-                            "icon-image": [
+                            "circle-color": [
                                 "match",
                                 ["get", "alert_level"],
                                 "emergency",
-                                "emergency",
+                                "#d32f2f",
                                 "alarm",
-                                "alarm",
+                                "#ff9800",
                                 "warning",
-                                "warning",
+                                "#ffc107",
                                 "normal",
-                                "normal",
-                                "normal",
+                                "#4caf50",
+                                "#4caf50"
                             ],
-                            "icon-anchor": "bottom",
-                            "icon-allow-overlap": True,
+                            "circle-stroke-width": 1.5,
+                            "circle-stroke-color": "#ffffff",
+                            "circle-opacity": 0.9,
                         },
                         "metadata": {"position": "top"},
-                        "source-layer": "public.multimodal_points_clustered",
+                        "source-layer": "gha.multimodal_points_clustered",
                     }
                 ],
                 "use_render_layers_json": True,
@@ -271,6 +272,7 @@ class Command(BaseCommand):
                 "source_layer": "gha.admin0",
                 "line_width": 1.2,
                 "line_opacity": 1.0,
+                "order": 0,
             },
             {
                 "id": "02453614-2716-4ca3-bc82-589b364fe47e",
@@ -278,6 +280,7 @@ class Command(BaseCommand):
                 "source_layer": "gha.admin1",
                 "line_width": 0.8,
                 "line_opacity": 0.6,
+                "order": 1,
             },
         ]
 
@@ -293,6 +296,7 @@ class Command(BaseCommand):
                     "title": layer_data["title"],
                     "default": True,
                     "base_url": f"{tileserv_url}/pg/tileserv/{layer_data['source_layer']}/{{z}}/{{x}}/{{y}}.pbf",
+                    "order": layer_data["order"],
                     "query_params_static": [],
                     "query_params_selectable": [],
                     "legend": [],

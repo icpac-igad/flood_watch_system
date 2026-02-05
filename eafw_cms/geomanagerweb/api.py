@@ -335,14 +335,47 @@ class MultimodalForecastGeoJSONView(View):
 
     Now uses normalized gha.multimodal_control_points and gha.multimodal_forecasts tables
     instead of the old home_multimodal_forecast_geojson JSONB blob table.
+
+    Query Parameters:
+        date: Filter by specific date (YYYY-MM-DD format). Defaults to latest.
+        filter: Filter points by alert level. Options:
+            - 'all': All points (default)
+            - 'active': Warning level and above (daily_avg >= warning_threshold)
+            - 'alarm': Alarm level and above (daily_avg >= alarm_threshold)
+            - 'emergency': Emergency only (daily_avg >= emergency_threshold)
     """
 
     def get(self, request):
         from django.db import connection
         import json as json_module
+        from home.models import MultimodalClusterSettings
 
         # Get date parameter (defaults to latest)
         date_str = request.GET.get('date')
+
+        # Get filter parameter for alert level filtering
+        filter_mode = request.GET.get('filter', 'all')
+
+        # Get thresholds from CMS settings
+        try:
+            cluster_settings = MultimodalClusterSettings.load(request_or_site=request)
+            warning_threshold = cluster_settings.warning_threshold
+            alarm_threshold = cluster_settings.alarm_threshold
+            emergency_threshold = cluster_settings.emergency_threshold
+        except Exception:
+            # Default thresholds if settings not configured
+            warning_threshold = 150.0
+            alarm_threshold = 300.0
+            emergency_threshold = 450.0
+
+        # Build filter SQL based on filter mode
+        filter_sql = ""
+        if filter_mode == 'active':
+            filter_sql = f"WHERE daily_avg >= {warning_threshold}"
+        elif filter_mode == 'alarm':
+            filter_sql = f"WHERE daily_avg >= {alarm_threshold}"
+        elif filter_mode == 'emergency':
+            filter_sql = f"WHERE daily_avg >= {emergency_threshold}"
 
         with connection.cursor() as cursor:
             try:
@@ -444,6 +477,7 @@ class MultimodalForecastGeoJSONView(View):
                         ), '[]'::json)
                     ) as geojson
                     FROM point_data
+                    {filter_sql}
                 """, params)
 
                 result = cursor.fetchone()
@@ -1045,59 +1079,59 @@ class CountrySummaryWithBoundsView(View):
                 # Get CMS thresholds if available, else use defaults
                 try:
                     from home.models import MultimodalClusterSettings
-                    settings = MultimodalClusterSettings.objects.first()
-                    if settings:
-                        warning_threshold = settings.warning_threshold
-                        alarm_threshold = settings.alarm_threshold
-                        emergency_threshold = settings.emergency_threshold
-                    else:
-                        warning_threshold = 150.0
-                        alarm_threshold = 300.0
-                        emergency_threshold = 450.0
+                    settings = MultimodalClusterSettings.load(request_or_site=request)
+                    warning_threshold = settings.warning_threshold
+                    alarm_threshold = settings.alarm_threshold
+                    emergency_threshold = settings.emergency_threshold
                 except Exception:
                     warning_threshold = 150.0
                     alarm_threshold = 300.0
                     emergency_threshold = 450.0
 
                 # Query to get country summary with alert counts and bounds
-                # Uses admin0 table for country bounds and spatial join to determine country
+                # Uses first forecast day (same basis as situation-summary) and
+                # admin0 spatial join for robust country mapping.
                 cursor.execute("""
-                    WITH first_forecast AS (
-                        SELECT MIN(forecast_date) as forecast_date
-                        FROM gha.multimodal_forecasts
-                        WHERE data_date = %s
-                          AND forecast_date >= %s
+                    WITH query_params AS (
+                        SELECT %s::date as query_date
                     ),
-                    point_max AS (
+                    first_forecast AS (
+                        SELECT MIN(forecast_date) as forecast_date
+                        FROM gha.multimodal_forecasts mf, query_params qp
+                        WHERE mf.data_date = qp.query_date
+                          AND mf.forecast_date >= qp.query_date
+                    ),
+                    point_data AS (
                         SELECT
                             cp.point_id,
-                            cp.admin_name,
                             cp.geom,
-                            MAX(f.daily_avg) as max_discharge
+                            COALESCE(f.daily_avg, 0) as daily_avg
                         FROM gha.multimodal_control_points cp
-                        JOIN gha.multimodal_forecasts f ON f.point_id = cp.point_id
-                        WHERE f.data_date = %s
-                        GROUP BY cp.point_id, cp.admin_name, cp.geom
+                        CROSS JOIN query_params qp
+                        CROSS JOIN first_forecast ff
+                        LEFT JOIN gha.multimodal_forecasts f
+                            ON f.point_id = cp.point_id
+                            AND f.data_date = qp.query_date
+                            AND f.forecast_date = ff.forecast_date
                     ),
                     point_country AS (
                         SELECT
-                            pm.point_id,
-                            pm.admin_name,
-                            pm.max_discharge,
+                            pd.point_id,
+                            pd.daily_avg,
                             -- Get country name from spatial join with admin0
                             COALESCE(a0.country, 'Unknown') as country_name
-                        FROM point_max pm
-                        LEFT JOIN gha.admin0 a0 ON ST_Within(pm.geom, a0.geom)
+                        FROM point_data pd
+                        LEFT JOIN gha.admin0 a0 ON ST_Within(pd.geom, a0.geom)
                     ),
                     point_risk AS (
                         SELECT
                             point_id,
                             country_name,
-                            max_discharge,
+                            daily_avg,
                             CASE
-                                WHEN max_discharge >= %s THEN 'emergency'
-                                WHEN max_discharge >= %s THEN 'alarm'
-                                WHEN max_discharge >= %s THEN 'warning'
+                                WHEN daily_avg >= %s THEN 'emergency'
+                                WHEN daily_avg >= %s THEN 'alarm'
+                                WHEN daily_avg >= %s THEN 'warning'
                                 ELSE 'normal'
                             END as risk_level
                         FROM point_country
@@ -1141,7 +1175,7 @@ class CountrySummaryWithBoundsView(View):
                     LEFT JOIN country_bounds cb ON LOWER(TRIM(ca.country_name)) = LOWER(TRIM(cb.name))
                     WHERE ca.emergency > 0 OR ca.alarm > 0 OR ca.warning > 0
                     ORDER BY ca.severity_score DESC, ca.emergency DESC, ca.alarm DESC, ca.warning DESC
-                """, [latest_date, latest_date, latest_date,
+                """, [latest_date,
                       emergency_threshold, alarm_threshold, warning_threshold])
 
                 countries = []
@@ -1222,9 +1256,9 @@ class SituationSummaryView(View):
 
         with connection.cursor() as cursor:
             try:
-                # Get the latest available data date
+                # Get the latest available data date from normalized multimodal forecasts
                 cursor.execute("""
-                    SELECT MAX(data_date) FROM home_multimodal_forecast_geojson
+                    SELECT MAX(data_date) FROM gha.multimodal_forecasts
                 """)
                 latest_date = cursor.fetchone()[0]
 
@@ -1235,62 +1269,66 @@ class SituationSummaryView(View):
                     response['Access-Control-Allow-Origin'] = '*'
                     return response
 
-                # Thresholds (matching frontend config)
-                warning_threshold = 500
-                alarm_threshold = 750
-                emergency_threshold = 1500
+                # Thresholds from CMS (same as map), fallback to defaults
+                try:
+                    from home.models import MultimodalClusterSettings
+                    cluster_settings = MultimodalClusterSettings.load(request_or_site=request)
+                    warning_threshold = cluster_settings.warning_threshold
+                    alarm_threshold = cluster_settings.alarm_threshold
+                    emergency_threshold = cluster_settings.emergency_threshold
+                except Exception:
+                    warning_threshold = 150.0
+                    alarm_threshold = 300.0
+                    emergency_threshold = 450.0
 
-                # Query to get summary statistics
+                # Query to get summary statistics using latest normalized data
                 cursor.execute("""
-                    WITH latest_forecasts AS (
-                        SELECT
-                            jsonb_array_elements(geojson_data->'features') as feature
-                        FROM home_multimodal_forecast_geojson
-                        WHERE data_date = %s
+                    WITH query_params AS (
+                        SELECT %s::date as query_date
                     ),
-                    forecast_data AS (
-                        SELECT
-                            feature->'properties'->>'point_id' as point_id,
-                            feature->'properties'->>'admin_name' as admin_name,
-                            feature->'properties'->'forecasts' as forecasts,
-                            (feature->'geometry'->'coordinates'->0)::float as lon,
-                            (feature->'geometry'->'coordinates'->1)::float as lat
-                        FROM latest_forecasts
-                        WHERE feature->'properties'->'forecasts' IS NOT NULL
+                    first_forecast AS (
+                        SELECT MIN(forecast_date) as forecast_date
+                        FROM gha.multimodal_forecasts mf, query_params qp
+                        WHERE mf.data_date = qp.query_date
+                          AND mf.forecast_date >= qp.query_date
                     ),
-                    point_max_discharge AS (
+                    point_data AS (
                         SELECT
-                            point_id,
-                            admin_name,
-                            -- Extract country code from admin_name (first 2 chars)
-                            UPPER(LEFT(admin_name, 2)) as country_code,
-                            lon,
-                            lat,
-                            MAX((f->>'daily_avg')::float) as max_discharge,
-                            (
-                                SELECT f2->>'date'
-                                FROM jsonb_array_elements(forecasts) f2
-                                ORDER BY (f2->>'daily_avg')::float DESC
-                                LIMIT 1
-                            ) as peak_date
-                        FROM forecast_data,
-                             jsonb_array_elements(forecasts) f
-                        GROUP BY point_id, admin_name, lon, lat, forecasts
+                            cp.point_id,
+                            cp.admin_name,
+                            COALESCE(f.daily_avg, 0) as daily_avg
+                        FROM gha.multimodal_control_points cp
+                        CROSS JOIN query_params qp
+                        CROSS JOIN first_forecast ff
+                        LEFT JOIN gha.multimodal_forecasts f
+                            ON f.point_id = cp.point_id
+                            AND f.data_date = qp.query_date
+                            AND f.forecast_date = ff.forecast_date
                     ),
                     risk_levels AS (
                         SELECT
                             point_id,
                             admin_name,
-                            country_code,
-                            max_discharge,
-                            peak_date,
+                            daily_avg,
                             CASE
-                                WHEN max_discharge >= %s THEN 'emergency'
-                                WHEN max_discharge >= %s THEN 'alarm'
-                                WHEN max_discharge >= %s THEN 'warning'
+                                WHEN daily_avg >= %s THEN 'emergency'
+                                WHEN daily_avg >= %s THEN 'alarm'
+                                WHEN daily_avg >= %s THEN 'warning'
                                 ELSE 'normal'
                             END as risk_level
-                        FROM point_max_discharge
+                        FROM point_data
+                    ),
+                    risk_by_date AS (
+                        SELECT
+                            mf.forecast_date,
+                            CASE
+                                WHEN mf.daily_avg >= %s THEN 'emergency'
+                                WHEN mf.daily_avg >= %s THEN 'alarm'
+                                WHEN mf.daily_avg >= %s THEN 'warning'
+                                ELSE 'normal'
+                            END as risk_level
+                        FROM gha.multimodal_forecasts mf, query_params qp
+                        WHERE mf.data_date = qp.query_date
                     )
                     SELECT
                         (SELECT COUNT(*) FROM risk_levels WHERE risk_level = 'emergency') as emergency_count,
@@ -1299,53 +1337,55 @@ class SituationSummaryView(View):
                         (SELECT COUNT(*) FROM risk_levels WHERE risk_level = 'normal') as normal_count,
                         (SELECT COUNT(*) FROM risk_levels) as total_points,
                         (
-                            SELECT peak_date
-                            FROM risk_levels
+                            SELECT forecast_date
+                            FROM risk_by_date
                             WHERE risk_level IN ('emergency', 'alarm', 'warning')
-                            GROUP BY peak_date
+                            GROUP BY forecast_date
                             ORDER BY COUNT(*) DESC
                             LIMIT 1
                         ) as peak_day
-                """, [latest_date, emergency_threshold, alarm_threshold, warning_threshold])
+                """, [latest_date,
+                      emergency_threshold, alarm_threshold, warning_threshold,
+                      emergency_threshold, alarm_threshold, warning_threshold])
 
                 row = cursor.fetchone()
 
                 # Get country breakdown
                 cursor.execute("""
-                    WITH latest_forecasts AS (
-                        SELECT
-                            jsonb_array_elements(geojson_data->'features') as feature
-                        FROM home_multimodal_forecast_geojson
-                        WHERE data_date = %s
+                    WITH query_params AS (
+                        SELECT %s::date as query_date
                     ),
-                    forecast_data AS (
-                        SELECT
-                            feature->'properties'->>'point_id' as point_id,
-                            feature->'properties'->>'admin_name' as admin_name,
-                            feature->'properties'->'forecasts' as forecasts
-                        FROM latest_forecasts
-                        WHERE feature->'properties'->'forecasts' IS NOT NULL
+                    first_forecast AS (
+                        SELECT MIN(forecast_date) as forecast_date
+                        FROM gha.multimodal_forecasts mf, query_params qp
+                        WHERE mf.data_date = qp.query_date
+                          AND mf.forecast_date >= qp.query_date
                     ),
-                    point_max_discharge AS (
+                    point_country AS (
                         SELECT
-                            point_id,
-                            UPPER(LEFT(admin_name, 2)) as country_code,
-                            MAX((f->>'daily_avg')::float) as max_discharge
-                        FROM forecast_data,
-                             jsonb_array_elements(forecasts) f
-                        GROUP BY point_id, admin_name, forecasts
+                            cp.point_id,
+                            cp.admin_name,
+                            COALESCE(f.daily_avg, 0) as daily_avg,
+                            UPPER(LEFT(cp.admin_name, 2)) as country_code
+                        FROM gha.multimodal_control_points cp
+                        CROSS JOIN query_params qp
+                        CROSS JOIN first_forecast ff
+                        LEFT JOIN gha.multimodal_forecasts f
+                            ON f.point_id = cp.point_id
+                            AND f.data_date = qp.query_date
+                            AND f.forecast_date = ff.forecast_date
                     ),
                     risk_levels AS (
                         SELECT
                             point_id,
                             country_code,
                             CASE
-                                WHEN max_discharge >= %s THEN 'emergency'
-                                WHEN max_discharge >= %s THEN 'alarm'
-                                WHEN max_discharge >= %s THEN 'warning'
+                                WHEN daily_avg >= %s THEN 'emergency'
+                                WHEN daily_avg >= %s THEN 'alarm'
+                                WHEN daily_avg >= %s THEN 'warning'
                                 ELSE 'normal'
                             END as risk_level
-                        FROM point_max_discharge
+                        FROM point_country
                     )
                     SELECT
                         country_code,

@@ -5,6 +5,8 @@
   border-radius: 2px;
   max-width: rem(550px);
   min-width: rem(200px);
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4);
 
   .close-btn {
     position: absolute;
@@ -44,8 +46,9 @@
 
 .mapboxgl-popup-content {
   padding: 0 !important;
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
   border-radius: 0 !important;
+  background: transparent;
 
   .mapboxgl-popup-close-button {
     top: 5px;
@@ -60,4 +63,8 @@
       color: darken($slate, 10%);
     }
   }
+}
+
+.mapboxgl-popup-tip {
+  display: none;
 }

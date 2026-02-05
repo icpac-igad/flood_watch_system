@@ -35,9 +35,11 @@ const BoundarySelector = ({
   onClear,
   boundaryData,
   setBoundaryData,
-  showOnlyIfParent = false
+  showOnlyIfParent = false,
+  requestParams = {}
 }) => {
   const [boundaries, setBoundaries] = useState([]);
+  const requestParamsKey = JSON.stringify(requestParams || {});
 
   useEffect(() => {
     const loadBoundaries = async () => {
@@ -50,12 +52,12 @@ const BoundarySelector = ({
         adminLevel,
         parentCode || '',
         true,
-        { boundaryData, setBoundaryData }
+        { boundaryData, setBoundaryData, extraParams: requestParams }
       );
       setBoundaries(Array.isArray(data) ? data : []);
     };
     loadBoundaries();
-  }, [adminLevel, parentCode, boundaryData, setBoundaryData, showOnlyIfParent]);
+  }, [adminLevel, parentCode, boundaryData, setBoundaryData, showOnlyIfParent, requestParamsKey]);
 
   // Defensive check to ensure boundaries is an array
   const availableBoundaries = Array.isArray(boundaries)
@@ -123,13 +125,14 @@ export const SubBorderSelector = ({ country, selectedSubBorder, parentCode, ...p
   />
 );
 
-export const LowerBorderSelector = ({ subBorder, selectedLowerBorder, parentCode, ...props }) => (
+export const LowerBorderSelector = ({ subBorder, selectedLowerBorder, parentCode, countryName, ...props }) => (
   <BoundarySelector
     adminLevel={1}
     parentCode={parentCode || subBorder?.code}
     selectedBoundary={selectedLowerBorder}
     placeholder="+ Select lower border"
     showOnlyIfParent={true}
+    requestParams={countryName ? { country_id: countryName } : {}}
     {...props}
   />
 );
@@ -360,6 +363,7 @@ class FilterPanelContainerComponent extends React.Component {
               <LowerBorderSelector
                 subBorder={selectedSubBorder}
                 selectedLowerBorder={selectedLowerBorder}
+                countryName={selectedCountry?.name}
                 onChange={(lowerBorder) => this.handleBoundaryChange('lowerBorder', lowerBorder)}
                 onClear={() => this.clearBoundary('lowerBorder')}
                 boundaryData={boundaryData}
@@ -640,7 +644,10 @@ class WHCAFilterContainerComponent extends React.Component {
     // Fetch districts for selected region
     const districts = await fetchAdminBoundaries(1, region.name, true, {
       boundaryData: this.props.boundaryData,
-      setBoundaryData: this.props.setBoundaryData
+      setBoundaryData: this.props.setBoundaryData,
+      extraParams: {
+        country_id: this.state.selectedCountry?.name || ''
+      }
     });
     this.setState({ districts: Array.isArray(districts) ? districts : [] });
 

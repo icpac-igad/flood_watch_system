@@ -9,7 +9,7 @@ export const fetchAdminBoundaries = async (
   adminLevel = null,
   unitId = '',
   withBbox = true,
-  { boundaryData, setBoundaryData } = {}
+  { boundaryData, setBoundaryData, extraParams = {} } = {}
 ) => {
   
   if (boundaryData && setBoundaryData) {
@@ -24,6 +24,7 @@ export const fetchAdminBoundaries = async (
     if (adminLevel !== null) params.admin_level = adminLevel;
     if (unitId) params.unit_id = unitId;
     if (withBbox) params.with_bbox = 'true';
+    Object.assign(params, extraParams);
 
     const response = await adminBoundaryRequest.get('', { params });
     const data = response.data;

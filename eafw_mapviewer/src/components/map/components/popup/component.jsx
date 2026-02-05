@@ -32,6 +32,9 @@ class Popup extends Component {
 
   state = {
     useClickedPoint: false,
+    popupDragOffset: { x: 0, y: 0 },
+    popupDragging: false,
+    popupDragStart: { x: 0, y: 0 },
   };
 
   componentDidUpdate(prevProps) {
@@ -42,6 +45,10 @@ class Popup extends Component {
       !isEqual(activeDatasets?.length, prevProps.activeDatasets?.length)
     ) {
       this.handleClose();
+    }
+
+    if (this.props.showPopup && !prevProps.showPopup) {
+      this.setState({ popupDragOffset: { x: 0, y: 0 } });
     }
   }
 
@@ -83,6 +90,48 @@ class Popup extends Component {
   // causing the popup to open again. this stops it for now.
   handleClose = () => {
     setTimeout(() => this.props.clearMapInteractions(), 300);
+  };
+
+  handlePopupDragStart = (e) => {
+    e.preventDefault();
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    this.setState((prev) => ({
+      popupDragging: true,
+      popupDragStart: {
+        x: clientX - prev.popupDragOffset.x,
+        y: clientY - prev.popupDragOffset.y,
+      },
+    }));
+
+    window.addEventListener("mousemove", this.handlePopupDragMove);
+    window.addEventListener("mouseup", this.handlePopupDragEnd);
+    window.addEventListener("touchmove", this.handlePopupDragMove, { passive: false });
+    window.addEventListener("touchend", this.handlePopupDragEnd);
+  };
+
+  handlePopupDragMove = (e) => {
+    if (!this.state.popupDragging) return;
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    this.setState((prev) => ({
+      popupDragOffset: {
+        x: clientX - prev.popupDragStart.x,
+        y: clientY - prev.popupDragStart.y,
+      },
+    }));
+  };
+
+  handlePopupDragEnd = () => {
+    this.setState({ popupDragging: false });
+    window.removeEventListener("mousemove", this.handlePopupDragMove);
+    window.removeEventListener("mouseup", this.handlePopupDragEnd);
+    window.removeEventListener("touchmove", this.handlePopupDragMove);
+    window.removeEventListener("touchend", this.handlePopupDragEnd);
   };
 
   handleInteractionChange = (selected) => {
@@ -167,6 +216,7 @@ class Popup extends Component {
                 isPoint={isPoint}
                 popupLat={latitude}
                 popupLon={longitude}
+                onPopupDragStart={this.handlePopupDragStart}
               />
             )}
             {isPoint && !isLayer && (
@@ -191,6 +241,7 @@ class Popup extends Component {
       selected,
       isDashboard,
     } = this.props;
+    const { popupDragOffset } = this.state;
     const { isBoundary } = selected || {};
 
     // confirm if the selected layer has interactionConfig setup
@@ -207,7 +258,12 @@ class Popup extends Component {
         onClose={this.handlePopupClose}
         closeOnClick={false}
       >
-        <div className="c-popup">{this.renderPopupBody()}</div>
+        <div
+          className="c-popup"
+          style={{ transform: `translate(${popupDragOffset.x}px, ${popupDragOffset.y}px)` }}
+        >
+          {this.renderPopupBody()}
+        </div>
       </MapPopup>
     ) : null;
   }

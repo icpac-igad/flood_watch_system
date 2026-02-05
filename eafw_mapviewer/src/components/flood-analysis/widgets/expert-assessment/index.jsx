@@ -64,6 +64,8 @@ const ExpertSection = ({
   config,
   forecastDate,
   selectedCountry,
+  requireComment = false,
+  onCommentError,
 }) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -287,6 +289,13 @@ const ExpertSection = ({
 
   // Save overall assessment
   const handleSaveOverall = useCallback(async () => {
+    // Validate comment if required
+    if (requireComment && !overallComment.trim()) {
+      if (onCommentError) onCommentError(true);
+      return;
+    }
+    if (onCommentError) onCommentError(false);
+
     setSaving(true);
     try {
       await fetch(`${CMS_API}/country-assessments/`, {
@@ -308,7 +317,7 @@ const ExpertSection = ({
     } finally {
       setSaving(false);
     }
-  }, [overallComment, overallRisk, forecastDate, expertType, selectedCountry]);
+  }, [overallComment, overallRisk, forecastDate, expertType, selectedCountry, requireComment, onCommentError]);
 
   const handleCancelEdit = () => {
     setShowEditPanel(false);
@@ -368,9 +377,14 @@ const ExpertSection = ({
 
         <textarea
           value={overallComment}
-          onChange={(e) => setOverallComment(e.target.value)}
-          placeholder={`Enter your ${expertType} assessment, observations, and recommendations...`}
+          onChange={(e) => {
+            setOverallComment(e.target.value);
+            if (onCommentError && e.target.value.trim()) onCommentError(false);
+          }}
+          placeholder={`Enter your ${expertType} assessment, observations, and recommendations...${requireComment ? " (Required)" : ""}`}
           rows={4}
+          className={requireComment && !overallComment.trim() ? "required-field" : ""}
+          required={requireComment}
         />
 
         <div className="save-row">
@@ -483,36 +497,68 @@ const ExpertSection = ({
   );
 };
 
-// Main component - stacked layout (NOT side-by-side)
+// Main component - single expert assessment with type selector
 const ExpertAssessmentWidget = ({
   params,
   forecastDate,
   selectedCountry,
 }) => {
+  const [expertType, setExpertType] = useState("hydrologist");
+  const [commentError, setCommentError] = useState(false);
+
+  const handleExpertTypeChange = (type) => {
+    setExpertType(type);
+    setCommentError(false);
+  };
+
   return (
     <div className="c-expert-assessment">
       <div className="widget-header">
         <h3 className="widget-title">Expert Risk Assessment</h3>
         <p className="widget-subtitle">
-          Add your assessment comments and optionally set district-level risk levels
+          Provide your expert assessment. Comment is required.
         </p>
       </div>
 
-      {/* Hydrologist Section */}
+      {/* Expert Type Selector */}
+      <div className="expert-type-selector">
+        <label className="selector-label">I am a:</label>
+        <div className="type-buttons">
+          {Object.entries(EXPERT_TYPES).map(([type, config]) => (
+            <button
+              key={type}
+              className={`type-btn ${expertType === type ? "selected" : ""}`}
+              style={{
+                borderColor: config.color,
+                backgroundColor: expertType === type ? config.color : "transparent",
+                color: expertType === type ? "white" : config.color,
+              }}
+              onClick={() => handleExpertTypeChange(type)}
+            >
+              <span className="type-icon">{config.icon}</span>
+              <span className="type-label">
+                {type === "hydrologist" ? "Hydrologist" : "Meteorologist"}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Single Expert Section based on selected type */}
       <ExpertSection
-        expertType="hydrologist"
-        config={EXPERT_TYPES.hydrologist}
+        expertType={expertType}
+        config={EXPERT_TYPES[expertType]}
         forecastDate={forecastDate}
         selectedCountry={selectedCountry}
+        requireComment={true}
+        onCommentError={setCommentError}
       />
 
-      {/* Meteorologist Section */}
-      <ExpertSection
-        expertType="meteorologist"
-        config={EXPERT_TYPES.meteorologist}
-        forecastDate={forecastDate}
-        selectedCountry={selectedCountry}
-      />
+      {commentError && (
+        <div className="comment-error-message">
+          Please provide an assessment comment before saving.
+        </div>
+      )}
     </div>
   );
 };

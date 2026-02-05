@@ -1,9 +1,11 @@
 /**
  * Action Buttons Component
- * Browser-based PDF export - no API required
+ * Professional PDF export using jsPDF and html2canvas
  */
 import React, { useState, useCallback } from "react";
 import { isEmpty } from "lodash";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 import Button from "@/components/ui/button";
 
@@ -22,9 +24,57 @@ const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
     setTimeout(() => setSnackbar({ show: false, message: "", type: "info" }), 4000);
   };
 
-  // Generate PDF report - opens in new window for Chrome PDF viewer
+  // Convert WebGL map canvases to static images for PDF capture
+  const convertMapsToImages = async () => {
+    const mapContainers = document.querySelectorAll(".maplibregl-canvas");
+    const replacements = [];
+
+    for (const canvas of mapContainers) {
+      try {
+        // Get the WebGL canvas data
+        const dataUrl = canvas.toDataURL("image/png");
+
+        // Create a static image
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        img.style.width = canvas.style.width || `${canvas.width}px`;
+        img.style.height = canvas.style.height || `${canvas.height}px`;
+        img.style.position = "absolute";
+        img.style.top = "0";
+        img.style.left = "0";
+        img.className = "map-snapshot";
+
+        // Store original canvas and insert image
+        const parent = canvas.parentNode;
+        replacements.push({ canvas, parent, img });
+
+        // Hide the WebGL canvas and add the static image
+        canvas.style.visibility = "hidden";
+        parent.appendChild(img);
+      } catch (e) {
+        console.warn("Could not convert map canvas:", e);
+      }
+    }
+
+    return replacements;
+  };
+
+  // Restore original map canvases
+  const restoreMaps = (replacements) => {
+    for (const { canvas, parent, img } of replacements) {
+      canvas.style.visibility = "visible";
+      if (img.parentNode) {
+        img.parentNode.removeChild(img);
+      }
+    }
+  };
+
+  // Generate professional PDF report using jsPDF and html2canvas
   const handleGeneratePdf = useCallback(async () => {
     setPdfLoading(true);
+    showSnackbar("Generating PDF report...", "info");
+
+    let mapReplacements = [];
 
     try {
       // Get the report content
@@ -34,121 +84,116 @@ const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
         return;
       }
 
-      // Clone the content
-      const clonedContent = reportContent.cloneNode(true);
-
-      // Remove unwanted elements from clone
-      const elementsToRemove = clonedContent.querySelectorAll(
-        ".c-action-buttons, .c-global-options, .top-rects"
+      // Hide elements we don't want in PDF
+      const elementsToHide = document.querySelectorAll(
+        ".c-action-buttons, .c-global-options, .generate-btn"
       );
-      elementsToRemove.forEach((el) => el.remove());
+      elementsToHide.forEach((el) => el.style.display = "none");
 
-      // Create new window
-      const printWindow = window.open("", "_blank", "width=900,height=700");
+      // Convert WebGL maps to static images for capture
+      mapReplacements = await convertMapsToImages();
 
-      if (!printWindow) {
-        showSnackbar("Please allow popups to export PDF", "error");
-        return;
+      // Small delay to ensure images are rendered
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Create canvas from the report content
+      const canvas = await html2canvas(reportContent, {
+        scale: 2, // Higher resolution
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        windowWidth: 1200,
+      });
+
+      // Restore hidden elements and maps
+      elementsToHide.forEach((el) => el.style.display = "");
+      restoreMaps(mapReplacements);
+
+      // Calculate PDF dimensions (A4 size)
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: imgHeight > pageHeight ? "portrait" : "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      // Add metadata
+      pdf.setProperties({
+        title: `Flood Analysis Report - ${params?.placename || "East Africa Region"}`,
+        subject: "Flood Forecast Analysis",
+        author: "IGAD ICPAC - East Africa Flood Watch",
+        creator: "East Africa Flood Watch System",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+
+      // Handle multi-page PDF if content is too long
+      let heightLeft = imgHeight;
+      let position = 0;
+      const margin = 5; // 5mm margin
+
+      // First page
+      pdf.addImage(imgData, "PNG", margin, position, imgWidth - (2 * margin), imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add more pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", margin, position, imgWidth - (2 * margin), imgHeight);
+        heightLeft -= pageHeight;
       }
 
-      // Get current styles
-      const styles = Array.from(document.styleSheets)
-        .map((sheet) => {
-          try {
-            return Array.from(sheet.cssRules)
-              .map((rule) => rule.cssText)
-              .join("\n");
-          } catch (e) {
-            // External stylesheets may throw CORS errors
-            return "";
-          }
-        })
-        .join("\n");
+      // Add footer to each page
+      const pageCount = pdf.internal.getNumberOfPages();
+      const currentDate = new Date().toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
 
-      // Write the document
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Flood Forecast Analysis Report - ${params?.placename || "East Africa Region"}</title>
-          <style>
-            ${styles}
+      for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setTextColor(128, 128, 128);
 
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              margin: 0;
-              padding: 20px;
-              background: white;
-            }
+        // Footer text
+        pdf.text(
+          `East Africa Flood Watch - Generated ${currentDate}`,
+          margin,
+          pageHeight - 5
+        );
+        pdf.text(
+          `Page ${i} of ${pageCount}`,
+          imgWidth - margin - 20,
+          pageHeight - 5
+        );
+        pdf.text(
+          "https://floodwatch.icpac.net",
+          imgWidth / 2 - 20,
+          pageHeight - 5
+        );
+      }
 
-            .c-flood-analysis {
-              max-width: 1000px;
-              margin: 0 auto;
-            }
+      // Generate filename
+      const dateStr = params?.forecast_date || new Date().toISOString().split("T")[0];
+      const regionStr = (params?.placename || "East_Africa").replace(/\s+/g, "_");
+      const filename = `FloodAnalysis_${regionStr}_${dateStr}.pdf`;
 
-            .report-header {
-              background: linear-gradient(135deg, #1a5d1a 0%, #2e7d32 100%) !important;
-              color: white;
-              padding: 20px;
-              border-radius: 8px;
-              margin-bottom: 20px;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
+      // Save the PDF
+      pdf.save(filename);
 
-            .report-title {
-              font-size: 24px;
-              font-weight: bold;
-              margin-bottom: 10px;
-            }
-
-            .print-instructions {
-              background: #f5f5f5;
-              border: 1px solid #ddd;
-              border-radius: 8px;
-              padding: 15px;
-              margin-bottom: 20px;
-              text-align: center;
-            }
-
-            .print-instructions button {
-              background: #1a5d1a;
-              color: white;
-              border: none;
-              padding: 10px 24px;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 14px;
-              margin: 5px;
-            }
-
-            .print-instructions button:hover {
-              background: #145214;
-            }
-
-            @media print {
-              .print-instructions { display: none !important; }
-              body { padding: 0; }
-              @page { size: A4; margin: 10mm; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="print-instructions">
-            <p><strong>To save as PDF:</strong> Press Ctrl+P (or Cmd+P on Mac) and select "Save as PDF"</p>
-            <button onclick="window.print()">🖨️ Print / Save as PDF</button>
-            <button onclick="window.close()">✕ Close</button>
-          </div>
-          ${clonedContent.outerHTML}
-        </body>
-        </html>
-      `);
-
-      printWindow.document.close();
-      showSnackbar("Report opened in new window - use Print to save as PDF", "info");
+      showSnackbar(`PDF saved as ${filename}`, "success");
     } catch (error) {
       console.error("PDF generation error:", error);
       showSnackbar("Failed to generate PDF. Please try again.", "error");
+      // Restore maps on error
+      restoreMaps(mapReplacements);
     } finally {
       setPdfLoading(false);
     }

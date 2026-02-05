@@ -28,10 +28,10 @@ FLOODPROOFS_CONFIG = {
 
 # Ensemble FTP configuration
 ENSEMBLE_CONFIG = {
-    'host': os.getenv('ENSEMBLE_FTP_HOST', '41.215.21.156'),
+    'host': os.getenv('ENSEMBLE_FTP_HOST'),
     'port': int(os.getenv('ENSEMBLE_FTP_PORT', 21)),
-    'username': os.getenv('ENSEMBLE_FTP_USER', 'geosfm'),
-    'password': os.getenv('ENSEMBLE_FTP_PASSWORD', 's.rBsfsF*e48'),
+    'username': os.getenv('ENSEMBLE_FTP_USER'),
+    'password': os.getenv('ENSEMBLE_FTP_PASSWORD'),
     'remote_dir': os.getenv('ENSEMBLE_REMOTE_DIR', '/output/Combined'),
     'zones': [1, 2, 3, 4, 5, 6],
     'file_pattern': 'Zone{zone}_{gridcode}.csv',
@@ -41,6 +41,16 @@ ENSEMBLE_CONFIG = {
 DRIVE_CONFIG = {
     'folder_id': os.getenv('DRIVE_FOLDER_ID'),
     'credentials_file': os.getenv('GOOGLE_CREDENTIALS_FILE', '/opt/credentials/google-credentials.json'),
+}
+
+# WRF Rainfall FTP configuration
+WRF_CONFIG = {
+    'host': os.getenv('WRF_FTP_HOST'),
+    'port': int(os.getenv('WRF_FTP_PORT', 21)),
+    'username': os.getenv('WRF_FTP_USER'),
+    'password': os.getenv('WRF_FTP_PASSWORD'),
+    'remote_dir': os.getenv('WRF_REMOTE_DIR', '/SharedData/wrf/weekly'),
+    'files': ['PrecDaily.nc', 'PrecExtreme.nc'],
 }
 
 # Sync settings

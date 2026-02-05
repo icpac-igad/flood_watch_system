@@ -3,27 +3,19 @@ import PropTypes from "prop-types";
 import {
   ComposedChart,
   Line,
-  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
 } from "recharts";
 import { format, parseISO, isAfter, startOfDay } from "date-fns";
 import { saveAs } from "file-saver";
 
 // Import shared configuration - single source of truth
-import {
-  DEFAULT_THRESHOLDS,
-  ALERT_COLORS,
-  WATER_COLORS,
-  calculateAlertLevel,
-  getAlertColor,
-  getWaterColors,
-  getTodayStr,
-} from "@/utils/multimodal-config";
+import { getTodayStr } from "@/utils/multimodal-config";
 
 import "./styles.scss";
 
@@ -177,6 +169,7 @@ const transformForChart = (forecasts) => {
       date: f.date,
       displayDate,
       isForecast,
+      index: idx,
     };
 
     // Include all model values (even 0) for complete chart display
@@ -223,9 +216,9 @@ const getDateRange = (forecasts) => {
 };
 
 /**
- * Finds today's display date for the reference line
+ * Finds today's index for the reference line
  */
-const findTodayDisplayDate = (chartData) => {
+const findTodayIndex = (chartData) => {
   const today = startOfDay(new Date());
 
   for (const d of chartData) {
@@ -235,7 +228,7 @@ const findTodayDisplayDate = (chartData) => {
         forecastDate.getTime() === today.getTime() ||
         isAfter(forecastDate, today)
       ) {
-        return d.displayDate;
+        return d.index;
       }
     } catch (e) {
       // Skip invalid dates
@@ -250,26 +243,9 @@ const findTodayDisplayDate = (chartData) => {
 // =============================================================================
 
 /**
- * Alert badge component - uses shared colors
- */
-const AlertBadge = ({ level }) => {
-  const color = getAlertColor(level);
-
-  return (
-    <span className="alert-badge" style={{ backgroundColor: color }}>
-      {level?.toUpperCase() || "NORMAL"}
-    </span>
-  );
-};
-
-AlertBadge.propTypes = {
-  level: PropTypes.string,
-};
-
-/**
  * Chart tooltip component - shows model values on hover
  */
-const ChartTooltip = ({ active, payload, label }) => {
+const ChartTooltip = ({ active, payload }) => {
   if (!active || !payload || !payload.length) {
     return null;
   }
@@ -294,7 +270,7 @@ const ChartTooltip = ({ active, payload, label }) => {
 
   return (
     <div className="custom-tooltip">
-      <p className="tooltip-date">{label}</p>
+      <p className="tooltip-date">{dataPoint.displayDate || ""}</p>
       {dataPoint.daily_avg !== undefined && (
         <p style={{ color: "#333", fontWeight: "bold", margin: "4px 0" }}>
           Daily Avg: {dataPoint.daily_avg.toFixed(2)} m³/s
@@ -314,7 +290,6 @@ const ChartTooltip = ({ active, payload, label }) => {
 ChartTooltip.propTypes = {
   active: PropTypes.bool,
   payload: PropTypes.array,
-  label: PropTypes.string,
 };
 
 /**
@@ -515,9 +490,8 @@ const MultiModelChart = ({
   pointId,
   hybasId,
   selectedDate,
-  thresholds: configThresholds,
+  onDragStart,
 }) => {
-  const thresholds = configThresholds || DEFAULT_THRESHOLDS;
   const chartRef = useRef(null);
 
   const [fetchedData, setFetchedData] = useState(null);
@@ -530,111 +504,16 @@ const MultiModelChart = ({
   // State for export dropdown
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
 
-  // State for expanded view
-  const [isExpanded, setIsExpanded] = useState(false);
+  // Zoom selection state
+  const [zoomRange, setZoomRange] = useState(null);
+  const [refAreaLeft, setRefAreaLeft] = useState(null);
+  const [refAreaRight, setRefAreaRight] = useState(null);
 
-  // State for chart height (for resizing)
-  const [chartHeight, setChartHeight] = useState(320);
-
-  // State for dragging
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-
-  // Toggle expanded view
-  const toggleExpanded = useCallback(() => {
-    setIsExpanded((prev) => {
-      if (!prev) {
-        // Opening - reset position to center
-        setDragPosition({ x: 0, y: 0 });
-        setChartHeight(450);
-      } else {
-        setChartHeight(320);
-      }
-      return !prev;
-    });
-  }, []);
-
-  // Handle drag start
   const handleDragStart = useCallback((e) => {
-    if (!isExpanded) return;
-
-    // Prevent text selection during drag
-    e.preventDefault();
-
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-    setIsDragging(true);
-    setDragStart({
-      x: clientX - dragPosition.x,
-      y: clientY - dragPosition.y,
-    });
-  }, [isExpanded, dragPosition]);
-
-  // Handle drag move
-  const handleDragMove = useCallback((e) => {
-    if (!isDragging) return;
-
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-    setDragPosition({
-      x: clientX - dragStart.x,
-      y: clientY - dragStart.y,
-    });
-  }, [isDragging, dragStart]);
-
-  // Handle drag end
-  const handleDragEnd = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  // Add/remove global mouse/touch listeners for dragging
-  useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleDragMove);
-      window.addEventListener('mouseup', handleDragEnd);
-      window.addEventListener('touchmove', handleDragMove);
-      window.addEventListener('touchend', handleDragEnd);
-
-      return () => {
-        window.removeEventListener('mousemove', handleDragMove);
-        window.removeEventListener('mouseup', handleDragEnd);
-        window.removeEventListener('touchmove', handleDragMove);
-        window.removeEventListener('touchend', handleDragEnd);
-      };
+    if (typeof onDragStart === "function") {
+      onDragStart(e);
     }
-  }, [isDragging, handleDragMove, handleDragEnd]);
-
-  // Handle resize
-  const handleResizeStart = useCallback((e) => {
-    if (!isExpanded) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    const startY = e.touches ? e.touches[0].clientY : e.clientY;
-    const startHeight = chartHeight;
-
-    const handleResizeMove = (moveEvent) => {
-      const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
-      const deltaY = currentY - startY;
-      const newHeight = Math.max(250, Math.min(700, startHeight + deltaY));
-      setChartHeight(newHeight);
-    };
-
-    const handleResizeEnd = () => {
-      window.removeEventListener('mousemove', handleResizeMove);
-      window.removeEventListener('mouseup', handleResizeEnd);
-      window.removeEventListener('touchmove', handleResizeMove);
-      window.removeEventListener('touchend', handleResizeEnd);
-    };
-
-    window.addEventListener('mousemove', handleResizeMove);
-    window.addEventListener('mouseup', handleResizeEnd);
-    window.addEventListener('touchmove', handleResizeMove);
-    window.addEventListener('touchend', handleResizeEnd);
-  }, [isExpanded, chartHeight]);
+  }, [onDragStart]);
 
   // Toggle model selection
   const toggleModel = useCallback((model) => {
@@ -716,11 +595,9 @@ const MultiModelChart = ({
     chartData,
     availableModels,
     dateRange,
-    todayDisplayDate,
-    alertLevel,
+    todayIndex,
     todayDailyAvg,
     actualDate,
-    waterColors,
     maxDataValue,
   } = useMemo(() => {
     const forecastData = fetchedData || forecastsJson;
@@ -731,11 +608,9 @@ const MultiModelChart = ({
         chartData: [],
         availableModels: [],
         dateRange: "",
-        todayDisplayDate: null,
-        alertLevel: "normal",
+        todayIndex: null,
         todayDailyAvg: 0,
         actualDate: null,
-        waterColors: getWaterColors("normal"),
         maxDataValue: 0,
       };
     }
@@ -758,22 +633,43 @@ const MultiModelChart = ({
       ? extractDailyAvg(targetForecast)
       : extractDailyAvg(forecasts[0]);
 
-    const level = calculateAlertLevel(dailyAvg, thresholds);
-
     console.log(`[MultiModelChart] Data points: ${data.length}, Available models: ${models.join(", ")}, maxVal: ${maxVal.toFixed(2)}`);
 
     return {
       chartData: data,
       availableModels: models,
       dateRange: getDateRange(forecasts),
-      todayDisplayDate: findTodayDisplayDate(data),
-      alertLevel: level,
+      todayIndex: findTodayIndex(data),
       todayDailyAvg: dailyAvg,
       actualDate: usedDate,
-      waterColors: getWaterColors(level),
       maxDataValue: maxVal,
     };
-  }, [forecastsJson, fetchedData, thresholds, selectedDate]);
+  }, [forecastsJson, fetchedData, selectedDate]);
+
+  const indexToLabel = useMemo(() => {
+    const map = {};
+    chartData.forEach((d) => {
+      map[d.index] = d.displayDate;
+    });
+    return map;
+  }, [chartData]);
+
+  const displayData = useMemo(() => {
+    if (!zoomRange) return chartData;
+    return chartData.slice(zoomRange.start, zoomRange.end + 1);
+  }, [chartData, zoomRange]);
+
+  const showTodayLine = useMemo(() => {
+    if (todayIndex === null) return false;
+    if (!zoomRange) return true;
+    return todayIndex >= zoomRange.start && todayIndex <= zoomRange.end;
+  }, [todayIndex, zoomRange]);
+
+  useEffect(() => {
+    setZoomRange(null);
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+  }, [chartData]);
 
   // Handle export
   const handleExport = useCallback(
@@ -823,39 +719,30 @@ const MultiModelChart = ({
   }
 
   return (
-    <>
-      {/* Overlay when expanded */}
-      {isExpanded && <div className="chart-overlay" onClick={toggleExpanded} />}
-
+    <div className="c-multimodel-chart" ref={chartRef}>
+      {/* Drag handle */}
       <div
-        className={`c-multimodel-chart ${isExpanded ? 'expanded' : ''} ${isDragging ? 'dragging' : ''}`}
-        ref={chartRef}
-        style={isExpanded ? {
-          transform: `translate(calc(-50% + ${dragPosition.x}px), ${dragPosition.y}px)`,
-        } : undefined}
+        className="drag-handle"
+        onMouseDown={handleDragStart}
+        onTouchStart={handleDragStart}
       >
-        {/* Drag handle - only active when expanded */}
-        <div
-          className="drag-handle"
-          onMouseDown={handleDragStart}
-          onTouchStart={handleDragStart}
-        >
-          <div className="drag-indicator" />
-        </div>
+        <div className="drag-indicator" />
+      </div>
 
         {/* Header */}
         <div className="chart-header">
           <div className="header-title-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h4 style={{ margin: 0 }}>Multi-Model Forecast{adminName ? ` - ${adminName}` : ""}</h4>
             <div className="header-controls">
-              <AlertBadge level={alertLevel} />
-              <button
-                className={isExpanded ? "close-expanded-btn" : "expand-btn"}
-                onClick={toggleExpanded}
-                title={isExpanded ? "Close expanded view" : "Expand chart"}
-              >
-                {isExpanded ? "✕ Close" : "⛶ Expand"}
-              </button>
+              {zoomRange && (
+                <button
+                  className="reset-zoom-btn"
+                  onClick={() => setZoomRange(null)}
+                  title="Reset zoom"
+                >
+                  Reset zoom
+                </button>
+              )}
               <ExportDropdown
                 onExport={handleExport}
                 isOpen={exportDropdownOpen}
@@ -879,15 +766,40 @@ const MultiModelChart = ({
 
         {/* Chart */}
         <div className="chart-container">
-          <ResponsiveContainer width="100%" height={chartHeight}>
+          <ResponsiveContainer width="100%" height={300}>
         <ComposedChart
-          data={chartData}
+          data={displayData}
           margin={{ top: 15, right: 10, left: -10, bottom: 35 }}
+          onMouseDown={(e) => {
+            if (e && e.activeLabel !== undefined) {
+              setRefAreaLeft(e.activeLabel);
+              setRefAreaRight(e.activeLabel);
+            }
+          }}
+          onMouseMove={(e) => {
+            if (refAreaLeft !== null && e && e.activeLabel !== undefined) {
+              setRefAreaRight(e.activeLabel);
+            }
+          }}
+          onMouseUp={() => {
+            if (refAreaLeft === null || refAreaRight === null) return;
+            if (refAreaLeft === refAreaRight) {
+              setRefAreaLeft(null);
+              setRefAreaRight(null);
+              return;
+            }
+            const [start, end] = refAreaLeft < refAreaRight
+              ? [refAreaLeft, refAreaRight]
+              : [refAreaRight, refAreaLeft];
+            setZoomRange({ start, end });
+            setRefAreaLeft(null);
+            setRefAreaRight(null);
+          }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
 
           <XAxis
-            dataKey="displayDate"
+            dataKey="index"
             angle={-45}
             textAnchor="end"
             height={60}
@@ -897,6 +809,7 @@ const MultiModelChart = ({
             interval={"preserveStartEnd"}
             tickCount={15}
             minTickGap={30}
+            tickFormatter={(value) => indexToLabel[value] || ""}
           />
 
           <YAxis
@@ -919,10 +832,19 @@ const MultiModelChart = ({
 
           <Tooltip content={<ChartTooltip />} />
 
+          {refAreaLeft !== null && refAreaRight !== null && (
+            <ReferenceArea
+              x1={refAreaLeft}
+              x2={refAreaRight}
+              strokeOpacity={0.2}
+              fill="rgba(25, 118, 210, 0.12)"
+            />
+          )}
+
           {/* Today reference line */}
-          {todayDisplayDate && (
+          {showTodayLine && todayIndex !== null && (
             <ReferenceLine
-              x={todayDisplayDate}
+              x={todayIndex}
               stroke="#333"
               strokeDasharray="3 3"
               strokeWidth={1}
@@ -995,17 +917,7 @@ const MultiModelChart = ({
           </ResponsiveContainer>
         </div>
 
-        {/* Resize handle - only visible in expanded mode */}
-        {isExpanded && (
-          <div
-            className="resize-handle"
-            title="Drag to resize"
-            onMouseDown={handleResizeStart}
-            onTouchStart={handleResizeStart}
-          />
-        )}
-      </div>
-    </>
+    </div>
   );
 };
 
@@ -1015,11 +927,7 @@ MultiModelChart.propTypes = {
   pointId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   hybasId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   selectedDate: PropTypes.string,
-  thresholds: PropTypes.shape({
-    warning: PropTypes.number,
-    alarm: PropTypes.number,
-    emergency: PropTypes.number,
-  }),
+  onDragStart: PropTypes.func,
 };
 
 export default MultiModelChart;

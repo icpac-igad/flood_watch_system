@@ -1,0 +1,38 @@
+/*
+ * Homepage layout module
+ * Keeps homepage vertical rhythm consistent on large screens:
+ * the partners block expands to absorb leftover viewport space.
+ */
+
+body.homepage {
+  --homepage-bg: #f0f0f0;
+  background: var(--homepage-bg);
+}
+
+body.homepage .content-wrapper {
+  margin-top: 60px;
+  padding: 0;
+  background: var(--homepage-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * Let the partners strip absorb leftover space at any viewport size
+ * so there is no detached empty block before the footer.
+ */
+body.homepage .partners-section {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: flex-start;
+}
+
+body.homepage .partners-section .partners-container {
+  width: 100%;
+}
+
+@media screen and (max-width: 768px) {
+  body.homepage .content-wrapper {
+    margin-top: 56px;
+  }
+}

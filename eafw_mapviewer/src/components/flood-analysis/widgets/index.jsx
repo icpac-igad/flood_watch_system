@@ -56,6 +56,7 @@ const FloodWidgets = ({ params, settings, forecastData, loading }) => {
         <RegionalMapsWidget
           params={params}
           forecastDate={params?.forecast_date}
+          alertFilter={params?.alert_filter}
           onCountrySelect={(country) => setSelectedCountry(country)}
         />
 

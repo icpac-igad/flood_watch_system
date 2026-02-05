@@ -53,6 +53,23 @@ def run_floodproofs_sync():
         logger.exception(f"Error in FloodProofs sync: {e}")
 
 
+def run_wrf_rainfall_sync():
+    """Run WRF Rainfall sync - weekly total and extreme rainfall"""
+    logger.info(f"[{datetime.now()}] Running WRF Rainfall sync")
+
+    try:
+        from .wrf_rainfall_job import run_wrf_rainfall
+        success = run_wrf_rainfall()
+
+        if success:
+            logger.info("WRF Rainfall sync completed successfully")
+        else:
+            logger.error("WRF Rainfall sync failed")
+
+    except Exception as e:
+        logger.exception(f"Error in WRF Rainfall sync: {e}")
+
+
 def run_gcs_inundation_sync():
     """Run Google Flood Inundation History sync from GCS"""
     logger.info(f"[{datetime.now()}] Running GCS Inundation History sync")
@@ -127,16 +144,28 @@ def start_scheduler():
         replace_existing=True
     )
 
+    # Schedule WRF Rainfall sync - daily at 06:00 UTC
+    # WRF weekly rainfall forecasts are updated daily
+    scheduler.add_job(
+        run_wrf_rainfall_sync,
+        CronTrigger(hour=6, minute=0),
+        id='wrf_rainfall_sync',
+        name='WRF Rainfall Sync',
+        replace_existing=True
+    )
+
     # Run immediately on startup
     logger.info("Running initial sync on startup...")
     run_multimodal_sync()
     run_floodproofs_sync()
     run_gcs_inundation_sync()
+    run_wrf_rainfall_sync()
 
     logger.info("Scheduler started. Jobs will run on schedule.")
     logger.info("Multimodal sync: Daily at 17:20 (5:20 PM)")
     logger.info("FloodProofs sync: 01:00, 07:00, 13:00, 19:00 UTC")
     logger.info("GCS Inundation sync: Weekly on Sunday at 02:00 UTC")
+    logger.info("WRF Rainfall sync: Daily at 06:00 UTC")
 
     try:
         scheduler.start()

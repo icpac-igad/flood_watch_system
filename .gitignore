@@ -82,3 +82,12 @@ htmlcov/
 /data
 eafw_jobs/data/
 eafw_jobs/logs/
+
+# Backup files (large)
+*.dump
+*.tar.gz
+*backup*.sh
+backup-*.sh
+
+# MapServer generated files
+eafw_docker/mapserver/mapfiles/symbols/

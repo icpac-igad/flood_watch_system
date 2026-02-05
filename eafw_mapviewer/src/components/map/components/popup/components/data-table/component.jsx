@@ -78,6 +78,7 @@ const DataTable = ({
   activeDatasets,
   popupLat,
   popupLon,
+  onPopupDragStart,
 }) => {
   // Get hybas_id from raw selected data (works for both GeoJSON and MVT layers)
   const rawHybasId = selected?.data?.hybas_id;
@@ -240,6 +241,7 @@ const DataTable = ({
           alertLevel={multiModelData.alertLevel}
           selectedDate={selectedDate}
           thresholds={clusterConfig?.thresholds}
+          onDragStart={onPopupDragStart}
         />
       )}
 
@@ -307,6 +309,7 @@ DataTable.propTypes = {
   activeDatasets: PropTypes.array,
   popupLat: PropTypes.number,
   popupLon: PropTypes.number,
+  onPopupDragStart: PropTypes.func,
 };
 
 const mapStateToProps = (state) => ({

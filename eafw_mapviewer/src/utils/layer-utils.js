@@ -32,6 +32,11 @@ const appendParamsToUrl = (url, params, isFilteredLayer = false) => {
       }
       // Only add backend filter params with actual values
       if (BACKEND_FILTER_PARAMS.includes(key) && value !== undefined && value !== '' && value !== false) {
+        // Keep per-layer admin level from the base URL (admin0/admin1/admin2),
+        // do not override it with the globally selected filter level.
+        if (key === 'admin_level' && existingParams.admin_level !== undefined) {
+          return;
+        }
         existingParams[key] = encodeURIComponent(String(value));
       }
     });
@@ -206,9 +211,18 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
       tileSourceSwapped = tiles !== originalTiles;
     }
 
-    // Only add filter params to layers that had their tile source swapped
-    // This ensures only the filtered layers get the country/region params
-    if (tileSourceSwapped && isFilteringActive) {
+    // If the source was already a filtered function (e.g. gha.admin_clipped),
+    // we still need to append admin params even when no swap happened.
+    const isAlreadyAdminFilteredLayer =
+      isAdminFilterActive &&
+      (
+        tiles.includes('tileserv/gha.admin_clipped') ||
+        tiles.includes('tileserv/gha.multimodal_points_by_admin') ||
+        tiles.includes('tileserv/climate.inundation_history_clipped')
+      );
+
+    // Add filter params when swapped OR when already on a filtered function source.
+    if ((tileSourceSwapped || isAlreadyAdminFilteredLayer) && isFilteringActive) {
       const updatedTiles = appendParamsToUrl(tiles, paramInteractions, true);
 
       // Update the layer config with new tiles URL

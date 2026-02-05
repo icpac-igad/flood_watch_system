@@ -16,6 +16,10 @@ google-api-python-client = "^2.108.0"
 google-auth = "^2.25.0"
 google-auth-httplib2 = "^0.2.0"
 google-auth-oauthlib = "^1.2.0"
+numpy = "^1.26.0"
+xarray = "^2024.1.0"
+pandas = "^2.1.0"
+netCDF4 = "^1.6.5"
 
 [build-system]
 requires = ["poetry-core"]

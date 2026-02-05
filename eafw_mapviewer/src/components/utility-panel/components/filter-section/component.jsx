@@ -10,18 +10,37 @@ import './styles.scss';
 // FloodWatch Custom: Filter Section with WHCA Countries option
 // WHCA = Uganda, Rwanda, South Sudan, Ethiopia, Sudan (5 countries)
 // =============================================================================
+const ENABLE_WHCA_FILTER = false;
+
 class FilterSection extends PureComponent {
   static propTypes = {
     selectedFilterType: PropTypes.string,
     setSelectedFilterType: PropTypes.func,
+    setParamInteractions: PropTypes.func,
   };
 
+  componentDidMount() {
+    const { selectedFilterType, setParamInteractions } = this.props;
+    if (selectedFilterType !== 'whca' && setParamInteractions) {
+      setParamInteractions({ whca_filter: false, whca_countries: '' });
+    }
+  }
+
+  componentDidUpdate(prevProps) {
+    const { selectedFilterType, setParamInteractions } = this.props;
+    if (prevProps.selectedFilterType !== selectedFilterType &&
+        selectedFilterType !== 'whca' &&
+        setParamInteractions) {
+      setParamInteractions({ whca_filter: false, whca_countries: '' });
+    }
+  }
+
   render() {
-    const { selectedFilterType, setSelectedFilterType } = this.props;
+    const { selectedFilterType, setSelectedFilterType, setParamInteractions } = this.props;
 
     const filterTypeOptions = [
       { label: 'Filter by admin', value: 'admin' },
-      { label: 'WHCA Countries', value: 'whca' },  // FloodWatch Custom
+      ...(ENABLE_WHCA_FILTER ? [{ label: 'WHCA Countries', value: 'whca' }] : []),
       { label: 'Filter by cluster', value: 'cluster' },
       { label: 'Filter by watershed', value: 'watershed' },
       { label: 'Filter by protected areas', value: 'protected' },
@@ -30,6 +49,13 @@ class FilterSection extends PureComponent {
     const selectedOption = filterTypeOptions.find(
       (option) => option.value === selectedFilterType
     );
+
+    const handleFilterTypeChange = (value) => {
+      setSelectedFilterType(value);
+      if (value !== 'whca' && setParamInteractions) {
+        setParamInteractions({ whca_filter: false, whca_countries: '' });
+      }
+    };
 
     return (
       <div className="c-filter-section">
@@ -40,7 +66,7 @@ class FilterSection extends PureComponent {
             theme="theme-dropdown-native"
             options={filterTypeOptions}
             value={selectedOption}
-            onChange={(value) => setSelectedFilterType(value)}
+            onChange={handleFilterTypeChange}
             native
           />
         </div>
@@ -52,13 +78,13 @@ class FilterSection extends PureComponent {
         )}
 
         {/* FloodWatch Custom: WHCA Countries Filter */}
-        {selectedFilterType === 'whca' && (
+        {ENABLE_WHCA_FILTER && selectedFilterType === 'whca' && (
           <div className="filter-content">
             <WHCAFilterContainer />
           </div>
         )}
 
-        {selectedFilterType !== 'admin' && selectedFilterType !== 'whca' && (
+        {selectedFilterType !== 'admin' && (!ENABLE_WHCA_FILTER || selectedFilterType !== 'whca') && (
           <div className="filter-placeholder">
             <p>Coming soon...</p>
           </div>

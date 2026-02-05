@@ -12,6 +12,15 @@ import { CMS_API } from "@/utils/constants";
 
 import "./global-options.scss";
 
+// Alert level filter options
+const ALERT_LEVELS = [
+  { value: "all", label: "All Points" },
+  { value: "emergency", label: "Emergency" },
+  { value: "alarm", label: "Alarm" },
+  { value: "warning", label: "Warning" },
+  { value: "normal", label: "Normal" },
+];
+
 // Date selector component
 const DateSelector = ({ value, onChange, disabled, label }) => (
   <div className="form-group">
@@ -79,6 +88,37 @@ const GlobalOptions = ({
     admin2: [],
   });
   const [riverBasins, setRiverBasins] = useState([]);
+  const [availableDates, setAvailableDates] = useState([]);
+  const [datesLoading, setDatesLoading] = useState(true);
+
+  // Fetch available forecast dates from database
+  useEffect(() => {
+    const fetchAvailableDates = async () => {
+      setDatesLoading(true);
+      try {
+        const response = await fetch(`${CMS_API}/multimodal/dates/`);
+        if (response.ok) {
+          const data = await response.json();
+          const dates = data.timestamps || [];
+          setAvailableDates(dates);
+          // Auto-select latest date if none selected
+          if (dates.length > 0 && !params.forecast_date) {
+            updateParams({ forecast_date: dates[0] });
+          }
+        } else {
+          console.error("Failed to fetch available dates:", response.status);
+          setAvailableDates([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch available dates:", error);
+        setAvailableDates([]);
+      } finally {
+        setDatesLoading(false);
+      }
+    };
+
+    fetchAvailableDates();
+  }, []);
 
   // Fetch admin boundaries when needed (countries)
   useEffect(() => {
@@ -205,37 +245,52 @@ const GlobalOptions = ({
     updateParams({ forecast_date: date });
   };
 
-  // Handle period change
-  const handlePeriodChange = (period) => {
-    updateParams({ forecast_period: period });
+  // Handle alert filter change
+  const handleAlertFilterChange = (value) => {
+    updateParams({ alert_filter: value });
   };
 
-  const { reporting_units, forecast_periods } = settings;
+  const { reporting_units } = settings;
 
-  // Format forecast periods for select
-  const periodOptions = forecast_periods?.map((p) => ({ value: p, label: p })) || [];
+  // Format available dates for select dropdown
+  const dateOptions = availableDates.map((date) => ({
+    value: date,
+    label: new Date(date).toLocaleDateString("en-GB", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }),
+  }));
 
   return (
     <div className="c-global-options">
       <div className="section-title">Time and Area of Analysis</div>
 
       <div className="options-row">
-        {/* Time Selection */}
+        {/* Date Selection - uses available dates from database */}
         <div className="options-col">
           <div className="options-grid">
-            <DateSelector
+            <SelectInput
               label="Forecast Date"
               value={params.forecast_date}
+              options={dateOptions}
               onChange={handleDateChange}
-              disabled={loading}
+              disabled={loading || datesLoading}
+              placeholder={datesLoading ? "Loading dates..." : "Select date"}
             />
+            {availableDates.length > 0 && (
+              <div className="date-info">
+                <span className="date-count">{availableDates.length} dates available</span>
+              </div>
+            )}
             <SelectInput
-              label="Forecast Period"
-              value={params.forecast_period}
-              options={periodOptions}
-              onChange={handlePeriodChange}
+              label="Alert Level Filter"
+              value={params.alert_filter || "all"}
+              options={ALERT_LEVELS}
+              onChange={handleAlertFilterChange}
               disabled={loading}
-              placeholder="Select period"
+              placeholder="Filter by alert level"
             />
           </div>
         </div>

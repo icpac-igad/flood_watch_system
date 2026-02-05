@@ -213,6 +213,142 @@ class BannerImage(Orderable):
     ]
 
 
+# =============================================================================
+# HOMEPAGE MAP CONFIGURATION - CMS-driven map elements
+# =============================================================================
+
+class MapLegendItem(Orderable):
+    """CMS-configurable legend item for the homepage map."""
+
+    page = ParentalKey("HomePage", related_name="map_legend_items")
+
+    alert_level = models.CharField(
+        max_length=20,
+        choices=[
+            ('emergency', _('Emergency')),
+            ('alarm', _('Alarm')),
+            ('warning', _('Warning')),
+            ('normal', _('Normal')),
+        ],
+        verbose_name=_("Alert Level"),
+        help_text=_("The alert level this legend item represents"),
+    )
+    label = models.CharField(
+        max_length=100,
+        verbose_name=_("Label"),
+        help_text=_("Display label (e.g., 'Emergency: Extreme flood risk')"),
+    )
+    icon = models.ForeignKey(
+        "wagtailimages.Image",
+        verbose_name=_("Legend Icon"),
+        help_text=_("Icon image for this legend item (same as used on map)"),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    panels = [
+        FieldPanel("alert_level"),
+        FieldPanel("label"),
+        FieldPanel("icon"),
+    ]
+
+    class Meta:
+        ordering = ["sort_order"]
+        verbose_name = _("Map Legend Item")
+        verbose_name_plural = _("Map Legend Items")
+
+
+class MapExternalLink(Orderable):
+    """CMS-configurable external link below the homepage map."""
+
+    page = ParentalKey("HomePage", related_name="map_external_links")
+
+    label = models.CharField(
+        max_length=100,
+        verbose_name=_("Link Label"),
+        help_text=_("Text displayed on the button"),
+    )
+    url = models.CharField(
+        max_length=500,
+        verbose_name=_("URL"),
+        help_text=_("Full URL or relative path (e.g., /reports/)"),
+    )
+    open_in_new_tab = models.BooleanField(
+        default=True,
+        verbose_name=_("Open in New Tab"),
+    )
+    button_color = models.CharField(
+        max_length=7,
+        default="#ff9800",
+        verbose_name=_("Button Color"),
+    )
+
+    panels = [
+        FieldPanel("label"),
+        FieldPanel("url"),
+        FieldPanel("open_in_new_tab"),
+        FieldPanel("button_color"),
+    ]
+
+    class Meta:
+        ordering = ["sort_order"]
+        verbose_name = _("Map External Link")
+        verbose_name_plural = _("Map External Links")
+
+
+class MapCategory(Orderable):
+    """CMS-configurable category for the homepage map menu (like 'Our Hazards Watch')."""
+
+    page = ParentalKey("HomePage", related_name="map_categories")
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name=_("Category Name"),
+        help_text=_("Display name for the category"),
+    )
+    icon = models.ForeignKey(
+        "wagtailimages.Image",
+        verbose_name=_("Category Icon"),
+        help_text=_("Icon image for the category"),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active"),
+        help_text=_("Whether this category is enabled"),
+    )
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name=_("Default Selected"),
+        help_text=_("Whether this category is selected by default on page load"),
+    )
+    # Link to geomanager category if applicable
+    geomanager_category_id = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Geomanager Category ID"),
+        help_text=_("Optional: Link to a Geomanager category for layer data"),
+    )
+
+    panels = [
+        FieldPanel("name"),
+        FieldPanel("icon"),
+        FieldPanel("is_active"),
+        FieldPanel("is_default"),
+        FieldPanel("geomanager_category_id"),
+    ]
+
+    class Meta:
+        ordering = ["sort_order"]
+        verbose_name = _("Map Category")
+        verbose_name_plural = _("Map Categories")
+
+
 class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
     template = "home/home_page.html"
     parent_page_type = ["wagtailcore.Page"]
@@ -389,6 +525,104 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
         help_text=_("Layout mode for the homepage dashboard"),
     )
 
+    # Dashboard Title (CMS-driven)
+    dashboard_title = models.CharField(
+        max_length=200,
+        default="Latest Situation of Flood Conditions",
+        verbose_name=_("Dashboard Title"),
+        help_text=_("Main title displayed above the map (e.g., 'Latest Situation of Flood Conditions')"),
+    )
+
+    # Point Filter Mode (controls what points API returns)
+    POINT_FILTER_CHOICES = [
+        ('all', _('All Points')),
+        ('active', _('Active Points Only (Warning+)')),
+        ('alarm', _('Alarm and Above')),
+        ('emergency', _('Emergency Only')),
+    ]
+    point_filter_mode = models.CharField(
+        max_length=20,
+        choices=POINT_FILTER_CHOICES,
+        default='all',
+        verbose_name=_("Point Filter"),
+        help_text=_("Filter which forecast points are displayed on the map"),
+    )
+
+    # Category Menu Settings
+    show_category_menu = models.BooleanField(
+        default=False,
+        verbose_name=_("Show Category Menu"),
+        help_text=_("Display category menu inside the map (like 'Our Hazards Watch')"),
+    )
+
+    # Menu Style (ICPAC-web style vs current)
+    MENU_STYLE_CHOICES = [
+        ('card_list', _('Card List (Current)')),
+        ('vertical_icons', _('Vertical Icons (ICPAC Style)')),
+    ]
+    category_menu_style = models.CharField(
+        max_length=20,
+        choices=MENU_STYLE_CHOICES,
+        default='vertical_icons',
+        verbose_name=_("Menu Style"),
+        help_text=_("Visual style for the category menu"),
+    )
+    category_menu_active_color = models.CharField(
+        max_length=7,
+        default="#f7a600",
+        verbose_name=_("Menu Active Color"),
+        help_text=_("Color for active/selected menu item (hex code)"),
+    )
+    category_menu_bg_color = models.CharField(
+        max_length=30,
+        default="rgba(68, 65, 65, 0.84)",
+        verbose_name=_("Menu Background Color"),
+        help_text=_("Background color for the menu pill (hex or rgba)"),
+    )
+
+    # Map Logo Settings
+    show_map_logo = models.BooleanField(
+        default=True,
+        verbose_name=_("Show Map Logo"),
+        help_text=_("Display logo overlay on the map (bottom-left)"),
+    )
+    map_logo = models.ForeignKey(
+        "wagtailimages.Image",
+        verbose_name=_("Map Logo"),
+        help_text=_("Logo displayed on the map (e.g., FloodWatch logo)"),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    map_logo_link = models.CharField(
+        max_length=255,
+        blank=True,
+        default="/mapviewer/",
+        verbose_name=_("Map Logo Link"),
+        help_text=_("URL the logo links to when clicked"),
+    )
+
+    # Legend Settings
+    legend_title = models.CharField(
+        max_length=100,
+        default="Flood Alert Level",
+        verbose_name=_("Legend Title"),
+        help_text=_("Title displayed above the map legend"),
+    )
+    legend_position = models.CharField(
+        max_length=20,
+        choices=[
+            ('bottom-left', _('Bottom Left')),
+            ('bottom-right', _('Bottom Right')),
+            ('top-left', _('Top Left')),
+            ('top-right', _('Top Right')),
+        ],
+        default='bottom-left',
+        verbose_name=_("Legend Position"),
+        help_text=_("Position of the legend on the map"),
+    )
+
     content_panels = Page.content_panels + [
         MultiFieldPanel(
             [
@@ -401,14 +635,52 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
         ),
         MultiFieldPanel(
             [
+                FieldPanel("dashboard_title"),
                 FieldPanel("homepage_layout"),
                 FieldPanel("show_mini_map"),
                 FieldPanel("mini_map_initial_zoom"),
                 FieldPanel("mini_map_center_lat"),
                 FieldPanel("mini_map_center_lng"),
+                FieldPanel("point_filter_mode"),
             ],
             heading=_("Mini-Map Widget"),
             help_text=_("Configure the interactive mini-map showing flood forecast points"),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("legend_title"),
+                FieldPanel("legend_position"),
+                InlinePanel("map_legend_items", label=_("Legend Items"), min_num=0, max_num=10),
+            ],
+            heading=_("Map Legend"),
+            help_text=_("Configure the legend items displayed on the map. If empty, uses defaults from Multimodal Settings."),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("show_map_logo"),
+                FieldPanel("map_logo"),
+                FieldPanel("map_logo_link"),
+            ],
+            heading=_("Map Logo"),
+            help_text=_("Logo overlay displayed on the map (bottom-left corner)"),
+        ),
+        MultiFieldPanel(
+            [
+                InlinePanel("map_external_links", label=_("External Links"), min_num=0, max_num=5),
+            ],
+            heading=_("Map External Links"),
+            help_text=_("Links displayed below the map (e.g., ICPAC Climate Portal, Flood Bulletins)"),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("show_category_menu"),
+                FieldPanel("category_menu_style"),
+                FieldPanel("category_menu_active_color"),
+                FieldPanel("category_menu_bg_color"),
+                InlinePanel("map_categories", label=_("Categories"), min_num=0, max_num=10),
+            ],
+            heading=_("Category Menu"),
+            help_text=_("Optional category menu inside the map (similar to 'Our Hazards Watch')"),
         ),
         MultiFieldPanel(
             [
@@ -419,40 +691,36 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
             heading=_("Country Cards"),
             help_text=_("Configure the country cards panel (sorted by severity)"),
         ),
-        # Legacy sections (collapsed by default for backwards compatibility)
+        # Hero Banner Section
         MultiFieldPanel(
             [
                 FieldPanel("banner_subtitle"),
-                FieldPanel("hero_question"),
                 InlinePanel("banner_images", label=_("Banner Images"), max_num=10),
             ],
-            heading=_("Legacy: Banner Images (not used in new design)"),
-            classname="collapsed",
+            heading=_("1. Hero Banner"),
+            help_text=_("Hero banner displayed at the top of the homepage. Uses banner_title from Header Settings."),
         ),
+        # Info/About Section
         MultiFieldPanel(
             [
                 FieldPanel("intro_text"),
                 FieldPanel("intro_image"),
             ],
-            heading=_("Legacy: Introduction Section (not used)"),
-            classname="collapsed",
+            heading=_("3. About Section"),
+            help_text=_("Information section about the flood watch system (displayed after the map widget)"),
         ),
+        # Additional Settings (collapsed)
         MultiFieldPanel(
             [
+                FieldPanel("hero_question"),
                 FieldPanel("show_weather_widget"),
                 FieldPanel("weather_widget_title"),
-            ],
-            heading=_("Legacy: Weather Widget (not used)"),
-            classname="collapsed",
-        ),
-        MultiFieldPanel(
-            [
                 FieldPanel("show_map_preview"),
                 FieldPanel("map_preview_title"),
                 FieldPanel("map_preview_subtitle"),
                 FieldPanel("mini_map_height"),
             ],
-            heading=_("Legacy: Other Settings (not used)"),
+            heading=_("Additional Settings"),
             classname="collapsed",
         ),
     ]

@@ -120,7 +120,10 @@ const MapPage = (props) => {
     }
 
     if (mapData?.paramInteractions) {
-      dispatch(setParamInteractions(mapData.paramInteractions));
+      const sanitizedParams = { ...mapData.paramInteractions };
+      delete sanitizedParams.whca_filter;
+      delete sanitizedParams.whca_countries;
+      dispatch(setParamInteractions(sanitizedParams));
     }
 
     if (mainMap) {

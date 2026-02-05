@@ -4,8 +4,19 @@ Downloads per-point CSV files from Google Drive and ingests forecast
 data into the normalized gha.multimodal_forecasts table.
 
 Uses concurrent downloads (ThreadPoolExecutor) for speed.
+
+Usage:
+    # Sync all available folders
+    python -m pyfloodwatch.drive_sync --all
+
+    # Sync specific folder by name
+    python -m pyfloodwatch.drive_sync 31012026
+
+    # Sync latest folder only (default)
+    python -m pyfloodwatch.drive_sync
 """
 import re
+import sys
 import time
 from io import BytesIO
 from datetime import datetime
@@ -105,12 +116,16 @@ class DriveSyncer:
             logger.error(f"Failed to load control points: {e}")
             return False
 
-    def get_latest_folder(self):
-        """Get the most recent dated folder from Drive"""
+    def get_all_folders(self):
+        """Get all dated folders from Drive.
+
+        Returns:
+            list of dicts with 'id', 'name', 'data_date' keys, sorted by date desc
+        """
         folder_id = self.config.get('folder_id')
         if not folder_id:
             logger.error("No DRIVE_FOLDER_ID configured")
-            return None
+            return []
 
         try:
             query = (
@@ -123,17 +138,56 @@ class DriveSyncer:
                 orderBy='name desc'
             ).execute()
 
-            subfolders = results.get('files', [])
-            if subfolders:
-                latest = subfolders[0]
-                logger.info(f"Using folder: {latest['name']}")
-                return latest['id']
+            folders = []
+            for f in results.get('files', []):
+                name = f['name']
+                # Parse date from folder name (DDMMYYYY format)
+                try:
+                    # Skip folders with _hist suffix or other non-date names
+                    clean_name = name.replace('_hist', '')
+                    data_date = datetime.strptime(clean_name, '%d%m%Y').date()
+                    folders.append({
+                        'id': f['id'],
+                        'name': name,
+                        'data_date': data_date
+                    })
+                except ValueError:
+                    logger.warning(f"Skipping folder with unparseable name: {name}")
+                    continue
 
-            return folder_id
+            # Sort by date descending (newest first)
+            folders.sort(key=lambda x: x['data_date'], reverse=True)
+            return folders
 
         except Exception as e:
-            logger.error(f"Failed to get folder: {e}")
-            return None
+            logger.error(f"Failed to get folders: {e}")
+            return []
+
+    def get_ingested_dates(self):
+        """Get dates that have already been ingested to the database.
+
+        Returns:
+            set of date objects
+        """
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT DISTINCT data_date FROM gha.multimodal_forecasts
+                """)
+                return {row[0] for row in cursor.fetchall()}
+        except Exception as e:
+            logger.error(f"Failed to get ingested dates: {e}")
+            return set()
+
+    def get_latest_folder(self):
+        """Get the most recent dated folder from Drive (backwards compatible)"""
+        folders = self.get_all_folders()
+        if folders:
+            latest = folders[0]
+            logger.info(f"Using folder: {latest['name']}")
+            return latest['id']
+        return self.config.get('folder_id')
 
     def list_zone_files(self, folder_id):
         """List all Zone*.csv files in folder with pagination"""
@@ -235,25 +289,24 @@ class DriveSyncer:
 
         return forecasts
 
-    def sync(self):
-        """Main sync: download CSVs from Drive, ingest to gha.multimodal_forecasts"""
-        logger.info("=" * 70)
-        logger.info("Multimodal Drive Sync Started")
-        logger.info("=" * 70)
+    def sync_folder(self, folder):
+        """Sync a single folder to the database.
 
-        if not self.connect_drive():
-            return False
+        Args:
+            folder: dict with 'id', 'name', 'data_date' keys
 
-        if not self.load_control_points():
-            return False
+        Returns:
+            bool: Success status
+        """
+        folder_id = folder['id']
+        folder_name = folder['name']
+        data_date = folder['data_date']
 
-        folder_id = self.get_latest_folder()
-        if not folder_id:
-            return False
+        logger.info(f"Processing folder: {folder_name} (date: {data_date})")
 
         files = self.list_zone_files(folder_id)
         if not files:
-            logger.warning("No Zone files found")
+            logger.warning(f"No Zone files found in {folder_name}")
             return False
 
         # Concurrent download and parse
@@ -292,11 +345,10 @@ class DriveSyncer:
         )
 
         if not forecast_data:
-            logger.warning("No forecast data parsed from CSV files")
+            logger.warning(f"No forecast data parsed from {folder_name}")
             return False
 
-        # Ingest to normalized gha.multimodal_forecasts
-        data_date = datetime.now().date()
+        # Ingest to normalized gha.multimodal_forecasts using folder date
         success, matched = ingest_multimodal_forecasts(
             data_date, forecast_data, self.control_points
         )
@@ -308,15 +360,113 @@ class DriveSyncer:
             )
             return True
         else:
-            logger.error("Failed to ingest forecasts")
+            logger.error(f"Failed to ingest forecasts for {data_date}")
             return False
 
+    def sync(self, folder_name=None, sync_all=False, days=None):
+        """Main sync entry point.
 
-def run_drive_sync():
-    """Entry point for Drive sync"""
+        Args:
+            folder_name: Specific folder name to sync (e.g., '31012026')
+            sync_all: If True, sync all available folders
+            days: Number of recent days to sync (e.g., 7 for last 7 days)
+
+        Returns:
+            bool: Success status (True if at least one folder synced)
+        """
+        logger.info("=" * 70)
+        logger.info("Multimodal Drive Sync Started")
+        logger.info("=" * 70)
+
+        if not self.connect_drive():
+            return False
+
+        if not self.load_control_points():
+            return False
+
+        all_folders = self.get_all_folders()
+        if not all_folders:
+            logger.error("No folders found in Drive")
+            return False
+
+        logger.info(f"Found {len(all_folders)} folders in Drive")
+
+        # Determine which folders to process
+        if folder_name:
+            # Sync specific folder by name
+            folders_to_sync = [f for f in all_folders if f['name'] == folder_name]
+            if not folders_to_sync:
+                logger.error(f"Folder '{folder_name}' not found in Drive")
+                logger.info(f"Available folders: {[f['name'] for f in all_folders]}")
+                return False
+        elif sync_all:
+            # Sync all folders, skip already ingested
+            ingested = self.get_ingested_dates()
+            folders_to_sync = [f for f in all_folders if f['data_date'] not in ingested]
+            logger.info(f"Already ingested: {len(ingested)} dates")
+            logger.info(f"To sync: {len(folders_to_sync)} folders")
+        elif days:
+            # Sync last N days
+            from datetime import timedelta
+            today = datetime.now().date()
+            cutoff = today - timedelta(days=days)
+            folders_to_sync = [f for f in all_folders if f['data_date'] >= cutoff]
+            logger.info(f"Syncing folders from last {days} days ({len(folders_to_sync)} folders)")
+        else:
+            # Default: sync today's folder or latest if today not found
+            today = datetime.now().date()
+            folders_to_sync = [f for f in all_folders if f['data_date'] == today]
+            if not folders_to_sync:
+                # Fall back to latest
+                folders_to_sync = [all_folders[0]]
+                logger.info(f"No folder for today, using latest: {folders_to_sync[0]['name']}")
+
+        if not folders_to_sync:
+            logger.info("No folders to sync (all already processed)")
+            return True
+
+        # Process each folder
+        success_count = 0
+        for folder in folders_to_sync:
+            logger.info("-" * 70)
+            if self.sync_folder(folder):
+                success_count += 1
+
+        logger.info("=" * 70)
+        logger.info(f"Sync complete: {success_count}/{len(folders_to_sync)} folders processed")
+        logger.info("=" * 70)
+
+        return success_count > 0
+
+
+def run_drive_sync(folder_name=None, sync_all=False, days=None):
+    """Entry point for Drive sync.
+
+    Args:
+        folder_name: Specific folder name to sync
+        sync_all: If True, sync all available folders
+        days: Number of recent days to sync
+    """
     syncer = DriveSyncer()
-    return syncer.sync()
+    return syncer.sync(folder_name=folder_name, sync_all=sync_all, days=days)
 
 
 if __name__ == "__main__":
-    run_drive_sync()
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Sync multimodal forecasts from Google Drive')
+    parser.add_argument('folder', nargs='?', help='Specific folder name to sync (e.g., 31012026)')
+    parser.add_argument('--all', '-a', action='store_true', help='Sync all available folders')
+    parser.add_argument('--days', '-d', type=int, help='Sync last N days')
+
+    args = parser.parse_args()
+
+    if args.all:
+        run_drive_sync(sync_all=True)
+    elif args.days:
+        run_drive_sync(days=args.days)
+    elif args.folder:
+        run_drive_sync(folder_name=args.folder)
+    else:
+        # Default: sync today or latest
+        run_drive_sync()
