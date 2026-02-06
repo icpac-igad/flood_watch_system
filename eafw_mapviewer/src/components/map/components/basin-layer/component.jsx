@@ -2,14 +2,15 @@ import { useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
 
-import { getInteractionSelected } from '@/components/map/selectors';
+import { getInteractionSelected, selectParamInteractions } from '@/components/map/selectors';
 
 /**
  * BasinLayer Component
- * Auto-loads and displays the basin boundary when a multimodal forecast point is clicked
- * Uses hybas_id from the clicked point to fetch basin geometry from the API
+ * Displays basin boundary on the map in two scenarios:
+ * 1. When a multimodal forecast point is clicked (hybas_id from point properties)
+ * 2. When the watershed filter dropdown selects a basin (basin_filter + basin_id from Redux)
  */
-const BasinLayer = ({ map, selected }) => {
+const BasinLayer = ({ map, selected, paramInteractions }) => {
   const currentBasinIdRef = useRef(null);
   const sourceAddedRef = useRef(false);
 
@@ -114,13 +115,34 @@ const BasinLayer = ({ map, selected }) => {
     }
   }, [map, removeBasinLayers]);
 
+  // Watch for watershed filter changes (dropdown selection)
+  useEffect(() => {
+    if (!map) return;
+
+    const basinFilter = paramInteractions?.basin_filter;
+    const basinId = paramInteractions?.basin_id;
+
+    if (basinFilter && basinId) {
+      addBasinToMap(basinId);
+    } else if (!basinFilter && currentBasinIdRef.current) {
+      // Basin filter was cleared — only remove if no point-click basin active
+      if (!selected?.data?.hybas_id) {
+        removeBasinLayers();
+        currentBasinIdRef.current = null;
+      }
+    }
+  }, [map, paramInteractions?.basin_filter, paramInteractions?.basin_id, addBasinToMap, removeBasinLayers]);
+
   // Watch for interaction changes to detect point clicks with hybas_id
   useEffect(() => {
     if (!map) return;
 
-    // Clear basin when no selection
+    // If basin filter is active, it takes priority — don't clear on deselect
+    const basinFilterActive = paramInteractions?.basin_filter && paramInteractions?.basin_id;
+
+    // Clear basin when no selection (and no filter active)
     if (!selected) {
-      if (currentBasinIdRef.current) {
+      if (currentBasinIdRef.current && !basinFilterActive) {
         removeBasinLayers();
         currentBasinIdRef.current = null;
       }
@@ -128,30 +150,21 @@ const BasinLayer = ({ map, selected }) => {
     }
 
     // Extract hybas_id from selected point data
-    // The selected object has 'data' with merged feature properties
     const { data } = selected;
-    if (!data) {
-      console.log('[BasinLayer] No data in selected:', selected);
-      return;
-    }
+    if (!data) return;
 
-    // hybas_id is directly on the data object (from MVT feature properties)
-    let hybasId = data.hybas_id;
-
-    // Debug: log data structure
-    console.log('[BasinLayer] Selected data:', data);
-    console.log('[BasinLayer] hybas_id:', hybasId);
+    const hybasId = data.hybas_id;
 
     if (hybasId) {
       addBasinToMap(hybasId);
-    } else {
-      // If clicking a point without hybas_id, clear the basin
+    } else if (!basinFilterActive) {
+      // If clicking a point without hybas_id and no filter active, clear the basin
       if (currentBasinIdRef.current) {
         removeBasinLayers();
         currentBasinIdRef.current = null;
       }
     }
-  }, [map, selected, addBasinToMap, removeBasinLayers]);
+  }, [map, selected, paramInteractions?.basin_filter, paramInteractions?.basin_id, addBasinToMap, removeBasinLayers]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -166,11 +179,13 @@ const BasinLayer = ({ map, selected }) => {
 BasinLayer.propTypes = {
   map: PropTypes.object,
   selected: PropTypes.object,
+  paramInteractions: PropTypes.object,
 };
 
-// Connect to Redux using the same selector as the popup
+// Connect to Redux — selected point + watershed filter state
 const mapStateToProps = (state) => ({
   selected: getInteractionSelected(state),
+  paramInteractions: selectParamInteractions(state),
 });
 
 export default connect(mapStateToProps)(BasinLayer);

@@ -211,6 +211,31 @@ services:
     depends_on:
       - eafw_cms
 
+  eafw_api:
+    platform: linux/x86_64
+    container_name: ${API_CNTR_NAME:-eafw-api}
+    image: ${API_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-api:latest}
+    restart: ${RESTART_POLICY:-always}
+    depends_on:
+      - eafw_pgbouncer
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${API_HOST_PORT:-9069}:9060
+    environment:
+      - EAFW_DATABASE_HOST=${PGB_HOST:-eafw_pgbouncer}
+      - EAFW_DATABASE_PORT=${PGB_LISTEN_PORT:-6432}
+      - EAFW_DATABASE_NAME=${CMS_DB_NAME}
+      - EAFW_DATABASE_USER=${CMS_DB_USER}
+      - EAFW_DATABASE_PASSWORD=${CMS_DB_PASSWORD}
+      - EAFW_DEBUG=${API_DEBUG:-false}
+      - EAFW_CORS_ORIGINS=["*"]
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9060/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   eafw_jobs:
     platform: linux/x86_64
     container_name: ${JOBS_CNTR_NAME:-eafw-jobs}

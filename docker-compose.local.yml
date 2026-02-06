@@ -1,4 +1,5 @@
 # EAFW FloodWatch - Local Development
+# Ports: 9060-9069 (nginx entry: 9068)
 # Usage: docker compose -f docker-compose.local.yml up --build
 
 networks:
@@ -18,7 +19,7 @@ services:
       - POSTGRES_PASSWORD=${CMS_DB_PASSWORD}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     ports:
-      - ${HOST_IP:-127.0.0.1}:${DB_HOST_PORT:-5431}:5432
+      - ${HOST_IP:-127.0.0.1}:${DB_HOST_PORT:-9060}:5432
     volumes:
       - ${CMS_DB_VOLUME}:/var/lib/postgresql/data/:z
       - ./eafw_docker/db-init:/docker-entrypoint-initdb.d/:z
@@ -31,7 +32,7 @@ services:
     depends_on:
       - eafw_db
     ports:
-      - ${PGB_HOST_IP:-${HOST_IP:-127.0.0.1}}:${PGB_HOST_PORT:-5463}:${PGB_LISTEN_PORT:-6432}
+      - ${PGB_HOST_IP:-${HOST_IP:-127.0.0.1}}:${PGB_HOST_PORT:-9061}:${PGB_LISTEN_PORT:-6432}
     environment:
       - LISTEN_PORT=${PGB_LISTEN_PORT:-6432}
       - DB_HOST=${PG_HOST:-eafw_db}
@@ -58,7 +59,7 @@ services:
     container_name: ${MEMCACHED_CNTR_NAME:-eafw-memcached}
     restart: ${RESTART_POLICY:-unless-stopped}
     ports:
-      - ${HOST_IP:-127.0.0.1}:${CACHE_HOST_PORT:-11211}:11211
+      - ${HOST_IP:-127.0.0.1}:${CACHE_HOST_PORT:-9062}:11211
     entrypoint:
       - memcached
       - -m 1024
@@ -77,7 +78,7 @@ services:
       sh -c "/wait
       && ./docker-entrypoint.sh
       && /opt/venv/bin/gunicorn geomanagerweb.asgi
-      --bind 0.0.0.0:8000 --workers=${CMS_NUM_OF_WORKERS} --worker-class=uvicorn.workers.UvicornWorker"
+      --bind 0.0.0.0:8000 --workers=${CMS_NUM_OF_WORKERS:-4} --worker-class=uvicorn.workers.UvicornWorker"
     expose:
       - "8000"
     environment:
@@ -86,33 +87,24 @@ services:
       - DEBUG=${CMS_DEBUG:-False}
       - WAGTAIL_SITE_NAME=${CMS_SITE_NAME:-localhost}
       - ADMIN_URL_PATH=${ADMIN_URL_PATH:-cms-admin}
-      - TIME_ZONE=${TIME_ZONE:-Nairobi/Africa}
+      - TIME_ZONE=${TIME_ZONE:-Africa/Nairobi}
       - SECRET_KEY=${SECRET_KEY}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-127.0.0.1,localhost}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://127.0.0.1:9068,http://localhost:9068}
       - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@${PGB_HOST:-eafw_pgbouncer}:${PGB_PORT:-6432}/${CMS_DB_NAME}
       - MEMCACHED_URI=${MEMCACHED_URI:-eafw_memcached:11211}
       - MAPVIEWER_SERVER_URL=${MAPVIEWER_SERVER_URL:-http://eafw_mapviewer:3000}
-      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://localhost:8000}
-      - CMS_BASE_URL=${CMS_BASE_URL:-http://localhost:8000}
+      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://localhost:9068}
+      - CMS_BASE_URL=${CMS_BASE_URL:-http://localhost:9068}
       - LANGUAGE_CODE=${CMS_DEFAULT_LANGUAGE_CODE:-en}
       - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
       - GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-geomanagerweb.settings.production}
       - DJANGO_ALLOW_ASYNC_UNSAFE=${ALLOW_ASYNC_UNSAFE:-true}
-      - SFTP_HOST=${SFTP_HOST}
-      - SFTP_PORT=${SFTP_PORT:-22}
-      - SFTP_USERNAME=${SFTP_USERNAME}
-      - SFTP_PASSWORD=${SFTP_PASSWORD}
-      - ENSEMBLE_FTP_HOST=${ENSEMBLE_FTP_HOST}
-      - ENSEMBLE_FTP_PORT=${ENSEMBLE_FTP_PORT:-21}
-      - ENSEMBLE_FTP_USER=${ENSEMBLE_FTP_USER}
-      - ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}
-      - ENSEMBLE_FTP_DIR=${ENSEMBLE_FTP_DIR}
     depends_on:
       - eafw_db
     ports:
-      - ${HOST_IP:-127.0.0.1}:${WEB_HOST_PORT:-8181}:8000
+      - ${HOST_IP:-127.0.0.1}:${WEB_HOST_PORT:-9063}:8000
     volumes:
       - ${CMS_STATIC_VOLUME}:/opt/eafw_cms/static:z
       - ${CMS_MEDIA_VOLUME}:/opt/eafw_cms/media:z
@@ -145,7 +137,7 @@ services:
       - ${MAPVIEWER_NEXT_STATIC_VOLUME}:/app/nginx/.next/static:z
       - ./eafw_docker/volumes/mapviewer/.cache:/root/.cache:z
     ports:
-      - ${HOST_IP:-127.0.0.1}:${UI_HOST_PORT:-3130}:3000
+      - ${HOST_IP:-127.0.0.1}:${UI_HOST_PORT:-9064}:3000
 
   eafw_mapserver:
     build:
@@ -162,7 +154,7 @@ services:
     depends_on:
       - eafw_pgbouncer
     ports:
-      - ${HOST_IP:-127.0.0.1}:${MS_HOST_PORT:-8482}:${MS_APP_PORT:-80}
+      - ${HOST_IP:-127.0.0.1}:${MS_HOST_PORT:-9065}:${MS_APP_PORT:-80}
     environment:
       - MS_DEBUGLEVEL=${MS_DEBUGLEVEL:-2}
       - MS_ERRORFILE=${MS_ERRORFILE:-stderr}
@@ -171,7 +163,7 @@ services:
       - MAPSERVER_CONFIG_FILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.conf
       - MAX_PROCESSES=${MS_MAX_PROCESSES:-10}
       - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
-      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://localhost:8482/mapserver/}
+      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://localhost:9065/mapserver/}
       - DB_HOST=${PGB_HOST:-eafw_pgbouncer}
       - DB_MAP_USER=${CMS_DB_USER}
       - DB_MAP_USER_PASSWORD=${CMS_DB_PASSWORD}
@@ -197,11 +189,11 @@ services:
     depends_on:
       - eafw_mapserver
     ports:
-      - ${HOST_IP:-127.0.0.1}:${MC_HOST_PORT:-8483}:${MC_APP_PORT:-80}
+      - ${HOST_IP:-127.0.0.1}:${MC_HOST_PORT:-9066}:${MC_APP_PORT:-80}
     volumes:
       - ${MC_TILES_DIR:-./data/mapcache/tiles}:${APP_TILES_DIR:-/opt/tiles}:z
     environment:
-      - SERVICE_URL=${MC_SERVICE_URL:-http://localhost:8483/mapcache/}
+      - SERVICE_URL=${MC_SERVICE_URL:-http://localhost:9066/mapcache/}
       - SOURCE_URL=${MC_SOURCE_URL:-http://eafw_mapserver/mapserver/?}
       - MAPCACHE_CONFIG_FILE=${MC_CONFIG_FILE:-/opt/mapcache/mapcache.xml}
       - WEB_GRID_EXTENTS=${WEB_GRID_EXTENTS:-2337709 -1329087 5792092 2632018}
@@ -227,7 +219,7 @@ services:
       - TS_DEBUG=${TILESERV_DEBUG:-false}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     ports:
-      - ${HOST_IP:-127.0.0.1}:${TILESERV_HOST_PORT:-7471}:7800
+      - ${HOST_IP:-127.0.0.1}:${TILESERV_HOST_PORT:-9067}:7800
 
   eafw_nginx:
     container_name: ${NGINX_CNTR_NAME:-eafw-nginx}
@@ -239,9 +231,39 @@ services:
       - ${MAPVIEWER_NEXT_STATIC_VOLUME}:/mapviewer/static:z
       - ./eafw_docker/nginx/nginx.local.conf:/etc/nginx/nginx.conf:z
     ports:
-      - ${HOST_IP:-127.0.0.1}:${CMS_HOST_PORT:-8180}:80
+      - ${HOST_IP:-127.0.0.1}:${CMS_HOST_PORT:-9068}:80
     depends_on:
       - eafw_cms
+      - eafw_api
+
+  eafw_api:
+    platform: linux/x86_64
+    container_name: ${API_CNTR_NAME:-eafw-api}
+    image: ${API_IMAGE_NAME:-icpac/eafw-api:local}
+    pull_policy: never
+    build:
+      context: ./eafw_api
+      dockerfile: Dockerfile
+    restart: ${RESTART_POLICY:-unless-stopped}
+    depends_on:
+      - eafw_pgbouncer
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${API_HOST_PORT:-9069}:9060
+    environment:
+      - EAFW_DATABASE_HOST=${PGB_HOST:-eafw_pgbouncer}
+      - EAFW_DATABASE_PORT=${PGB_LISTEN_PORT:-6432}
+      - EAFW_DATABASE_NAME=${CMS_DB_NAME}
+      - EAFW_DATABASE_USER=${CMS_DB_USER}
+      - EAFW_DATABASE_PASSWORD=${CMS_DB_PASSWORD}
+      - EAFW_DEBUG=${API_DEBUG:-false}
+      - EAFW_CORS_ORIGINS=["*"]
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9060/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   eafw_jobs:
     platform: linux/x86_64
@@ -270,11 +292,6 @@ services:
       - SYNC_SOURCE=${SYNC_SOURCE:-drive}
       - SYNC_INTERVAL=${SYNC_INTERVAL:-21600}
       - SYNC_DAYS=${SYNC_DAYS:-7}
-      - WRF_FTP_HOST=${WRF_FTP_HOST:-197.254.13.228}
-      - WRF_FTP_PORT=${WRF_FTP_PORT:-21}
-      - WRF_FTP_USER=${WRF_FTP_USER}
-      - WRF_FTP_PASSWORD=${WRF_FTP_PASSWORD}
-      - WRF_REMOTE_DIR=${WRF_REMOTE_DIR:-/SharedData/wrf/weekly}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     volumes:
       - ${JOBS_DATA_VOLUME:-./eafw_jobs/data}:/opt/data:z

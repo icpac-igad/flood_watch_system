@@ -1089,8 +1089,9 @@ class CountrySummaryWithBoundsView(View):
                     emergency_threshold = 450.0
 
                 # Query to get country summary with alert counts and bounds
-                # Uses first forecast day (same basis as situation-summary) and
-                # admin0 spatial join for robust country mapping.
+                # Uses first forecast day (same basis as situation-summary).
+                # Fast path derives ISO country code from admin_name prefix,
+                # then falls back to spatial join only when prefix is missing/invalid.
                 cursor.execute("""
                     WITH query_params AS (
                         SELECT %s::date as query_date
@@ -1105,6 +1106,7 @@ class CountrySummaryWithBoundsView(View):
                         SELECT
                             cp.point_id,
                             cp.geom,
+                            cp.admin_name,
                             COALESCE(f.daily_avg, 0) as daily_avg
                         FROM gha.multimodal_control_points cp
                         CROSS JOIN query_params qp
@@ -1118,15 +1120,41 @@ class CountrySummaryWithBoundsView(View):
                         SELECT
                             pd.point_id,
                             pd.daily_avg,
-                            -- Get country name from spatial join with admin0
-                            COALESCE(a0.country, 'Unknown') as country_name
+                            COALESCE(
+                                CASE
+                                    WHEN UPPER(SUBSTRING(COALESCE(pd.admin_name, '') FROM 1 FOR 2)) IN (
+                                        'ET', 'KE', 'UG', 'SD', 'SS', 'TZ', 'RW', 'BI', 'SO', 'DJ', 'ER'
+                                    ) THEN UPPER(SUBSTRING(pd.admin_name FROM 1 FOR 2))
+                                    ELSE NULL
+                                END,
+                                (
+                                    SELECT CASE
+                                        WHEN LOWER(TRIM(a0.country)) = 'ethiopia' THEN 'ET'
+                                        WHEN LOWER(TRIM(a0.country)) = 'kenya' THEN 'KE'
+                                        WHEN LOWER(TRIM(a0.country)) = 'uganda' THEN 'UG'
+                                        WHEN LOWER(TRIM(a0.country)) = 'sudan' THEN 'SD'
+                                        WHEN LOWER(TRIM(a0.country)) = 'south sudan' THEN 'SS'
+                                        WHEN LOWER(TRIM(a0.country)) IN ('tanzania', 'zanzibar') THEN 'TZ'
+                                        WHEN LOWER(TRIM(a0.country)) = 'rwanda' THEN 'RW'
+                                        WHEN LOWER(TRIM(a0.country)) = 'burundi' THEN 'BI'
+                                        WHEN LOWER(TRIM(a0.country)) = 'somalia' THEN 'SO'
+                                        WHEN LOWER(TRIM(a0.country)) = 'djibouti' THEN 'DJ'
+                                        WHEN LOWER(TRIM(a0.country)) = 'eritrea' THEN 'ER'
+                                        ELSE 'UN'
+                                    END
+                                    FROM gha.admin0 a0
+                                    WHERE a0.geom && pd.geom
+                                      AND ST_Covers(a0.geom, pd.geom)
+                                    LIMIT 1
+                                ),
+                                'UN'
+                            ) as country_code
                         FROM point_data pd
-                        LEFT JOIN gha.admin0 a0 ON ST_Within(pd.geom, a0.geom)
                     ),
                     point_risk AS (
                         SELECT
                             point_id,
-                            country_name,
+                            country_code,
                             daily_avg,
                             CASE
                                 WHEN daily_avg >= %s THEN 'emergency'
@@ -1138,7 +1166,7 @@ class CountrySummaryWithBoundsView(View):
                     ),
                     country_agg AS (
                         SELECT
-                            country_name,
+                            country_code,
                             SUM(CASE WHEN risk_level = 'emergency' THEN 1 ELSE 0 END) as emergency,
                             SUM(CASE WHEN risk_level = 'alarm' THEN 1 ELSE 0 END) as alarm,
                             SUM(CASE WHEN risk_level = 'warning' THEN 1 ELSE 0 END) as warning,
@@ -1148,20 +1176,40 @@ class CountrySummaryWithBoundsView(View):
                             SUM(CASE WHEN risk_level = 'alarm' THEN 10 ELSE 0 END) +
                             SUM(CASE WHEN risk_level = 'warning' THEN 1 ELSE 0 END) as severity_score
                         FROM point_risk
-                        GROUP BY country_name
+                        GROUP BY country_code
                     ),
                     country_bounds AS (
                         SELECT
-                            country as name,
-                            ST_XMin(ST_Envelope(geom)) as west,
-                            ST_YMin(ST_Envelope(geom)) as south,
-                            ST_XMax(ST_Envelope(geom)) as east,
-                            ST_YMax(ST_Envelope(geom)) as north
-                        FROM gha.admin0
-                        WHERE country IS NOT NULL AND country != ''
+                            country_code,
+                            MIN(ST_XMin(ST_Envelope(geom))) as west,
+                            MIN(ST_YMin(ST_Envelope(geom))) as south,
+                            MAX(ST_XMax(ST_Envelope(geom))) as east,
+                            MAX(ST_YMax(ST_Envelope(geom))) as north
+                        FROM (
+                            SELECT
+                                CASE
+                                    WHEN LOWER(TRIM(a0.country)) = 'ethiopia' THEN 'ET'
+                                    WHEN LOWER(TRIM(a0.country)) = 'kenya' THEN 'KE'
+                                    WHEN LOWER(TRIM(a0.country)) = 'uganda' THEN 'UG'
+                                    WHEN LOWER(TRIM(a0.country)) = 'sudan' THEN 'SD'
+                                    WHEN LOWER(TRIM(a0.country)) = 'south sudan' THEN 'SS'
+                                    WHEN LOWER(TRIM(a0.country)) IN ('tanzania', 'zanzibar') THEN 'TZ'
+                                    WHEN LOWER(TRIM(a0.country)) = 'rwanda' THEN 'RW'
+                                    WHEN LOWER(TRIM(a0.country)) = 'burundi' THEN 'BI'
+                                    WHEN LOWER(TRIM(a0.country)) = 'somalia' THEN 'SO'
+                                    WHEN LOWER(TRIM(a0.country)) = 'djibouti' THEN 'DJ'
+                                    WHEN LOWER(TRIM(a0.country)) = 'eritrea' THEN 'ER'
+                                    ELSE 'UN'
+                                END as country_code,
+                                a0.geom
+                            FROM gha.admin0 a0
+                            WHERE a0.country IS NOT NULL AND a0.country != ''
+                        ) country_polygons
+                        WHERE country_code != 'UN'
+                        GROUP BY country_code
                     )
                     SELECT
-                        ca.country_name,
+                        ca.country_code,
                         ca.emergency,
                         ca.alarm,
                         ca.warning,
@@ -1172,24 +1220,23 @@ class CountrySummaryWithBoundsView(View):
                         cb.east,
                         cb.north
                     FROM country_agg ca
-                    LEFT JOIN country_bounds cb ON LOWER(TRIM(ca.country_name)) = LOWER(TRIM(cb.name))
+                    LEFT JOIN country_bounds cb ON cb.country_code = ca.country_code
                     WHERE ca.emergency > 0 OR ca.alarm > 0 OR ca.warning > 0
                     ORDER BY ca.severity_score DESC, ca.emergency DESC, ca.alarm DESC, ca.warning DESC
                 """, [latest_date,
                       emergency_threshold, alarm_threshold, warning_threshold])
 
                 countries = []
-                # Map country names to ISO codes
-                country_codes = {
-                    'ethiopia': 'ET', 'kenya': 'KE', 'uganda': 'UG',
-                    'sudan': 'SD', 'south sudan': 'SS', 'tanzania': 'TZ',
-                    'rwanda': 'RW', 'burundi': 'BI', 'somalia': 'SO',
-                    'djibouti': 'DJ', 'eritrea': 'ER'
+                country_names = {
+                    'ET': 'Ethiopia', 'KE': 'Kenya', 'UG': 'Uganda',
+                    'SD': 'Sudan', 'SS': 'South Sudan', 'TZ': 'Tanzania',
+                    'RW': 'Rwanda', 'BI': 'Burundi', 'SO': 'Somalia',
+                    'DJ': 'Djibouti', 'ER': 'Eritrea', 'UN': 'Unknown'
                 }
 
                 for row in cursor.fetchall():
-                    country_name = row[0] or 'Unknown'
-                    code = country_codes.get(country_name.lower().strip(), country_name[:2].upper())
+                    code = row[0] or 'UN'
+                    country_name = country_names.get(code, code)
 
                     country_data = {
                         'code': code,
@@ -1658,49 +1705,61 @@ class HotspotsView(View):
 
 
 # =============================================================================
-# FloodWatch Custom: Country Assessments API
-# For hydrologists and meteorologists to submit country-level assessments
+# FloodWatch: Expert Assessments API (gha.expert_assessments)
+# Professional multi-stakeholder flood risk assessment system
 # =============================================================================
 class CountryAssessmentsView(View):
-    """API endpoint for country-level flood assessments"""
+    """
+    API for country/regional level expert flood risk assessments.
+    Used by hydrologists and meteorologists to submit their professional assessments.
+    Data stored in gha.expert_assessments table.
+    """
 
     def get(self, request):
         from django.db import connection
 
         date_str = request.GET.get('date')
-        expert_type = request.GET.get('expert_type', 'hydrologist')
+        expert_type = request.GET.get('expert_type')
         country_code = request.GET.get('country')
+        published_only = request.GET.get('published', 'false').lower() == 'true'
 
         with connection.cursor() as cursor:
             try:
                 query = """
-                    SELECT id, expert_type, forecast_date, country_code, country_name,
-                           risk_level, comment, affected_areas, recommendations,
-                           updated_by, updated_at
-                    FROM floodwatch.country_assessments
-                    WHERE expert_type = %s
+                    SELECT id, expert_type, assessment_date, valid_from, valid_to,
+                           country_code, country_name, risk_level, assessment_comment,
+                           affected_areas, recommendations, created_by, created_at,
+                           updated_at, is_published
+                    FROM gha.expert_assessments
+                    WHERE 1=1
                 """
-                params = [expert_type]
+                params = []
+
+                if expert_type:
+                    query += " AND expert_type = %s"
+                    params.append(expert_type)
 
                 if date_str:
-                    query += " AND forecast_date = %s"
+                    query += " AND assessment_date = %s"
                     params.append(date_str)
 
                 if country_code:
                     query += " AND country_code = %s"
                     params.append(country_code)
 
-                query += " ORDER BY country_name"
+                if published_only:
+                    query += " AND is_published = TRUE"
+
+                query += " ORDER BY assessment_date DESC, country_name"
 
                 cursor.execute(query, params)
                 columns = [col[0] for col in cursor.description]
                 assessments = []
                 for row in cursor.fetchall():
                     item = dict(zip(columns, row))
-                    if item.get('forecast_date'):
-                        item['forecast_date'] = item['forecast_date'].isoformat()
-                    if item.get('updated_at'):
-                        item['updated_at'] = item['updated_at'].isoformat()
+                    for date_field in ['assessment_date', 'valid_from', 'valid_to', 'created_at', 'updated_at']:
+                        if item.get(date_field):
+                            item[date_field] = item[date_field].isoformat() if hasattr(item[date_field], 'isoformat') else str(item[date_field])
                     assessments.append(item)
 
             except Exception as e:
@@ -1724,55 +1783,44 @@ class CountryAssessmentsView(View):
             return response
 
         expert_type = data.get('expert_type', 'hydrologist')
-        forecast_date = data.get('forecast_date')
-        country_code = data.get('country_code')
-        country_name = data.get('country_name')
+        assessment_date = data.get('forecast_date') or data.get('assessment_date')
+        country_code = data.get('country_code', 'REGION')
+        country_name = data.get('country_name', 'East Africa Region')
         risk_level = data.get('risk_level', 'normal')
         comment = data.get('comment', '')
         affected_areas = data.get('affected_areas', '')
         recommendations = data.get('recommendations', '')
+        created_by = data.get('created_by', '')
 
-        if not all([forecast_date, country_code]):
-            response = JsonResponse({'error': 'Missing required fields'}, status=400)
+        if not assessment_date:
+            response = JsonResponse({'error': 'Assessment date is required'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        if not comment.strip():
+            response = JsonResponse({'error': 'Assessment comment is required'}, status=400)
             response['Access-Control-Allow-Origin'] = '*'
             return response
 
         with connection.cursor() as cursor:
             try:
-                cursor.execute("CREATE SCHEMA IF NOT EXISTS floodwatch")
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS floodwatch.country_assessments (
-                        id SERIAL PRIMARY KEY,
-                        expert_type VARCHAR(50) NOT NULL DEFAULT 'hydrologist',
-                        forecast_date DATE NOT NULL,
-                        country_code VARCHAR(10) NOT NULL,
-                        country_name VARCHAR(100),
-                        risk_level VARCHAR(50) NOT NULL DEFAULT 'normal',
-                        comment TEXT,
-                        affected_areas TEXT,
-                        recommendations TEXT,
-                        updated_by VARCHAR(200),
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(expert_type, forecast_date, country_code)
-                    )
-                """)
-
-                cursor.execute("""
-                    INSERT INTO floodwatch.country_assessments
-                        (expert_type, forecast_date, country_code, country_name, risk_level,
-                         comment, affected_areas, recommendations, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                    ON CONFLICT (expert_type, forecast_date, country_code)
+                    INSERT INTO gha.expert_assessments
+                        (expert_type, assessment_date, country_code, country_name,
+                         risk_level, assessment_comment, affected_areas, recommendations,
+                         created_by, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (expert_type, assessment_date, country_code)
                     DO UPDATE SET
                         risk_level = EXCLUDED.risk_level,
-                        comment = EXCLUDED.comment,
+                        assessment_comment = EXCLUDED.assessment_comment,
                         affected_areas = EXCLUDED.affected_areas,
                         recommendations = EXCLUDED.recommendations,
                         country_name = EXCLUDED.country_name,
                         updated_at = CURRENT_TIMESTAMP
                     RETURNING id
-                """, [expert_type, forecast_date, country_code, country_name, risk_level,
-                      comment, affected_areas, recommendations])
+                """, [expert_type, assessment_date, country_code, country_name,
+                      risk_level, comment, affected_areas, recommendations, created_by])
 
                 result = cursor.fetchone()
                 assessment_id = result[0] if result else None
@@ -1782,7 +1830,11 @@ class CountryAssessmentsView(View):
                 response['Access-Control-Allow-Origin'] = '*'
                 return response
 
-        response = JsonResponse({'success': True, 'id': assessment_id})
+        response = JsonResponse({
+            'success': True,
+            'id': assessment_id,
+            'message': 'Expert assessment saved successfully'
+        })
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
         response['Access-Control-Allow-Headers'] = 'Content-Type'
@@ -1931,34 +1983,35 @@ class RiverBasinsView(View):
 
 
 # =============================================================================
-# FloodWatch Custom: Expert Risk Assessment API
-# Allows hydrologists and meteorologists to save/retrieve risk assessments per admin2
+# FloodWatch: District Risk Levels API (gha.district_risk_levels)
+# Allows experts to set risk levels at admin2 (district) level
 # =============================================================================
 class RiskAssessmentView(View):
-    """API endpoint for expert risk assessments"""
+    """
+    API for district-level flood risk assessments.
+    Experts can set risk levels for individual districts on the map.
+    Data stored in gha.district_risk_levels table.
+    """
 
     def get(self, request):
         from django.db import connection
 
-        # Get parameters
         date_str = request.GET.get('date')
-        expert_type = request.GET.get('expert_type')  # hydrologist or meteorologist
+        expert_type = request.GET.get('expert_type')
         country = request.GET.get('country')
 
         with connection.cursor() as cursor:
             try:
-                # Build query
                 query = """
-                    SELECT
-                        id, expert_type, forecast_date, country, admin1, admin2, gid_2,
-                        risk_level, comment, updated_by, updated_at
-                    FROM floodwatch.risk_assessments
+                    SELECT id, expert_type, assessment_date, country, admin1, admin2,
+                           gid_2, risk_level, comment, created_at, updated_at
+                    FROM gha.district_risk_levels
                     WHERE 1=1
                 """
                 params = []
 
                 if date_str:
-                    query += " AND forecast_date = %s"
+                    query += " AND assessment_date = %s"
                     params.append(date_str)
 
                 if expert_type:
@@ -1969,28 +2022,22 @@ class RiskAssessmentView(View):
                     query += " AND country = %s"
                     params.append(country)
 
-                query += " ORDER BY updated_at DESC"
+                query += " ORDER BY country, admin1, admin2"
 
                 cursor.execute(query, params)
                 columns = [col[0] for col in cursor.description]
                 assessments = []
                 for row in cursor.fetchall():
                     item = dict(zip(columns, row))
-                    # Format dates
-                    if item.get('forecast_date'):
-                        item['forecast_date'] = item['forecast_date'].isoformat()
-                    if item.get('updated_at'):
-                        item['updated_at'] = item['updated_at'].isoformat()
+                    for date_field in ['assessment_date', 'created_at', 'updated_at']:
+                        if item.get(date_field):
+                            item[date_field] = item[date_field].isoformat() if hasattr(item[date_field], 'isoformat') else str(item[date_field])
                     assessments.append(item)
 
             except Exception as e:
-                # Table may not exist yet - return empty
                 assessments = []
 
-        response = JsonResponse({
-            'assessments': assessments,
-            'count': len(assessments)
-        })
+        response = JsonResponse({'assessments': assessments, 'count': len(assessments)})
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
         response['Access-Control-Allow-Headers'] = 'Content-Type'
@@ -2007,9 +2054,8 @@ class RiskAssessmentView(View):
             response['Access-Control-Allow-Origin'] = '*'
             return response
 
-        # Required fields
         expert_type = data.get('expert_type', 'hydrologist')
-        forecast_date = data.get('forecast_date')
+        assessment_date = data.get('forecast_date') or data.get('assessment_date')
         country = data.get('country')
         admin1 = data.get('admin1')
         admin2 = data.get('admin2')
@@ -2017,62 +2063,38 @@ class RiskAssessmentView(View):
         comment = data.get('comment', '')
         gid_2 = data.get('gid_2')
 
-        if not all([forecast_date, country, admin1, admin2]):
-            response = JsonResponse({'error': 'Missing required fields'}, status=400)
+        if not all([assessment_date, country, admin1, admin2]):
+            response = JsonResponse({'error': 'Missing required fields: date, country, admin1, admin2'}, status=400)
             response['Access-Control-Allow-Origin'] = '*'
             return response
 
         with connection.cursor() as cursor:
             try:
-                # Create schema and table if not exists
                 cursor.execute("""
-                    CREATE SCHEMA IF NOT EXISTS floodwatch
-                """)
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS floodwatch.risk_assessments (
-                        id SERIAL PRIMARY KEY,
-                        expert_type VARCHAR(50) NOT NULL DEFAULT 'hydrologist',
-                        forecast_date DATE NOT NULL,
-                        country VARCHAR(100) NOT NULL,
-                        admin1 VARCHAR(200) NOT NULL,
-                        admin2 VARCHAR(200) NOT NULL,
-                        gid_2 VARCHAR(50),
-                        risk_level VARCHAR(50) NOT NULL DEFAULT 'normal',
-                        comment TEXT,
-                        updated_by VARCHAR(200),
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE(expert_type, forecast_date, country, admin1, admin2)
-                    )
-                """)
-
-                # Upsert (insert or update on conflict)
-                cursor.execute("""
-                    INSERT INTO floodwatch.risk_assessments
-                        (expert_type, forecast_date, country, admin1, admin2, gid_2, risk_level, comment, updated_at)
+                    INSERT INTO gha.district_risk_levels
+                        (expert_type, assessment_date, country, admin1, admin2, gid_2, risk_level, comment, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                    ON CONFLICT (expert_type, forecast_date, country, admin1, admin2)
+                    ON CONFLICT (expert_type, assessment_date, country, admin1, admin2)
                     DO UPDATE SET
                         risk_level = EXCLUDED.risk_level,
                         comment = EXCLUDED.comment,
                         gid_2 = EXCLUDED.gid_2,
                         updated_at = CURRENT_TIMESTAMP
                     RETURNING id
-                """, [expert_type, forecast_date, country, admin1, admin2, gid_2, risk_level, comment])
+                """, [expert_type, assessment_date, country, admin1, admin2, gid_2, risk_level, comment])
 
                 result = cursor.fetchone()
                 assessment_id = result[0] if result else None
 
             except Exception as e:
-                response = JsonResponse({
-                    'error': f'Database error: {str(e)}'
-                }, status=500)
+                response = JsonResponse({'error': f'Database error: {str(e)}'}, status=500)
                 response['Access-Control-Allow-Origin'] = '*'
                 return response
 
         response = JsonResponse({
             'success': True,
             'id': assessment_id,
-            'message': 'Assessment saved'
+            'message': 'District risk level saved'
         })
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'

@@ -2,15 +2,9 @@ import React, { PureComponent } from 'react';
 import PropTypes from 'prop-types';
 
 import Dropdown from '@/components/ui/dropdown';
-import { FilterPanelContainer, WHCAFilterContainer } from '@/services/filters';
+import { ProjectFilterContainer, WatershedFilterContainer } from '@/services/filters';
 
 import './styles.scss';
-
-// =============================================================================
-// FloodWatch Custom: Filter Section with WHCA Countries option
-// WHCA = Uganda, Rwanda, South Sudan, Ethiopia, Sudan (5 countries)
-// =============================================================================
-const ENABLE_WHCA_FILTER = false;
 
 class FilterSection extends PureComponent {
   static propTypes = {
@@ -19,28 +13,11 @@ class FilterSection extends PureComponent {
     setParamInteractions: PropTypes.func,
   };
 
-  componentDidMount() {
-    const { selectedFilterType, setParamInteractions } = this.props;
-    if (selectedFilterType !== 'whca' && setParamInteractions) {
-      setParamInteractions({ whca_filter: false, whca_countries: '' });
-    }
-  }
-
-  componentDidUpdate(prevProps) {
-    const { selectedFilterType, setParamInteractions } = this.props;
-    if (prevProps.selectedFilterType !== selectedFilterType &&
-        selectedFilterType !== 'whca' &&
-        setParamInteractions) {
-      setParamInteractions({ whca_filter: false, whca_countries: '' });
-    }
-  }
-
   render() {
     const { selectedFilterType, setSelectedFilterType, setParamInteractions } = this.props;
 
     const filterTypeOptions = [
-      { label: 'Filter by admin', value: 'admin' },
-      ...(ENABLE_WHCA_FILTER ? [{ label: 'WHCA Countries', value: 'whca' }] : []),
+      { label: 'Filter by project', value: 'project' },
       { label: 'Filter by cluster', value: 'cluster' },
       { label: 'Filter by watershed', value: 'watershed' },
       { label: 'Filter by protected areas', value: 'protected' },
@@ -52,8 +29,19 @@ class FilterSection extends PureComponent {
 
     const handleFilterTypeChange = (value) => {
       setSelectedFilterType(value);
-      if (value !== 'whca' && setParamInteractions) {
-        setParamInteractions({ whca_filter: false, whca_countries: '' });
+      if (setParamInteractions) {
+        const resetParams = {};
+        if (value !== 'project') {
+          resetParams.project_filter = false;
+          resetParams.project_countries = '';
+        }
+        if (value !== 'watershed') {
+          resetParams.basin_filter = false;
+          resetParams.basin_id = '';
+        }
+        if (Object.keys(resetParams).length > 0) {
+          setParamInteractions(resetParams);
+        }
       }
     };
 
@@ -71,20 +59,19 @@ class FilterSection extends PureComponent {
           />
         </div>
 
-        {selectedFilterType === 'admin' && (
+        {selectedFilterType === 'project' && (
           <div className="filter-content">
-            <FilterPanelContainer />
+            <ProjectFilterContainer />
           </div>
         )}
 
-        {/* FloodWatch Custom: WHCA Countries Filter */}
-        {ENABLE_WHCA_FILTER && selectedFilterType === 'whca' && (
+        {selectedFilterType === 'watershed' && (
           <div className="filter-content">
-            <WHCAFilterContainer />
+            <WatershedFilterContainer />
           </div>
         )}
 
-        {selectedFilterType !== 'admin' && (!ENABLE_WHCA_FILTER || selectedFilterType !== 'whca') && (
+        {selectedFilterType !== 'project' && selectedFilterType !== 'watershed' && (
           <div className="filter-placeholder">
             <p>Coming soon...</p>
           </div>

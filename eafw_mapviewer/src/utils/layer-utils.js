@@ -1,9 +1,9 @@
 // FloodWatch Custom: Params that should be passed to backend for filtering
 // These are the ONLY params we want to add to pg_tileserv URLs
-const BACKEND_FILTER_PARAMS = ['country_name', 'region_name', 'district_name', 'whca_countries', 'admin_level', 'risk_level'];
+const BACKEND_FILTER_PARAMS = ['country_name', 'region_name', 'district_name', 'project_countries', 'admin_level', 'risk_level', 'basin_id'];
 
 // Params that control frontend behavior but shouldn't be in URLs
-const FRONTEND_ONLY_PARAMS = ['admin_filter', 'whca_filter'];
+const FRONTEND_ONLY_PARAMS = ['admin_filter', 'whca_filter', 'project_filter', 'basin_filter'];
 
 // Params that are legacy GFW-style and should be ignored
 const LEGACY_PARAMS_TO_IGNORE = ['unit_id', 'MASK_UNIT_ID', 'MASK_ADMIN_LEVEL', 'MASK_AREA', 'border_level', 'project_name'];
@@ -82,6 +82,88 @@ const ADMIN_TILE_REPLACEMENTS = {
   'gha.admin_whca': { replacement: 'gha.admin_clipped' },
   // Climate layers - inundation history supports admin clipping (same function, just needs params)
   'climate.inundation_history_clipped': { replacement: 'climate.inundation_history_clipped' },
+};
+
+// =============================================================================
+// FloodWatch Custom: Basin/Watershed Filter - Tile source swapping
+// When basin filter is active, swap to basin-filtered tile functions
+// =============================================================================
+const BASIN_TILE_REPLACEMENTS = {
+  'gha.multimodal_points': { replacement: 'gha.multimodal_points_by_basin' },
+  'gha.multimodal_points_clustered': { replacement: 'gha.multimodal_points_by_basin' },
+  'gha.multimodal_points_by_admin': { replacement: 'gha.multimodal_points_by_basin' },
+};
+
+// =============================================================================
+// FloodWatch Custom: Project Filter - Tile source swapping
+// When project filter is active, swap to project-filtered versions that accept
+// project_countries param (comma-separated country names), uses ST_Within
+// =============================================================================
+const PROJECT_TILE_REPLACEMENTS = {
+  'gha.multimodal_points': { replacement: 'gha.multimodal_points_by_project' },
+  'gha.multimodal_points_clustered': { replacement: 'gha.multimodal_points_by_project' },
+  'gha.multimodal_points_by_admin': { replacement: 'gha.multimodal_points_by_project' },
+  'gha.admin0': { replacement: 'gha.admin_by_project', params: 'admin_level=0' },
+  'gha.admin1': { replacement: 'gha.admin_by_project', params: 'admin_level=1' },
+  'gha.admin2': { replacement: 'gha.admin_by_project', params: 'admin_level=2' },
+  'gha.admin_clipped': { replacement: 'gha.admin_by_project' },
+  'gha.admin_whca': { replacement: 'gha.admin_by_project' },
+};
+
+const applyBasinFilter = (tileUrl) => {
+  let modifiedUrl = tileUrl;
+  let newSourceLayer = null;
+
+  Object.entries(BASIN_TILE_REPLACEMENTS).forEach(([original, config]) => {
+    const replacement = typeof config === 'object' ? config.replacement : config;
+
+    if (!modifiedUrl.includes(original)) return;
+
+    newSourceLayer = replacement;
+
+    const escapedOriginal = original.replace('.', '\\.');
+    const pattern1 = new RegExp(`(tileserv/)${escapedOriginal}(/|\\?)`, 'g');
+    modifiedUrl = modifiedUrl.replace(pattern1, `$1${replacement}$2`);
+    const pattern2 = new RegExp(`(tileserv/)${escapedOriginal}(\\{)`, 'g');
+    modifiedUrl = modifiedUrl.replace(pattern2, `$1${replacement}/$2`);
+  });
+
+  return { url: modifiedUrl, sourceLayer: newSourceLayer };
+};
+
+const applyProjectFilter = (tileUrl) => {
+  let modifiedUrl = tileUrl;
+  let newSourceLayer = null;
+
+  Object.entries(PROJECT_TILE_REPLACEMENTS).forEach(([original, config]) => {
+    const replacement = typeof config === 'object' ? config.replacement : config;
+    const params = typeof config === 'object' ? config.params : null;
+
+    const escapedOriginal = original.replace('.', '\\.');
+    if (!modifiedUrl.includes(original)) return;
+
+    newSourceLayer = replacement;
+
+    const pattern1 = new RegExp(`(tileserv/)${escapedOriginal}(/|\\?)`, 'g');
+    modifiedUrl = modifiedUrl.replace(pattern1, `$1${replacement}$2`);
+    const pattern2 = new RegExp(`(tileserv/)${escapedOriginal}(\\{)`, 'g');
+    modifiedUrl = modifiedUrl.replace(pattern2, `$1${replacement}/$2`);
+
+    if (params && modifiedUrl.includes(replacement)) {
+      if (modifiedUrl.includes('?')) {
+        modifiedUrl = modifiedUrl + '&' + params;
+      } else if (modifiedUrl.includes('.pbf')) {
+        modifiedUrl = modifiedUrl.replace('.pbf', '.pbf?' + params);
+      }
+    }
+  });
+
+  // Remove unresolved template placeholders like date={{time}} that cause SQL errors
+  modifiedUrl = modifiedUrl.replace(/[&?]date=\{\{time\}\}/g, '');
+  // Clean up leading ? or trailing & if needed
+  modifiedUrl = modifiedUrl.replace(/\?&/, '?').replace(/\?$/, '');
+
+  return { url: modifiedUrl, sourceLayer: newSourceLayer };
 };
 
 const applyAdminFilter = (tileUrl) => {
@@ -165,17 +247,22 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
     ? layers.filter(l => (l.mapSide && l.mapSide === mapSide) || l.isBoundary)
     : layers;
 
-  // FloodWatch Custom: Check if WHCA filter is active
+  // FloodWatch Custom: Check filter states
+  const isProjectFilterActive = paramInteractions?.project_filter === true;
   const isWHCAFilterActive = paramInteractions?.whca_filter === true;
-
-  // FloodWatch Custom: Check if admin filter is active (user selected a country/region/district)
   const isAdminFilterActive = paramInteractions?.admin_filter === true;
-
-  // FloodWatch Custom: Has specific admin selection (country_name set means drilling down)
+  const isBasinFilterActive = paramInteractions?.basin_filter === true;
   const hasAdminSelection = !!(paramInteractions?.country_name);
 
   // Determine if any filtering is active
-  const isFilteringActive = isWHCAFilterActive || isAdminFilterActive;
+  const isFilteringActive = isProjectFilterActive || isWHCAFilterActive || isAdminFilterActive || isBasinFilterActive;
+
+  // DEBUG: log filter state
+  if (isProjectFilterActive || paramInteractions?.project_countries) {
+    console.log('[processLayers] project_filter:', isProjectFilterActive,
+      'project_countries:', paramInteractions?.project_countries,
+      'admin_filter:', isAdminFilterActive, 'all params:', JSON.stringify(paramInteractions));
+  }
 
   return filteredLayers.map(layer => {
     let tiles = layer.layerConfig?.source?.tiles?.[0] || '';
@@ -189,22 +276,36 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
     let newSourceLayer = null;
 
     // FloodWatch Custom: Apply tile source swapping based on filter state
-    if (isWHCAFilterActive) {
+    // Priority: Basin > Project > WHCA > Admin
+    if (isBasinFilterActive) {
+      const result = applyBasinFilter(tiles);
+      tiles = result.url;
+      newSourceLayer = result.sourceLayer;
+      tileSourceSwapped = tiles !== originalTiles;
+    } else if (isProjectFilterActive) {
+      // Project filter: swap to project-filtered functions (accepts project_countries param)
+      const result = applyProjectFilter(tiles);
+      tiles = result.url;
+      newSourceLayer = result.sourceLayer;
+      tileSourceSwapped = tiles !== originalTiles;
+      if (tileSourceSwapped) {
+        console.log('[processLayers] SWAPPED:', originalTiles, '->', tiles, 'sourceLayer:', newSourceLayer);
+      } else {
+        console.log('[processLayers] NO SWAP for:', originalTiles);
+      }
+    } else if (isWHCAFilterActive) {
       if (hasAdminSelection) {
-        // WHCA mode with admin drill-down: use admin-filtered functions
         const result = applyAdminFilter(tiles);
         tiles = result.url;
         newSourceLayer = result.sourceLayer;
         tileSourceSwapped = tiles !== originalTiles;
       } else {
-        // WHCA mode without drill-down: use WHCA-filtered functions
         const result = applyWHCAFilter(tiles);
         tiles = result.url;
         newSourceLayer = result.sourceLayer;
         tileSourceSwapped = tiles !== originalTiles;
       }
     } else if (isAdminFilterActive) {
-      // Pure admin filter mode (no WHCA): use admin-filtered functions
       const result = applyAdminFilter(tiles);
       tiles = result.url;
       newSourceLayer = result.sourceLayer;
@@ -213,16 +314,20 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
 
     // If the source was already a filtered function (e.g. gha.admin_clipped),
     // we still need to append admin params even when no swap happened.
-    const isAlreadyAdminFilteredLayer =
-      isAdminFilterActive &&
-      (
+    const isAlreadyFilteredLayer =
+      (isProjectFilterActive && (
+        tiles.includes('tileserv/gha.multimodal_points_by_project') ||
+        tiles.includes('tileserv/gha.admin_by_project')
+      )) ||
+      (isAdminFilterActive && (
         tiles.includes('tileserv/gha.admin_clipped') ||
         tiles.includes('tileserv/gha.multimodal_points_by_admin') ||
         tiles.includes('tileserv/climate.inundation_history_clipped')
-      );
+      )) ||
+      (isBasinFilterActive && tiles.includes('tileserv/gha.multimodal_points_by_basin'));
 
     // Add filter params when swapped OR when already on a filtered function source.
-    if ((tileSourceSwapped || isAlreadyAdminFilteredLayer) && isFilteringActive) {
+    if ((tileSourceSwapped || isAlreadyFilteredLayer) && isFilteringActive) {
       const updatedTiles = appendParamsToUrl(tiles, paramInteractions, true);
 
       // Update the layer config with new tiles URL

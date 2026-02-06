@@ -4,1253 +4,24 @@
 {% block body_class %}homepage{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}">
-<style>
-    /* ============================================
-       CLEAN DASHBOARD LAYOUT (Drought-style)
-       ============================================ */
-
-    /* ============================================
-       HERO BANNER SECTION - Responsive
-       ============================================ */
-    .hero-banner {
-        position: relative;
-        min-height: 280px;
-        height: 38vh;
-        max-height: 400px;
-        overflow: hidden;
-        color: white;
-    }
-
-    .hero-slides {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-    }
-
-    .hero-slide {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-size: cover;
-        background-position: center;
-        opacity: 0;
-        transition: opacity 1.5s ease-in-out;
-    }
-
-    .hero-slide.active {
-        opacity: 1;
-    }
-
-    .hero-banner::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.2) 100%);
-        z-index: 1;
-    }
-
-    .hero-content {
-        position: relative;
-        z-index: 2;
-        width: 100%;
-        max-width: 1400px;
-        margin: 0 auto;
-        padding: 60px 40px;
-        text-align: left;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-
-    .hero-title {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 12px;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-
-    .hero-subtitle {
-        font-size: 1.1rem;
-        margin-bottom: 20px;
-        max-width: 600px;
-        opacity: 0.95;
-        line-height: 1.6;
-    }
-
-    .hero-cta {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: #ff9800;
-        color: white;
-        padding: 12px 28px;
-        border-radius: 4px;
-        font-size: 1rem;
-        font-weight: 600;
-        text-decoration: none;
-        transition: background 0.2s, transform 0.2s;
-        width: fit-content;
-    }
-
-    .hero-cta:hover {
-        background: #f57c00;
-        color: white;
-        transform: translateY(-2px);
-    }
-
-    .hero-cta svg {
-        width: 18px;
-        height: 18px;
-        fill: currentColor;
-    }
-
-    /* Hero slide indicators */
-    .hero-indicators {
-        position: absolute;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 10px;
-        z-index: 3;
-    }
-
-    .hero-indicator {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: rgba(255,255,255,0.5);
-        cursor: pointer;
-        transition: background 0.3s;
-    }
-
-    .hero-indicator.active {
-        background: white;
-    }
-
-    /* ============================================
-       INFO/ABOUT SECTION - Full width
-       ============================================ */
-    .info-section {
-        background: white;
-        padding: 30px 0;
-    }
-
-    .info-container {
-        max-width: 1600px;
-        margin: 0 auto;
-        padding: 0 40px;
-    }
-
-    .info-content {
-        font-size: 0.95rem;
-        color: #444;
-        line-height: 1.6;
-    }
-
-    .info-content p {
-        margin: 0;
-    }
-
-    /* ============================================
-       PARTNERS & MEMBERS SECTION - Light background
-       ============================================ */
-    .partners-section {
-        background: #f0f0f0;
-        padding: 24px 30px 40px;
-        border-top: 1px solid #ddd;
-    }
-
-    .partners-container {
-        max-width: 1600px;
-        margin: 0 auto;
-        padding: 0 40px;
-        display: flex;
-        flex-direction: column;
-        gap: 24px;
-    }
-
-    .partners-group, .members-group {
-        display: flex;
-        align-items: center;
-        column-gap: 28px;
-        row-gap: 12px;
-        flex-wrap: wrap;
-    }
-
-    .members-group {
-        border-top: 1px dashed #d0d0d0;
-        padding-top: 14px;
-        margin-top: 2px;
-    }
-
-    .partners-label {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #1f4d3a;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        min-width: 190px;
-        padding: 6px 10px;
-        border-left: 4px solid #1f4d3a;
-        background: rgba(31, 77, 58, 0.08);
-        border-radius: 3px;
-    }
-
-    .partners-logos {
-        display: flex;
-        align-items: center;
-        gap: 25px;
-        flex-wrap: wrap;
-    }
-
-    .partners-logos a {
-        display: flex;
-        align-items: center;
-        text-decoration: none;
-    }
-
-    .partner-logo {
-        height: 64px;
-        width: auto;
-        max-width: 200px;
-        object-fit: contain;
-        transition: transform 0.2s;
-    }
-
-    .partner-logo:hover {
-        transform: scale(1.05);
-    }
-
-    .member-flags {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        flex-wrap: wrap;
-    }
-
-    .member-flag {
-        display: flex;
-        align-items: center;
-        transition: transform 0.2s;
-        cursor: default;
-    }
-
-    .member-flag:hover {
-        transform: scale(1.1);
-    }
-
-    .member-flag img {
-        width: 64px;
-        height: 42px;
-        object-fit: cover;
-        border-radius: 2px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-    }
-
-    @media screen and (max-width: 768px) {
-        .partners-container {
-            align-items: center;
-            text-align: center;
-        }
-
-        .partners-group, .members-group {
-            flex-direction: column;
-            width: 100%;
-        }
-
-        .partners-logos, .member-flags {
-            justify-content: center;
-        }
-    }
-
-    .info-content h2 {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #333;
-        margin-bottom: 20px;
-    }
-
-    .info-content-text p {
-        font-size: 1rem;
-        color: #555;
-        line-height: 1.7;
-        margin-bottom: 16px;
-    }
-
-    .info-image img {
-        width: 100%;
-        height: auto;
-        border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    }
-
-    @media screen and (max-width: 768px) {
-        .hero-title {
-            font-size: 1.8rem;
-        }
-
-        .hero-subtitle {
-            font-size: 1rem;
-        }
-
-        .info-container {
-            grid-template-columns: 1fr;
-            gap: 30px;
-        }
-    }
-
-    /* Main Dashboard Container - Compact, no scrolling */
-    .dashboard-container {
-        width: 100%;
-        max-width: 100%;
-        margin: 0;
-        padding: 10px 30px 15px;
-        background: #f8f9fa;
-        --dashboard-panel-height: clamp(520px, 58vh, 660px);
-        --dashboard-panel-height-tablet: clamp(430px, 54vh, 540px);
-        --dashboard-panel-height-mobile: clamp(340px, 48vh, 460px);
-    }
-
-    /* Animated Risk Level Ticker - Full width */
-    .risk-ticker-container {
-        overflow: hidden;
-        background: linear-gradient(90deg, #1a1a2e, #16213e);
-        padding: 10px 0;
-        width: 100%;
-    }
-
-    .risk-ticker {
-        display: flex;
-        animation: ticker-scroll 25s linear infinite;
-    }
-
-    .ticker-content {
-        display: flex;
-        gap: 30px;
-        padding: 0 20px;
-        white-space: nowrap;
-        align-items: center;
-    }
-
-    .ticker-title {
-        color: #fff;
-        font-size: 0.95rem;
-        font-weight: 600;
-    }
-
-    .ticker-separator {
-        color: rgba(255,255,255,0.4);
-        font-size: 1.2rem;
-    }
-
-    .ticker-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        color: #fff;
-        font-size: 0.9rem;
-        font-weight: 500;
-    }
-
-    .ticker-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    .ticker-item.emergency .ticker-dot { background: #d32f2f; }
-    .ticker-item.alarm .ticker-dot { background: #ff9800; }
-    .ticker-item.warning .ticker-dot { background: #ffc107; }
-    .ticker-item.normal .ticker-dot { background: #4caf50; }
-
-    .ticker-label {
-        color: rgba(255,255,255,0.8);
-    }
-
-    .ticker-count {
-        font-weight: 700;
-        font-size: 1rem;
-    }
-
-    .ticker-item.emergency .ticker-count { color: #ff6b6b; }
-    .ticker-item.alarm .ticker-count { color: #ffa726; }
-    .ticker-item.warning .ticker-count { color: #ffee58; }
-    .ticker-item.normal .ticker-count { color: #81c784; }
-
-    @keyframes ticker-scroll {
-        0% { transform: translateX(100%); }
-        100% { transform: translateX(-100%); }
-    }
-
-    @keyframes pulse {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.6; transform: scale(1.2); }
-    }
-
-    /* Dashboard Grid - Map and Cards Side by Side */
-    .dashboard-grid {
-        display: grid;
-        grid-template-columns: 1fr 420px;
-        gap: 15px;
-        max-width: 1600px;
-        margin: 0 auto;
-    }
-
-    /* ============================================
-       MAP SECTION
-       ============================================ */
-    .map-section {
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        overflow: hidden;
-        position: relative;
-    }
-
-    .map-wrapper {
-        position: relative;
-        height: var(--dashboard-panel-height);
-    }
-
-    #mini-map {
-        width: 100%;
-        height: 100%;
-    }
-
-    .map-loading {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-        color: #666;
-        z-index: 5;
-    }
-
-    .map-loading .spinner {
-        width: 36px;
-        height: 36px;
-        border: 3px solid #e0e0e0;
-        border-top-color: #1976d2;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-
-    /* ============================================
-       CATEGORY MENU (ICPAC-Web Style - Vertical Icons) - Top Left
-       ============================================ */
-    .c-menu-control {
-        position: absolute;
-        z-index: 99;
-        left: 12px;
-        top: 12px;
-    }
-
-    .c-menu-control .c-map-menu {
-        position: relative;
-    }
-
-    /* Dark pill background behind icons */
-    .c-menu-control .c-map-menu::before {
-        position: absolute;
-        top: -3px;
-        bottom: -3px;
-        right: 0;
-        content: ' ';
-        left: 0;
-        width: 28px;
-        background-color: var(--menu-bg, rgba(68, 65, 65, 0.84));
-        border-radius: 28px;
-    }
-
-    .c-menu-control .c-map-menu .menu-category {
-        position: relative;
-        padding: 12px 0;
-        display: flex;
-        align-items: center;
-        cursor: pointer;
-    }
-
-    .c-menu-control .c-map-menu .menu-category .category-icon {
-        height: 28px;
-        width: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        overflow: hidden;
-        transition: background-color 0.2s, box-shadow 0.2s;
-    }
-
-    .c-menu-control .c-map-menu .menu-category .category-icon img {
-        padding: 2px;
-        width: 24px;
-        height: 24px;
-        object-fit: contain;
-        filter: brightness(0) invert(1);
-    }
-
-    .c-menu-control .c-map-menu .menu-category .category-icon .category-initial {
-        color: #fff;
-        font-size: 14px;
-        font-weight: 700;
-        text-transform: uppercase;
-    }
-
-    .c-menu-control .c-map-menu .menu-category .layer-title {
-        position: absolute;
-        left: 34px;
-        cursor: pointer;
-        width: max-content;
-        padding: 0 11px;
-        font-size: 14px;
-        text-shadow: 0 0 4px #fff;
-        font-weight: 500;
-        color: #333;
-        opacity: 0;
-        transition: opacity 0.2s, background-color 0.2s;
-    }
-
-    .c-menu-control .c-map-menu .menu-category.active .category-icon {
-        background-color: var(--menu-active, #f7a600);
-        box-shadow: 0 0 4px 0 black;
-    }
-
-    .c-menu-control .c-map-menu .menu-category.active .category-icon img {
-        filter: none;
-    }
-
-    .c-menu-control .c-map-menu .menu-category.active .layer-title,
-    .c-menu-control .c-map-menu .menu-category:hover .layer-title {
-        background-color: rgba(68, 65, 65, 0.6);
-        border-radius: 20px;
-        color: #fff;
-        text-shadow: none;
-        opacity: 1;
-    }
-
-    /* Card Style (alternative) */
-    .c-menu-control.card-style {
-        left: 15px;
-        top: 15px;
-    }
-
-    .c-menu-control.card-style .c-map-menu {
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-        overflow: hidden;
-        min-width: 180px;
-    }
-
-    .c-menu-control.card-style .c-map-menu::before {
-        display: none;
-    }
-
-    .c-menu-control.card-style .menu-category {
-        padding: 12px 16px;
-        border-bottom: 1px solid #f0f0f0;
-        gap: 12px;
-    }
-
-    .c-menu-control.card-style .menu-category:last-child {
-        border-bottom: none;
-    }
-
-    .c-menu-control.card-style .menu-category:hover {
-        background: #f5f5f5;
-    }
-
-    .c-menu-control.card-style .menu-category.active {
-        background: #fff3e0;
-    }
-
-    .c-menu-control.card-style .menu-category .category-icon {
-        width: 32px;
-        height: 32px;
-    }
-
-    .c-menu-control.card-style .menu-category .category-icon img {
-        filter: none;
-        width: 100%;
-        height: 100%;
-    }
-
-    .c-menu-control.card-style .menu-category .layer-title {
-        position: static;
-        opacity: 1;
-        padding: 0;
-        text-shadow: none;
-        font-size: 0.9rem;
-    }
-
-    .c-menu-control.card-style .menu-category.active .layer-title {
-        background: none;
-        color: #e65100;
-        font-weight: 600;
-    }
-
-    /* ============================================
-       MAP LOGO (ICPAC-Web Style) - Bottom Left, aligned with map
-       ============================================ */
-    .c-map-logo {
-        position: absolute;
-        bottom: 25px;
-        left: 15px;
-        z-index: 99;
-        height: 45px;
-        width: 65px;
-        background: rgba(255,255,255,0.9);
-        border-radius: 4px;
-        padding: 4px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-
-    .c-map-logo img {
-        height: 100%;
-        width: 100%;
-        object-fit: contain;
-    }
-
-    /* ============================================
-       LEGEND (ICPAC-Web Style) - Bottom Right, above CTA
-       ============================================ */
-    .c-legend {
-        position: absolute;
-        z-index: 100;
-        max-width: 220px;
-        min-width: 160px;
-        background-color: #fff;
-        padding: 10px 12px;
-        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 25%);
-        border-radius: 4px;
-        bottom: 50px;
-        right: 15px;
-    }
-
-    /* Override positions if set via CMS */
-    .c-legend.legend-bottom-left { bottom: 50px; left: 15px; right: auto; }
-    .c-legend.legend-bottom-right { bottom: 50px; right: 15px; left: auto; }
-    .c-legend.legend-top-left { top: 15px; left: 15px; bottom: auto; right: auto; }
-    .c-legend.legend-top-right { top: 15px; right: 15px; bottom: auto; left: auto; }
-
-    .c-legend .c-legend-title {
-        font-size: 13px;
-        font-weight: 600;
-        padding-bottom: 8px;
-        border-bottom: 1px solid #eee;
-        margin-bottom: 8px;
-        color: #333;
-    }
-
-    .c-legend-basic {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-    }
-
-    .c-legend-basic .c-legend-item {
-        margin: 5px 0;
-        display: flex;
-        align-items: center;
-    }
-
-    .c-legend-basic .c-legend-item .c-legend-item-icon {
-        width: 16px;
-        height: 12px;
-        margin-right: 8px;
-        border: 0.5px solid rgba(19, 21, 41, 0.3);
-        border-radius: 2px;
-    }
-
-    .c-legend-basic .c-legend-item .c-legend-item-icon.emergency { background-color: #d32f2f; }
-    .c-legend-basic .c-legend-item .c-legend-item-icon.alarm { background-color: #ff9800; }
-    .c-legend-basic .c-legend-item .c-legend-item-icon.warning { background-color: #ffc107; }
-    .c-legend-basic .c-legend-item .c-legend-item-icon.normal { background-color: #4caf50; }
-
-    .c-legend-basic .c-legend-item img.c-legend-item-icon {
-        width: 20px;
-        height: 20px;
-        object-fit: contain;
-        border: none;
-    }
-
-    .c-legend-basic .c-legend-item .c-legend-item-label {
-        font-size: 0.75rem;
-        color: #555;
-    }
-
-    /* Go to Mapviewer Button - Bottom Right, below legend */
-    .map-cta-btn {
-        position: absolute;
-        bottom: 15px;
-        right: 15px;
-        background: #1976d2;
-        color: white;
-        padding: 6px 14px;
-        border-radius: 4px;
-        font-size: 0.8rem;
-        font-weight: 500;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        z-index: 99;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        transition: background 0.2s;
-    }
-
-    .map-cta-btn:hover {
-        background: #1565c0;
-        color: white;
-    }
-
-    .map-cta-btn svg {
-        width: 14px;
-        height: 14px;
-        fill: currentColor;
-    }
-
-    /* Attribution - Bottom center */
-    .map-attribution {
-        position: absolute;
-        bottom: 5px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 0.6rem;
-        color: #666;
-        z-index: 10;
-        background: rgba(255,255,255,0.7);
-        padding: 2px 6px;
-        border-radius: 3px;
-    }
-
-    .map-attribution a {
-        color: #666;
-    }
-
-    /* External Links Below Map */
-    .map-external-links {
-        display: flex;
-        justify-content: center;
-        gap: 12px;
-        padding: 12px;
-        background: #f5f5f5;
-        border-top: 1px solid #ddd;
-    }
-
-    .external-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 14px;
-        background: #ff9800;
-        color: white;
-        font-size: 0.75rem;
-        font-weight: 500;
-        text-decoration: none;
-        border-radius: 3px;
-        transition: background 0.2s;
-    }
-
-    .external-link:hover {
-        background: #f57c00;
-        color: white;
-    }
-
-    .external-link svg {
-        width: 12px;
-        height: 12px;
-        fill: currentColor;
-    }
-
-    /* ============================================
-       COUNTRY CARDS SECTION - Vertical List (Side Panel)
-       ============================================ */
-    .country-section {
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        height: var(--dashboard-panel-height);
-    }
-
-    .country-section-header {
-        padding: 10px 12px;
-        border-bottom: 1px solid #eee;
-        flex-shrink: 0;
-    }
-
-    .country-section-title {
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: #333;
-        margin: 0 0 8px 0;
-    }
-
-    /* Alert Level Legend Pills */
-    .alert-legend-pills {
-        display: flex;
-        gap: 6px;
-    }
-
-    .alert-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 3px 8px;
-        border-radius: 3px;
-        font-size: 0.65rem;
-        font-weight: 600;
-        color: white;
-    }
-
-    .alert-pill.emergency { background: #d32f2f; }
-    .alert-pill.alarm { background: #ff9800; }
-    .alert-pill.warning { background: #ffc107; color: #333; }
-
-    /* Country List - Vertical scrollable */
-    .country-list {
-        flex: 1;
-        overflow-y: auto;
-        min-height: 0;
-    }
-
-    .country-item {
-        display: flex;
-        align-items: center;
-        padding: 8px 12px;
-        border-bottom: 1px solid #f0f0f0;
-        cursor: pointer;
-        transition: background 0.15s;
-    }
-
-    .country-item:hover {
-        background: #f8f9fa;
-    }
-
-    .country-item:last-child {
-        border-bottom: none;
-    }
-
-    .country-item.selected {
-        background: #e3f2fd;
-    }
-
-    /* Country Flag */
-    .country-flag {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        overflow: hidden;
-        margin-right: 10px;
-        flex-shrink: 0;
-        border: 2px solid #e0e0e0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f5f5f5;
-    }
-
-    .country-flag img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-
-    /* Country Info */
-    .country-info {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .country-name {
-        font-size: 0.8rem;
-        font-weight: 500;
-        color: #333;
-        margin-bottom: 3px;
-    }
-
-    /* Stacked Horizontal Bar */
-    .country-bar {
-        display: flex;
-        height: 5px;
-        background: #e8e8e8;
-        border-radius: 3px;
-        overflow: hidden;
-    }
-
-    .country-bar-segment {
-        height: 100%;
-        transition: width 0.3s ease;
-    }
-
-    .country-bar-segment.emergency { background: #d32f2f; }
-    .country-bar-segment.alarm { background: #ff9800; }
-    .country-bar-segment.warning { background: #ffc107; }
-
-    /* Country Loading */
-    .country-loading {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 30px 15px;
-        color: #666;
-    }
-
-    /* ============================================
-       HIDE MAPLIBRE CONTROLS (EXCEPT ZOOM)
-       ============================================ */
-    .maplibregl-ctrl-attrib {
-        display: none !important;
-    }
-
-    /* Simple zoom controls */
-    .maplibregl-ctrl-group {
-        border-radius: 4px !important;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.15) !important;
-    }
-
-    .maplibregl-ctrl-group button {
-        width: 30px !important;
-        height: 30px !important;
-    }
-
-    /* Popup styles */
-    .maplibregl-popup-content {
-        padding: 10px 14px;
-        border-radius: 6px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-        font-size: 0.85rem;
-    }
-
-    .popup-title {
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 6px;
-    }
-
-    .popup-value {
-        font-size: 0.8rem;
-        color: #666;
-    }
-
-    .popup-value span {
-        font-weight: 600;
-    }
-
-    .popup-value span.emergency { color: #d32f2f; }
-    .popup-value span.alarm { color: #ff9800; }
-    .popup-value span.warning { color: #c79100; }
-
-    /* ============================================
-       RESPONSIVE
-       ============================================ */
-    @media screen and (max-width: 1024px) {
-        .dashboard-container {
-            padding: 20px;
-        }
-
-        .dashboard-grid {
-            grid-template-columns: 1fr 320px;
-            gap: 20px;
-        }
-
-        .map-wrapper,
-        .country-section {
-            height: var(--dashboard-panel-height-tablet);
-        }
-    }
-
-    @media screen and (max-width: 768px) {
-        .dashboard-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .map-wrapper {
-            height: var(--dashboard-panel-height-mobile);
-        }
-
-        .country-section {
-            height: auto;
-            min-height: 320px;
-        }
-
-        .country-list {
-            max-height: 340px;
-        }
-
-        .map-external-links {
-            flex-wrap: wrap;
-        }
-    }
-</style>
+<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260206-6">
 {% endblock %}
 
 {% block content %}
-<!-- ============================================
-     1. HERO BANNER SECTION - Animated slideshow
-     ============================================ -->
-{% if page.banner_images.all %}
-<section class="hero-banner">
-    <div class="hero-slides">
-        {% for banner in page.banner_images.all %}
-        {% image banner.image width-1920 as hero_bg %}
-        <div class="hero-slide{% if forloop.first %} active{% endif %}" style="background-image: url('{{ hero_bg.url }}');"></div>
-        {% endfor %}
-    </div>
-    <div class="hero-content">
-        <h1 class="hero-title">{{ page.banner_title }}</h1>
-        {% if page.banner_subtitle %}
-        <p class="hero-subtitle">{{ page.banner_subtitle }}</p>
-        {% endif %}
-    </div>
-    {% if page.banner_images.count > 1 %}
-    <div class="hero-indicators">
-        {% for banner in page.banner_images.all %}
-        <span class="hero-indicator{% if forloop.first %} active{% endif %}" data-slide="{{ forloop.counter0 }}"></span>
-        {% endfor %}
-    </div>
-    {% endif %}
-</section>
-{% endif %}
+<div class="home-wireframe">
+    <section class="home-module home-module--hero">
+        {% include "home/partials/hero_section.html" %}
+    </section>
 
-<!-- ============================================
-     2. ANIMATED TICKER - Full width with title inside
-     ============================================ -->
-<div class="risk-ticker-container">
-    <div class="risk-ticker" id="risk-ticker">
-        <div class="ticker-content">
-            <span class="ticker-title" id="dashboard-title">
-                {{ page.dashboard_title|default:"Latest Situation of Flood Conditions" }} - <span id="title-date">Loading...</span>
-            </span>
-            <span class="ticker-separator">|</span>
-            <span class="ticker-item emergency">
-                <span class="ticker-dot"></span>
-                <span class="ticker-label">Emergency:</span>
-                <span class="ticker-count" id="ticker-emergency">-</span>
-            </span>
-            <span class="ticker-item alarm">
-                <span class="ticker-dot"></span>
-                <span class="ticker-label">Alarm:</span>
-                <span class="ticker-count" id="ticker-alarm">-</span>
-            </span>
-            <span class="ticker-item warning">
-                <span class="ticker-dot"></span>
-                <span class="ticker-label">Warning:</span>
-                <span class="ticker-count" id="ticker-warning">-</span>
-            </span>
-            <span class="ticker-item normal">
-                <span class="ticker-dot"></span>
-                <span class="ticker-label">Normal:</span>
-                <span class="ticker-count" id="ticker-normal">-</span>
-            </span>
+    <section class="home-module home-module--analysis">
+        <div class="analysis-shell">
+            {% include "home/partials/risk_ticker.html" %}
+            {% include "home/partials/analysis_section.html" %}
         </div>
-    </div>
+    </section>
+
+    {% include "home/partials/partners_strip.html" %}
 </div>
-
-<!-- ============================================
-     3. FLOOD MAP WIDGET SECTION
-     ============================================ -->
-<div class="dashboard-container">
-
-    <div class="dashboard-grid">
-        <!-- Map Section -->
-        {% if page.show_mini_map %}
-        <div class="map-section">
-            <div class="map-wrapper">
-                <div id="mini-map"></div>
-                <div class="map-loading" id="map-loading">
-                    <div class="spinner"></div>
-                    <span>{% trans "Loading map..." %}</span>
-                </div>
-
-                {% if page.show_category_menu %}
-                <!-- Category Menu - Auto-populated from Geomanager or CMS -->
-                <div class="c-menu-control {% if page.category_menu_style == 'card_list' %}card-style{% endif %}">
-                    <div class="c-map-menu" style="--menu-bg: {{ page.category_menu_bg_color|default:'rgba(68, 65, 65, 0.84)' }}; --menu-active: {{ page.category_menu_active_color|default:'#f7a600' }};">
-                        {% if page.map_categories.all %}
-                        {# Use CMS-defined categories #}
-                        {% for category in page.map_categories.all %}
-                        {% if category.is_active %}
-                        <div class="menu-category{% if category.is_default %} active{% endif %}" data-category-id="{{ category.geomanager_category_id|default:'' }}">
-                            <div class="category-icon">
-                                {% if category.icon %}
-                                {% image category.icon width-40 as cat_icon %}
-                                <img src="{{ cat_icon.url }}" alt="{{ category.name }}">
-                                {% endif %}
-                            </div>
-                            <div class="layer-title">
-                                <div>{{ category.name }}</div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        {% endfor %}
-                        {% elif dataset_categories %}
-                        {# Auto-populate from Geomanager categories - only Multimodal, Impact, Weather #}
-                        {% for category in dataset_categories %}
-                        {% if category.title == "Multimodal" or category.title == "Impact" or category.title == "Weather Information" or category.title == "Weather" %}
-                        <div class="menu-category{% if category.title == 'Multimodal' %} active{% endif %}" data-category-id="{{ category.id }}">
-                            <div class="category-icon" title="{{ category.title }}">
-                                <span class="category-initial">{{ category.title|slice:":1" }}</span>
-                            </div>
-                            <div class="layer-title">
-                                <div>{{ category.title }}</div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        {% endfor %}
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
-
-                {% if page.show_map_logo and page.map_logo %}
-                <!-- Map Logo (CMS-driven) -->
-                <div class="c-map-logo">
-                    <a href="{{ page.map_logo_link|default:'/mapviewer/' }}" {% if page.map_logo_link != '#' %}target="_blank" rel="noopener"{% endif %}>
-                        {% image page.map_logo width-100 as map_logo_img %}
-                        <img src="{{ map_logo_img.url }}" alt="FloodWatch">
-                    </a>
-                </div>
-                {% endif %}
-
-                <!-- Map Legend (CMS-driven) - Position: {{ page.legend_position }} -->
-                <div class="c-legend legend-{{ page.legend_position|default:'bottom-left' }}">
-                    <div class="c-legend-title">{{ page.legend_title|default:"Flood Alert Level" }}</div>
-                    <ul class="c-legend-basic">
-                        {% for item in page.map_legend_items.all %}
-                        <li class="c-legend-item">
-                            {% if item.icon %}
-                            {% image item.icon width-24 as legend_icon %}
-                            <img src="{{ legend_icon.url }}" alt="{{ item.label }}" class="c-legend-item-icon">
-                            {% else %}
-                            <div class="c-legend-item-icon {{ item.alert_level }}" {% if item.color %}style="background-color: {{ item.color }}"{% endif %}></div>
-                            {% endif %}
-                            <span class="c-legend-item-label">{{ item.label }}</span>
-                        </li>
-                        {% empty %}
-                        <li class="c-legend-item">
-                            <span style="color: #999; font-style: italic;">{% trans "Configure legend in CMS" %}</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-
-                <!-- Attribution -->
-                <div class="map-attribution">
-                    &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors
-                </div>
-
-                <!-- Go to Mapviewer Button -->
-                <a href="/mapviewer/" class="map-cta-btn">
-                    {% trans "Go to mapviewer" %}
-                    <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
-                </a>
-            </div>
-
-            <!-- External Links (CMS-driven) -->
-            {% if page.map_external_links.all %}
-            <div class="map-external-links">
-                {% for link in page.map_external_links.all %}
-                <a href="{{ link.url }}" {% if link.open_in_new_tab %}target="_blank" rel="noopener"{% endif %} class="external-link" style="background: {{ link.button_color }}">
-                    {{ link.label }}
-                    <svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
-                </a>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        <!-- Country Cards Section -->
-        {% if page.show_country_cards %}
-        <div class="country-section">
-            <div class="country-section-header">
-                <h2 class="country-section-title">{{ page.country_cards_title|default:"Flood Alert Level per Country proportion" }}</h2>
-                <div class="alert-legend-pills">
-                    <span class="alert-pill emergency">{% trans "Emergency" %}</span>
-                    <span class="alert-pill alarm">{% trans "Alarm" %}</span>
-                    <span class="alert-pill warning">{% trans "Warning" %}</span>
-                </div>
-            </div>
-
-            <div class="country-list" id="country-list">
-                <div class="country-loading">
-                    <div class="spinner"></div>
-                    <span>{% trans "Loading country data..." %}</span>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- ============================================
-     3. PARTNERS & MEMBERS SECTION (After Minimap)
-     ============================================ -->
-{% if footer %}
-{% if footer.partners or footer.member_countries %}
-<section class="partners-section">
-    <div class="partners-container">
-        {% if footer.partners %}
-        <div class="partners-group">
-            <span class="partners-label">Partners</span>
-            <div class="partners-logos">
-                {% for block in footer.partners %}
-                {% with block.value as partner %}
-                {% if partner.image %}
-                <a href="{{ partner.url|default:'#' }}" {% if partner.url %}target="_blank" rel="noopener"{% endif %}>
-                    {% image partner.image height-45 as partner_logo %}
-                    <img src="{{ partner_logo.url }}" alt="{{ partner.name }}" class="partner-logo" title="{{ partner.name }}">
-                </a>
-                {% endif %}
-                {% endwith %}
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
-        {% if footer.member_countries %}
-        <div class="members-group">
-            <span class="partners-label">Member Countries</span>
-            <div class="member-flags">
-                {% for block in footer.member_countries %}
-                {% with block.value as item %}
-                <div class="member-flag" title="{{ item.country }}">
-                    <img src="https://flagcdn.com/w40/{{ item.country|lower }}.png" alt="{{ item.country }}">
-                </div>
-                {% endwith %}
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</section>
-{% endif %}
-{% endif %}
-
-
 {% endblock %}
 
 {% block extra_js %}
@@ -1263,6 +34,8 @@
     let miniMap = null;
     let countriesData = [];
     let selectedCountry = null;
+    let resizeTimer = null;
+    let mapResizeFrame = null;
 
     // CMS Configuration
     const mapConfig = {
@@ -1297,11 +70,31 @@
         'BI': 'https://flagcdn.com/w80/bi.png'
     };
 
+    // Use Django API endpoints (DRF-style paths) for homepage widgets.
+    const apiEndpoints = {
+        geojson: [
+            '/api/multimodal/geojson',
+            '/api/multimodal/geojson/'
+        ],
+        countrySummary: [
+            '/api/country-summary-with-bounds/',
+            '/api/country-summary-with-bounds'
+        ],
+        situationSummary: [
+            '/api/situation-summary/',
+            '/api/situation-summary'
+        ]
+    };
+
     document.addEventListener('DOMContentLoaded', function() {
+        setHomepageLayoutHeights();
+        initRiskTickerLoop();
         initMiniMap();
         loadCountryData();
         loadSituationSummary();
         initHeroSlideshow();
+        window.addEventListener('resize', handleHomepageResize);
+        window.addEventListener('load', handleHomepageResize);
 
         // Refresh every 5 minutes
         setInterval(() => {
@@ -1310,6 +103,122 @@
             if (miniMap) loadMapPoints();
         }, 5 * 60 * 1000);
     });
+
+    // ========================================
+    // VIEWPORT FIT HELPERS
+    // ========================================
+    function setHomepageLayoutHeights() {
+        const compact = window.innerHeight < 860 || window.innerWidth < 1200;
+        document.body.classList.toggle('homepage-tight', compact);
+    }
+
+    function scheduleMiniMapResize(delay = 0) {
+        if (!miniMap) return;
+
+        const runResize = () => {
+            if (!miniMap) return;
+            miniMap.resize();
+        };
+
+        if (delay > 0) {
+            window.setTimeout(() => {
+                requestAnimationFrame(runResize);
+            }, delay);
+            return;
+        }
+
+        if (mapResizeFrame) {
+            cancelAnimationFrame(mapResizeFrame);
+        }
+        mapResizeFrame = requestAnimationFrame(() => {
+            runResize();
+            mapResizeFrame = null;
+        });
+    }
+
+    function getAutoFitCardLimit(totalCountries) {
+        const section = document.querySelector('.country-section');
+        const header = section ? section.querySelector('.country-section-header') : null;
+
+        if (!section || !header || !totalCountries) {
+            return Math.min(mapConfig.maxCards, totalCountries || mapConfig.maxCards);
+        }
+
+        const availableHeight = section.clientHeight - header.offsetHeight - 8;
+        if (availableHeight <= 80) {
+            return Math.max(2, Math.min(4, mapConfig.maxCards, totalCountries));
+        }
+
+        const estimatedCardHeight = window.innerWidth <= 1200 ? 34 : 38;
+        const calculated = Math.floor(availableHeight / estimatedCardHeight);
+        const minCards = window.innerWidth > 900 ? 5 : (window.innerWidth > 700 ? 4 : 3);
+
+        return Math.max(minCards, Math.min(mapConfig.maxCards, calculated, totalCountries));
+    }
+
+    function handleHomepageResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            setHomepageLayoutHeights();
+            initRiskTickerLoop();
+            scheduleMiniMapResize();
+            if (countriesData.length) renderCountryList(countriesData);
+        }, 120);
+    }
+
+    function initRiskTickerLoop() {
+        const ticker = document.getElementById('risk-ticker');
+        if (!ticker) return;
+
+        const baseContent = ticker.querySelector('.ticker-content');
+        if (!baseContent) return;
+
+        ticker.querySelectorAll('.ticker-content.is-clone').forEach((clone) => clone.remove());
+
+        const container = ticker.parentElement;
+        const baseWidth = Math.max(baseContent.offsetWidth, 1);
+        let totalWidth = baseWidth;
+
+        while (container && totalWidth < container.offsetWidth * 2) {
+            const clone = baseContent.cloneNode(true);
+            clone.classList.add('is-clone');
+            clone.setAttribute('aria-hidden', 'true');
+            ticker.appendChild(clone);
+            totalWidth += baseWidth;
+        }
+
+        ticker.style.setProperty('--ticker-shift', `${baseWidth}px`);
+        const speedPxPerSecond = 80;
+        const duration = Math.max(16, Math.round(baseWidth / speedPxPerSecond));
+        ticker.style.setProperty('--ticker-duration', `${duration}s`);
+    }
+
+    // ========================================
+    // API HELPERS
+    // ========================================
+    async function fetchJsonWithFallback(urls) {
+        let lastError = null;
+
+        for (const url of urls) {
+            try {
+                const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} for ${url}`);
+                }
+
+                let payload = await response.json();
+                if (typeof payload === 'string') {
+                    payload = JSON.parse(payload);
+                }
+                return payload;
+            } catch (error) {
+                lastError = error;
+                console.warn('Endpoint failed:', url, error);
+            }
+        }
+
+        throw lastError || new Error('All API endpoints failed');
+    }
 
     // ========================================
     // HERO SLIDESHOW
@@ -1385,8 +294,10 @@
             miniMap.on('load', function() {
                 document.getElementById('map-loading').style.display = 'none';
 
+                scheduleMiniMapResize();
                 // Fit to East Africa bounds
                 miniMap.fitBounds(mapConfig.bounds, { padding: 30, duration: 0 });
+                scheduleMiniMapResize(140);
 
                 loadMapPoints();
             });
@@ -1405,11 +316,14 @@
 
         try {
             // Add point filter from CMS config
-            const filterParam = mapConfig.pointFilter !== 'all' ? `?filter=${mapConfig.pointFilter}` : '';
-            const response = await fetch(`/api/multimodal/geojson/${filterParam}`);
-            if (!response.ok) throw new Error('Failed to fetch points');
-
-            const geojson = await response.json();
+            const filterParam = mapConfig.pointFilter !== 'all'
+                ? `?filter=${encodeURIComponent(mapConfig.pointFilter)}`
+                : '';
+            const geojsonUrls = apiEndpoints.geojson.map(url => `${url}${filterParam}`);
+            const geojson = await fetchJsonWithFallback(geojsonUrls);
+            if (!geojson || !Array.isArray(geojson.features)) {
+                throw new Error('Invalid GeoJSON response');
+            }
 
             // Add alert_level based on thresholds
             const thresholds = {
@@ -1485,10 +399,7 @@
     // ========================================
     async function loadCountryData() {
         try {
-            const response = await fetch('/api/country-summary-with-bounds/');
-            if (!response.ok) throw new Error('Failed to fetch country data');
-
-            const data = await response.json();
+            const data = await fetchJsonWithFallback(apiEndpoints.countrySummary);
             countriesData = data.countries || [];
 
             renderCountryList(countriesData);
@@ -1526,14 +437,16 @@
 
         if (!countries || countries.length === 0) {
             container.innerHTML = '<div class="country-loading"><span style="color:#4caf50;">No flood alerts</span></div>';
+            scheduleMiniMapResize(40);
             return;
         }
 
         // Calculate max for bar scaling
         const maxTotal = Math.max(...countries.map(c => c.emergency + c.alarm + c.warning), 1);
+        const cardLimit = getAutoFitCardLimit(countries.length);
 
         let html = '';
-        countries.slice(0, mapConfig.maxCards).forEach(country => {
+        countries.slice(0, cardLimit).forEach(country => {
             const name = country.name || country.code;
             const flagUrl = flagUrls[country.code] || `https://flagcdn.com/w80/${country.code.toLowerCase()}.png`;
 
@@ -1560,6 +473,7 @@
         });
 
         container.innerHTML = html;
+        scheduleMiniMapResize(40);
     }
 
     // ========================================
@@ -1594,10 +508,7 @@
     // ========================================
     async function loadSituationSummary() {
         try {
-            const response = await fetch('/api/situation-summary/');
-            if (!response.ok) throw new Error('Failed');
-
-            const data = await response.json();
+            const data = await fetchJsonWithFallback(apiEndpoints.situationSummary);
 
             // Update date in ticker
             if (data.data_date) {

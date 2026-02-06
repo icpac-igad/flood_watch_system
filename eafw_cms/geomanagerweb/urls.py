@@ -9,57 +9,40 @@ from wagtail.documents import urls as wagtaildocs_urls
 from wagtail.urls import WAGTAIL_FRONTEND_LOGIN_TEMPLATE, serve_pattern
 from wagtailcache.cache import cache_page
 
+# Homepage widget APIs are served directly from Django views (DRF-style /api/* paths).
 
-from .api import api_router, FloodProofsAvailableDatesView, FloodProofsDataView, FloodProofsGeoJSONView, MultimodalForecastGeoJSONView, MultimodalClusteredGeoJSONView, MultimodalAvailableDatesView, AdminBoundaryView, ImpactForecastDatesView, DatasetsProxyView, ReportsListView, BasinGeometryView, GridCellsView, SituationSummaryView, HotspotsView, RiskAssessmentView, RiverBasinsView, CountryAssessmentsView, RegionalSummaryView, CountrySummaryWithBoundsView
 from home.views import map_view, partners_view, flood_analysis_view
 from home.mapviewer_config import get_mapviewer_config
+from geomanagerweb.api import (
+    MultimodalForecastGeoJSONView,
+    CountrySummaryWithBoundsView,
+    SituationSummaryView,
+)
 
 ADMIN_URL_PATH = getattr(settings, "ADMIN_URL_PATH", None)
-
-# Note: Wagtail API endpoints are registered in api.py
-# The router is available at the path matching its name: "webapi" -> "web-api/"
 
 urlpatterns = [
     path("i18n/", include("django.conf.urls.i18n")),  # Language switching
     path("documents/", include(wagtaildocs_urls)),
-    path("", include((api_router.urls[0], api_router.urls[1]))),
-    # Alias routes for mapviewer compatibility (redirects to /api/ prefixed paths)
-    path("mapviewer-config", get_mapviewer_config, name="mapview_config_alias"),
-    re_path(r"^datasets/(?P<path>.*)$", DatasetsProxyView.as_view(), name="datasets_proxy"),
-    # FloodProofs API endpoints
-    path("api/floodproofs/dates/", FloodProofsAvailableDatesView.as_view(), name="floodproofs_dates"),
-    path("api/floodproofs/data/", FloodProofsDataView.as_view(), name="floodproofs_data"),
-    path("api/floodproofs/geojson/", FloodProofsGeoJSONView.as_view(), name="floodproofs_geojson"),
-    # Multimodal Forecast API endpoints
-    path("api/multimodal/geojson/", MultimodalForecastGeoJSONView.as_view(), name="multimodal_forecast_geojson"),
-    path("api/multimodal/dates/", MultimodalAvailableDatesView.as_view(), name="multimodal_dates"),
-    # Multimodal Clustered GeoJSON - returns pre-clustered data based on zoom level
-    path("api/multimodal/clustered/", MultimodalClusteredGeoJSONView.as_view(), name="multimodal_clustered_geojson"),
-    # FloodWatch Custom: Admin Boundary API for filter dropdowns
-    path("api/admin-boundaries/", AdminBoundaryView.as_view(), name="admin_boundaries"),
-    path("api/reports/", ReportsListView.as_view(), name="reports"),
-    # FloodProofs Impact forecast dates API
-    path("api/impact/dates/", ImpactForecastDatesView.as_view(), name="impact_forecast_dates"),
-    # FloodWatch Custom: Basin Geometry API - returns GeoJSON for basin by hybas_id
-    path("api/basin/<int:hybas_id>/", BasinGeometryView.as_view(), name="basin_geometry"),
-    # FloodWatch Custom: Grid Cells API - returns grid cells for a country/region
-    path("api/grid-cells/", GridCellsView.as_view(), name="grid_cells"),
-    # FloodWatch Custom: Homepage KPI APIs
+    # Homepage widget API routes (Django).
+    path("api/multimodal/geojson/", MultimodalForecastGeoJSONView.as_view(), name="multimodal_geojson"),
+    path("api/multimodal/geojson", MultimodalForecastGeoJSONView.as_view(), name="multimodal_geojson_noslash"),
+    path(
+        "api/country-summary-with-bounds/",
+        CountrySummaryWithBoundsView.as_view(),
+        name="country_summary_with_bounds",
+    ),
+    path(
+        "api/country-summary-with-bounds",
+        CountrySummaryWithBoundsView.as_view(),
+        name="country_summary_with_bounds_noslash",
+    ),
     path("api/situation-summary/", SituationSummaryView.as_view(), name="situation_summary"),
-    path("api/hotspots/", HotspotsView.as_view(), name="hotspots"),
-    # FloodWatch Custom: Country Summary with Bounds for Homepage Mini-Map
-    path("api/country-summary-with-bounds/", CountrySummaryWithBoundsView.as_view(), name="country_summary_with_bounds"),
-    # FloodWatch Custom: Expert Risk Assessment API (hydrologist & meteorologist)
-    path("api/risk-assessments/", RiskAssessmentView.as_view(), name="risk_assessments"),
-    # FloodWatch Custom: River Basins API for filter dropdowns
-    path("api/river-basins/", RiverBasinsView.as_view(), name="river_basins"),
-    # FloodWatch Custom: Country Assessments API (per-country comments)
-    path("api/country-assessments/", CountryAssessmentsView.as_view(), name="country_assessments"),
-    # FloodWatch Custom: Regional Summary Generator
-    path("api/regional-summary/generate/", RegionalSummaryView.as_view(), name="regional_summary_generate"),
-    # Custom mapviewer config (includes datasets and layers) - MUST come before geomanager.urls
+    path("api/situation-summary", SituationSummaryView.as_view(), name="situation_summary_noslash"),
+    # Custom mapviewer config (includes datasets and layers)
+    path("mapviewer-config", get_mapviewer_config, name="mapview_config_alias"),
     path("api/mapviewer-config", get_mapviewer_config, name="mapview_config"),
-    # Custom mapviewer URLs (with navbar context) - MUST come before geomanager.urls
+    # Custom mapviewer URLs (with navbar context)
     path("mapviewer/", map_view, name="mapview"),
     # Partners page - displays CMS-managed partners and member countries
     path("partners/", partners_view, name="partners"),

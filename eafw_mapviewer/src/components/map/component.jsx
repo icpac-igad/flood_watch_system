@@ -80,7 +80,7 @@ class RenderMap extends PureComponent {
             {/* LAYER MANAGER */}
             <LayerManagerWrapper map={map} mapSide={mapSide} />
 
-            {/* MULTIMODAL CLUSTERED LAYER - DISABLED: Using VectorTileLayer from database instead */}
+            {/* MULTIMODAL CLUSTERED LAYER - disabled: pg_tileserv handles clustering via vector tiles */}
             {/* <MultimodalClusterLayer map={map} mapSide={mapSide} /> */}
 
             {/* Alert Pulse Animation - Pulsing effect for warning/alarm/emergency points */}

@@ -9,7 +9,7 @@ export const selectActiveTab = createSelector(
 
 export const selectSelectedFilterType = createSelector(
   [selectUtilityPanel],
-  (utilityPanel) => utilityPanel.selectedFilterType || 'admin'
+  (utilityPanel) => utilityPanel.selectedFilterType || 'project'
 );
 
 export const selectHidden = createSelector(

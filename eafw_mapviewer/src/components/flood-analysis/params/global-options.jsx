@@ -125,7 +125,7 @@ const GlobalOptions = ({
     const fetchAdminBoundaries = async () => {
       try {
         // API returns array directly: [{code, name}, ...]
-        const response = await fetch(`${CMS_API}/admin-boundaries/`);
+        const response = await fetch(`/api/admin-boundaries/`);
         if (response.ok) {
           const data = await response.json();
           // Response is direct array, not wrapped in {countries: [...]}
@@ -153,7 +153,7 @@ const GlobalOptions = ({
         // API params: admin_level=0 means get children (admin1) of country
         // unit_id is the country name
         const response = await fetch(
-          `${CMS_API}/admin-boundaries/?admin_level=0&unit_id=${encodeURIComponent(params.admin0_code)}`
+          `/api/admin-boundaries/?admin_level=0&unit_id=${encodeURIComponent(params.admin0_code)}`
         );
         if (response.ok) {
           const data = await response.json();

@@ -16,7 +16,7 @@ from wagtail_color_panel.edit_handlers import NativeColorPanel
 from .blocks import (
     InfoBlock, FeatureBlock, ActionCardBlock, LinkGroupBlock, LinkBlock, SocialLinkBlock,
     ReportTextBlock, AlertSummaryBlock, StatisticsRowBlock, AffectedAreasTableBlock,
-    MapEmbedBlock, ForecastBlock, ReportImageBlock, ResponseActionsBlock, ContactsBlock,
+    MapEmbedBlock, ForecastBlock, ReportImageBlock, ContactsBlock,
     LogoItemBlock, CountryBlock
 )
 
@@ -1028,66 +1028,14 @@ class MapserverConfig(BaseGenericSetting):
 
 
 # =============================================================================
-# REPORT PAGES - Flood Bulletins and Situation Reports
+# REPORT PAGES - Expert Assessment / Flood Bulletins
 # =============================================================================
 
-class ReportIndexPage(MetadataPageMixin, WagtailCacheMixin, Page):
-    """Index page for listing all reports."""
-
-    template = "reports/report_index_page.html"
-    parent_page_types = ["wagtailcore.Page"]
-    subpage_types = ["home.FloodBulletinPage", "home.SituationReportPage"]
-    max_count = 1
-
-    introduction = RichTextField(
-        blank=True,
-        null=True,
-        features=["bold", "italic", "link"],
-        verbose_name=_("Introduction"),
-        help_text=_("Brief introduction to the reports section"),
-    )
-
-    content_panels = Page.content_panels + [
-        FieldPanel("introduction"),
-    ]
-
-    def get_context(self, request, *args, **kwargs):
-        context = super().get_context(request, *args, **kwargs)
-
-        # Get all child report pages
-        reports = self.get_children().live().order_by('-first_published_at')
-
-        # Filter by report type if specified
-        report_type = request.GET.get('type')
-        if report_type == 'bulletin':
-            reports = reports.type(FloodBulletinPage)
-        elif report_type == 'sitrep':
-            reports = reports.type(SituationReportPage)
-
-        context['reports'] = reports
-        context['report_type'] = report_type
-        context['report_filters'] = [
-            {"key": "all", "label": "All Reports"},
-            {"key": "bulletin", "label": "Flood Bulletins"},
-            {"key": "sitrep", "label": "Situation Reports"},
-        ]
-
-        # Add navbar and footer
-        context['navbar'] = Navbar.objects.live().first()
-        context['footer'] = Footer.objects.live().first()
-
-        return context
-
-    class Meta:
-        verbose_name = _("Report Index Page")
-        verbose_name_plural = _("Report Index Pages")
-
-
 class FloodBulletinPage(MetadataPageMixin, WagtailCacheMixin, Page):
-    """Flood Bulletin/Alert Report page."""
+    """Expert Assessment / Flood Bulletin Report page."""
 
     template = "reports/flood_bulletin_page.html"
-    parent_page_types = ["home.ReportIndexPage"]
+    parent_page_types = ["home.HomePage"]
     subpage_types = []
 
     # Report metadata
@@ -1205,177 +1153,6 @@ class FloodBulletinPage(MetadataPageMixin, WagtailCacheMixin, Page):
     class Meta:
         verbose_name = _("Flood Bulletin")
         verbose_name_plural = _("Flood Bulletins")
-
-
-class SituationReportPage(MetadataPageMixin, WagtailCacheMixin, Page):
-    """Situation Report (SitRep) page."""
-
-    template = "reports/situation_report_page.html"
-    parent_page_types = ["home.ReportIndexPage"]
-    subpage_types = []
-
-    # Report metadata
-    report_number = models.CharField(
-        max_length=50,
-        blank=True,
-        verbose_name=_("Report Number"),
-        help_text=_("e.g., 'SITREP-2024-001'"),
-    )
-    report_date = models.DateField(
-        verbose_name=_("Report Date"),
-    )
-    reporting_period_start = models.DateField(
-        blank=True,
-        null=True,
-        verbose_name=_("Reporting Period Start"),
-    )
-    reporting_period_end = models.DateField(
-        blank=True,
-        null=True,
-        verbose_name=_("Reporting Period End"),
-    )
-
-    # Header section
-    header_logo = models.ForeignKey(
-        "wagtailimages.Image",
-        verbose_name=_("Header Logo"),
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="+",
-    )
-    issuing_authority = models.CharField(
-        max_length=200,
-        default="IGAD Climate Prediction and Applications Centre (ICPAC)",
-        verbose_name=_("Issuing Authority"),
-    )
-
-    # Event information
-    event_name = models.CharField(
-        max_length=200,
-        verbose_name=_("Event Name"),
-        help_text=_("e.g., 'Kenya Floods - October 2024'"),
-    )
-    event_type = models.CharField(
-        max_length=50,
-        choices=[
-            ('flood', _('Flood')),
-            ('flash_flood', _('Flash Flood')),
-            ('riverine_flood', _('Riverine Flood')),
-            ('coastal_flood', _('Coastal Flood')),
-        ],
-        default='flood',
-        verbose_name=_("Event Type"),
-    )
-
-    # Situation overview
-    situation_overview = RichTextField(
-        blank=True,
-        null=True,
-        features=["bold", "italic", "ol", "ul", "h3", "h4"],
-        verbose_name=_("Situation Overview"),
-        help_text=_("Current situation description"),
-    )
-
-    # Flexible content sections
-    content = StreamField(
-        [
-            ("text", ReportTextBlock()),
-            ("alert_summary", AlertSummaryBlock()),
-            ("statistics", StatisticsRowBlock()),
-            ("affected_areas", AffectedAreasTableBlock()),
-            ("map", MapEmbedBlock()),
-            ("response_actions", ResponseActionsBlock()),
-            ("forecast", ForecastBlock()),
-            ("image", ReportImageBlock()),
-            ("contacts", ContactsBlock()),
-        ],
-        blank=True,
-        
-        verbose_name=_("Report Content"),
-    )
-
-    # Next steps / Recommendations
-    recommendations = RichTextField(
-        blank=True,
-        null=True,
-        features=["bold", "italic", "ol", "ul"],
-        verbose_name=_("Recommendations"),
-        help_text=_("Recommended actions and next steps"),
-    )
-
-    # Footer/disclaimer
-    disclaimer = models.TextField(
-        blank=True,
-        verbose_name=_("Disclaimer"),
-        default=_("This situation report is based on available information at the time of publication."),
-    )
-
-    content_panels = Page.content_panels + [
-        MultiFieldPanel(
-            [
-                FieldPanel("report_number"),
-                FieldPanel("report_date"),
-                FieldPanel("reporting_period_start"),
-                FieldPanel("reporting_period_end"),
-            ],
-            heading=_("Report Details"),
-        ),
-        MultiFieldPanel(
-            [
-                FieldPanel("header_logo"),
-                FieldPanel("issuing_authority"),
-            ],
-            heading=_("Header"),
-        ),
-        MultiFieldPanel(
-            [
-                FieldPanel("event_name"),
-                FieldPanel("event_type"),
-            ],
-            heading=_("Event Information"),
-        ),
-        FieldPanel("situation_overview"),
-        FieldPanel("content"),
-        FieldPanel("recommendations"),
-        FieldPanel("disclaimer"),
-    ]
-
-    def get_context(self, request, *args, **kwargs):
-        context = super().get_context(request, *args, **kwargs)
-        context['navbar'] = Navbar.objects.live().first()
-        context['footer'] = Footer.objects.live().first()
-        return context
-
-    class Meta:
-        verbose_name = _("Situation Report")
-        verbose_name_plural = _("Situation Reports")
-
-
-class MergedDeterministicGeoJSON(models.Model):
-    """
-    Unmanaged model for accessing FloodProofs merged deterministic GeoJSON data.
-    This table exists in the floodproofs schema and is managed externally.
-    """
-    id = models.AutoField(primary_key=True)
-    data_date = models.DateField(unique=True)
-    date_string = models.CharField(max_length=8, unique=True)
-    geojson_data = models.JSONField()
-    feature_count = models.IntegerField()
-    file_count = models.IntegerField(null=True, blank=True)
-    file_path = models.CharField(max_length=500, null=True, blank=True)
-    processed_by = models.CharField(max_length=100, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        managed = False
-        db_table = 'floodproofs"."merged_deterministic_geojson'
-        verbose_name = _("Merged Deterministic GeoJSON")
-        verbose_name_plural = _("Merged Deterministic GeoJSONs")
-
-    def __str__(self):
-        return f"FloodProofs Data - {self.data_date}"
 
 
 # =============================================================================

@@ -69,7 +69,7 @@ const RiskAssessmentMap = ({
   useEffect(() => {
     const fetchCountries = async () => {
       try {
-        const response = await fetch(`${CMS_API}/admin-boundaries/`);
+        const response = await fetch(`/api/admin-boundaries/`);
         if (response.ok) {
           const data = await response.json();
           setCountries(Array.isArray(data) ? data : []);

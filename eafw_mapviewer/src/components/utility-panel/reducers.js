@@ -1,6 +1,6 @@
 export const initialState = {
   activeTab: 'filter', // 'filter' | 'draw'
-  selectedFilterType: 'admin', // 'admin' | 'cluster' | 'watershed' | 'protected'
+  selectedFilterType: 'project', // 'project' | 'cluster' | 'watershed' | 'protected'
   hidden: false,
   collapsed: false,
 };

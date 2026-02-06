@@ -59,7 +59,6 @@ const BoundarySelector = ({
     loadBoundaries();
   }, [adminLevel, parentCode, boundaryData, setBoundaryData, showOnlyIfParent, requestParamsKey]);
 
-  // Defensive check to ensure boundaries is an array
   const availableBoundaries = Array.isArray(boundaries)
     ? boundaries.filter(boundary =>
         !selectedBoundary || boundary.code !== selectedBoundary.code
@@ -103,7 +102,7 @@ const BoundarySelector = ({
   );
 };
 
-// Convenience wrappers for better readability
+// Convenience wrappers
 export const CountrySelector = (props) => (
   <BoundarySelector
     adminLevel={null}
@@ -137,246 +136,6 @@ export const LowerBorderSelector = ({ subBorder, selectedLowerBorder, parentCode
   />
 );
 
-// FilterPanelContainer configuration
-const BOUNDARY_CONFIG = {
-  country: {
-    level: '0',
-    borderLevel: '0',
-    stateKey: 'selectedCountry',
-    parentKey: null,
-    nextLevel: 'subBorder'
-  },
-  subBorder: {
-    level: '1',
-    borderLevel: '1',
-    stateKey: 'selectedSubBorder',
-    parentKey: 'selectedCountry',
-    nextLevel: 'lowerBorder'
-  },
-  lowerBorder: {
-    level: '2',
-    borderLevel: '2',
-    stateKey: 'selectedLowerBorder',
-    parentKey: 'selectedSubBorder',
-    nextLevel: null
-  }
-};
-
-class FilterPanelContainerComponent extends React.Component {
-  handleBoundaryChange = async (boundaryType, boundary) => {
-    const config = BOUNDARY_CONFIG[boundaryType];
-    if (!config) return;
-
-    const currentBoundary = this.props.filterInteractions[config.stateKey];
-    if (currentBoundary?.code === boundary?.code) return;
-
-    // Clear lower level boundaries
-    const newFilterState = {};
-    Object.keys(BOUNDARY_CONFIG).forEach(key => {
-      if (this.shouldClearBoundary(key, boundaryType)) {
-        newFilterState[BOUNDARY_CONFIG[key].stateKey] = null;
-      }
-    });
-
-    newFilterState[config.stateKey] = boundary;
-
-    // Update centralized filter state
-    this.props.setFilterInteractions(newFilterState);
-
-    // FloodWatch: Build parent boundaries object for spatial filtering
-    const { selectedCountry, selectedSubBorder } = this.props.filterInteractions;
-    const parentBoundaries = {
-      country_name: boundaryType === 'country' ? boundary?.name : selectedCountry?.name || '',
-      region_name: boundaryType === 'subBorder' ? boundary?.name :
-                   (boundaryType === 'lowerBorder' ? selectedSubBorder?.name : ''),
-    };
-
-    // Update param interactions in Redux using consolidated utility
-    const paramInteractions = buildParamInteractionsFromBoundary(
-      boundary,
-      config.level,
-      config.borderLevel,
-      'Admin',
-      parentBoundaries
-    );
-    this.props.setParamInteractions(paramInteractions);
-
-    if (boundary?.bbox) {
-      await this.fitMapToBounds(boundary.bbox);
-    }
-  };
-
-  clearBoundary = async (boundaryType) => {
-    const config = BOUNDARY_CONFIG[boundaryType];
-    if (!config) return;
-
-    const newFilterState = {};
-    Object.keys(BOUNDARY_CONFIG).forEach(key => {
-      const keyConfig = BOUNDARY_CONFIG[key];
-      const keyLevel = parseInt(keyConfig.level);
-      const clearLevel = parseInt(config.level);
-
-      if (keyLevel >= clearLevel) {
-        newFilterState[keyConfig.stateKey] = null;
-      }
-    });
-
-    // Update centralized filter state
-    this.props.setFilterInteractions(newFilterState);
-
-    const fallbackConfig = this.findHighestExistingBoundaryConfig(boundaryType);
-
-    if (fallbackConfig) {
-      // Update to parent boundary params using consolidated utility
-      const paramInteractions = buildParamInteractionsFromBoundary(
-        fallbackConfig.boundary,
-        fallbackConfig.level,
-        fallbackConfig.borderLevel
-      );
-      this.props.setParamInteractions(paramInteractions);
-
-      if (fallbackConfig.boundary?.bbox) {
-        await this.fitMapToBounds(fallbackConfig.boundary.bbox);
-      }
-    } else {
-      // Reset all params to defaults (will restore initial CMS params if they exist)
-      this.props.clearParamInteractions();
-
-      // If there's an initial bbox from CMS, fit to it; otherwise clear bbox to use default viewport
-      const { initialBbox } = this.props;
-      if (initialBbox && initialBbox.length === 4) {
-        await this.fitMapToBounds(initialBbox, true);
-      } else {
-        await this.resetToDefaultView();
-      }
-    }
-  };
-
-  shouldClearBoundary = (boundaryKey, changedBoundaryType) => {
-    const changedLevel = this.getBoundaryLevel(changedBoundaryType);
-    const currentLevel = this.getBoundaryLevel(boundaryKey);
-    return currentLevel > changedLevel;
-  };
-
-  getBoundaryLevel = (boundaryType) => {
-    const config = BOUNDARY_CONFIG[boundaryType];
-    return config ? parseInt(config.level) : -1;
-  };
-
-  findHighestExistingBoundaryConfig = (clearedBoundaryType) => {
-    const clearedLevel = this.getBoundaryLevel(clearedBoundaryType);
-
-    for (let level = clearedLevel - 1; level >= 0; level--) {
-      const boundaryType = this.getBoundaryTypeByLevel(level.toString());
-      if (boundaryType && this.props.filterInteractions[BOUNDARY_CONFIG[boundaryType].stateKey]) {
-        return {
-          ...BOUNDARY_CONFIG[boundaryType],
-          boundary: this.props.filterInteractions[BOUNDARY_CONFIG[boundaryType].stateKey]
-        };
-      }
-    }
-
-    return null;
-  };
-
-  getBoundaryTypeByLevel = (level) => {
-    return Object.keys(BOUNDARY_CONFIG).find(
-      key => BOUNDARY_CONFIG[key].level === level
-    );
-  };
-
-  resetToDefaultView = async () => {
-    const { setMapSettings } = this.props;
-    const centerLng = 36.84;
-    const centerLat = 5.73;
-   const bboxPadding = 20; 
-
-    const defaultBbox = [
-      centerLng - bboxPadding, // left
-      centerLat - bboxPadding, // bottom
-      centerLng + bboxPadding, // right
-      centerLat + bboxPadding  // top
-    ];
-
-    setMapSettings({
-      canBound: true,
-      bbox: defaultBbox
-    });
-  };
-
-  fitMapToBounds = async (bbox, isFormatted = false) => {
-    const { setMapSettings } = this.props;
-    if (!bbox) return;
-
-    const formattedBbox = isFormatted
-      ? bbox
-      : [bbox.left, bbox.bottom, bbox.right, bbox.top];
-
-    // Validate bbox
-    const [minX, minY, maxX, maxY] = formattedBbox;
-    if (isNaN(minX) || isNaN(minY) || isNaN(maxX) || isNaN(maxY) || minX >= maxX || minY >= maxY) {
-      console.error('Invalid bbox:', formattedBbox);
-      return;
-    }
-
-    setMapSettings({
-      canBound: true,
-      bbox: [...formattedBbox]
-    });
-  };
-
-  render() {
-    const { selectedCountry, selectedSubBorder, selectedLowerBorder } = this.props.filterInteractions;
-    const { boundaryData, setBoundaryData } = this.props;
-
-    return (
-      <div className="filter-panel-container">
-        <div className="filter-grid">
-          <div className="filter-column">
-            <h3>Filter By Country</h3>
-            <CountrySelector
-              selectedCountry={selectedCountry}
-              onChange={(country) => this.handleBoundaryChange('country', country)}
-              onClear={() => this.clearBoundary('country')}
-              boundaryData={boundaryData}
-              setBoundaryData={setBoundaryData}
-            />
-          </div>
-
-          {selectedCountry && (
-            <div className="filter-column">
-              <h3>Filter By Sub Border</h3>
-              <SubBorderSelector
-                country={selectedCountry}
-                selectedSubBorder={selectedSubBorder}
-                onChange={(subBorder) => this.handleBoundaryChange('subBorder', subBorder)}
-                onClear={() => this.clearBoundary('subBorder')}
-                boundaryData={boundaryData}
-                setBoundaryData={setBoundaryData}
-              />
-            </div>
-          )}
-
-          {selectedSubBorder && (
-            <div className="filter-column">
-              <h3>Filter By Lower Border</h3>
-              <LowerBorderSelector
-                subBorder={selectedSubBorder}
-                selectedLowerBorder={selectedLowerBorder}
-                countryName={selectedCountry?.name}
-                onChange={(lowerBorder) => this.handleBoundaryChange('lowerBorder', lowerBorder)}
-                onClear={() => this.clearBoundary('lowerBorder')}
-                boundaryData={boundaryData}
-                setBoundaryData={setBoundaryData}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-}
-
 const mapStateToProps = (state) => ({
   stateBbox: state.map?.settings?.bbox || [],
   filterInteractions: state.map?.data?.filterInteractions || {
@@ -399,156 +158,24 @@ const mapDispatchToProps = {
   setBoundaryData
 };
 
-export const FilterPanelContainer = connect(
-  mapStateToProps,
-  mapDispatchToProps
-)(FilterPanelContainerComponent);
-
-
 // =============================================================================
-// FloodWatch Custom: WHCA Countries Filter
-// WHCA = Uganda, Rwanda, South Sudan, Ethiopia, Sudan (5 countries)
-// When selected, automatically zooms to and filters by all 5 countries as one region
-// Also provides admin selectors filtered to only WHCA countries
+// FloodWatch: Project-based Filter
+// Projects define a set of countries with their full admin hierarchy.
+// Selecting a project scopes the map to those countries, then allows
+// drilling down through Country → Region → District.
 // =============================================================================
-const WHCA_COUNTRIES = ['Uganda', 'Rwanda', 'South Sudan', 'Ethiopia', 'Sudan'];
-
-// WHCA-specific boundary selector that filters countries to WHCA only
-const WHCACountrySelector = ({
-  selectedCountry,
-  whcaCountries,
-  onChange,
-  onClear,
-}) => {
-  const availableCountries = whcaCountries.filter(
-    c => !selectedCountry || c.code !== selectedCountry.code
-  );
-
-  const dropdownOptions = [
-    { label: '+ Select country', value: '' },
-    ...availableCountries.map(country => ({
-      label: country.name,
-      value: country.code
-    }))
-  ];
-
-  return (
-    <div className="filter-container">
-      {selectedCountry && (
-        <FilterItem label={selectedCountry.name} onClear={onClear} />
-      )}
-      <Dropdown
-        className="boundary-dropdown"
-        theme="theme-dropdown-native"
-        options={dropdownOptions}
-        value=""
-        onChange={(value) => {
-          if (value) {
-            const selected = whcaCountries.find(c => c.code === value);
-            if (selected) onChange(selected);
-          }
-        }}
-        native
-      />
-    </div>
-  );
+const PROJECTS = {
+  WHCA: {
+    label: 'WHCA',
+    countries: ['Uganda', 'Rwanda', 'South Sudan', 'Ethiopia', 'Sudan'],
+  },
 };
 
-// WHCA Region selector using same pattern
-const WHCARegionSelector = ({
-  selectedRegion,
-  regions,
-  onChange,
-  onClear,
-  showOnlyIfParent,
-  parentCode
-}) => {
-  if (showOnlyIfParent && !parentCode) return null;
-
-  const availableRegions = regions.filter(
-    r => !selectedRegion || r.code !== selectedRegion.code
-  );
-
-  const dropdownOptions = [
-    { label: '+ Select region', value: '' },
-    ...availableRegions.map(region => ({
-      label: region.name,
-      value: region.code
-    }))
-  ];
-
-  return (
-    <div className="filter-container">
-      {selectedRegion && (
-        <FilterItem label={selectedRegion.name} onClear={onClear} />
-      )}
-      <Dropdown
-        className="boundary-dropdown"
-        theme="theme-dropdown-native"
-        options={dropdownOptions}
-        value=""
-        onChange={(value) => {
-          if (value) {
-            const selected = regions.find(r => r.code === value);
-            if (selected) onChange(selected);
-          }
-        }}
-        native
-      />
-    </div>
-  );
-};
-
-// WHCA District selector using same pattern
-const WHCADistrictSelector = ({
-  selectedDistrict,
-  districts,
-  onChange,
-  onClear,
-  showOnlyIfParent,
-  parentCode
-}) => {
-  if (showOnlyIfParent && !parentCode) return null;
-
-  const availableDistricts = districts.filter(
-    d => !selectedDistrict || d.code !== selectedDistrict.code
-  );
-
-  const dropdownOptions = [
-    { label: '+ Select district', value: '' },
-    ...availableDistricts.map(district => ({
-      label: district.name,
-      value: district.code
-    }))
-  ];
-
-  return (
-    <div className="filter-container">
-      {selectedDistrict && (
-        <FilterItem label={selectedDistrict.name} onClear={onClear} />
-      )}
-      <Dropdown
-        className="boundary-dropdown"
-        theme="theme-dropdown-native"
-        options={dropdownOptions}
-        value=""
-        onChange={(value) => {
-          if (value) {
-            const selected = districts.find(d => d.code === value);
-            if (selected) onChange(selected);
-          }
-        }}
-        native
-      />
-    </div>
-  );
-};
-
-class WHCAFilterContainerComponent extends React.Component {
+class ProjectFilterContainerComponent extends React.Component {
   state = {
-    loading: true,
-    applied: false,
-    whcaCountriesData: [],
+    loading: false,
+    selectedProject: null,
+    projectCountriesData: [],
     selectedCountry: null,
     selectedRegion: null,
     selectedDistrict: null,
@@ -556,27 +183,29 @@ class WHCAFilterContainerComponent extends React.Component {
     districts: [],
   };
 
-  componentDidMount() {
-    this.applyWHCAFilter();
-  }
+  applyProject = async (projectKey) => {
+    const project = PROJECTS[projectKey];
+    if (!project) return;
 
-  applyWHCAFilter = async () => {
+    this.setState({ loading: true, selectedProject: projectKey,
+      selectedCountry: null, selectedRegion: null, selectedDistrict: null,
+      regions: [], districts: [], projectCountriesData: [] });
+
     try {
       const data = await fetchAdminBoundaries(null, '', true, {
         boundaryData: this.props.boundaryData,
         setBoundaryData: this.props.setBoundaryData
       });
 
-      // Filter to only WHCA countries and calculate combined bounds
-      const whcaData = (Array.isArray(data) ? data : []).filter(item =>
-        WHCA_COUNTRIES.includes(item.name)
+      const projectData = (Array.isArray(data) ? data : []).filter(item =>
+        project.countries.includes(item.name)
       );
 
-      if (whcaData.length > 0) {
+      if (projectData.length > 0) {
         let minLeft = Infinity, minBottom = Infinity;
         let maxRight = -Infinity, maxTop = -Infinity;
 
-        whcaData.forEach(item => {
+        projectData.forEach(item => {
           if (item.bbox) {
             minLeft = Math.min(minLeft, item.bbox.left);
             minBottom = Math.min(minBottom, item.bbox.bottom);
@@ -585,49 +214,59 @@ class WHCAFilterContainerComponent extends React.Component {
           }
         });
 
-        // Zoom to WHCA region
         this.props.setMapSettings({
           canBound: true,
           bbox: [minLeft, minBottom, maxRight, maxTop]
         });
 
-        // Set param interactions for WHCA filtering
         this.props.setParamInteractions({
-          whca_filter: true,
-          whca_countries: WHCA_COUNTRIES.join(',')
+          project_filter: true,
+          project_countries: project.countries.join(',')
         });
-
-        this.setState({ loading: false, applied: true, whcaCountriesData: whcaData });
       }
+
+      this.setState({ loading: false, projectCountriesData: projectData });
     } catch (error) {
       this.setState({ loading: false });
+    }
+  };
+
+  clearProject = () => {
+    this.setState({
+      selectedProject: null, projectCountriesData: [],
+      selectedCountry: null, selectedRegion: null, selectedDistrict: null,
+      regions: [], districts: []
+    });
+    this.props.clearParamInteractions();
+
+    const { initialBbox } = this.props;
+    if (initialBbox && initialBbox.length === 4) {
+      this.props.setMapSettings({ canBound: true, bbox: [...initialBbox] });
     }
   };
 
   handleCountryChange = async (country) => {
     if (!country) return;
 
+    const project = PROJECTS[this.state.selectedProject];
     this.setState({ selectedCountry: country, selectedRegion: null, selectedDistrict: null, districts: [] });
 
-    // Fetch regions for selected country using shared utility
     const regions = await fetchAdminBoundaries(0, country.name, true, {
       boundaryData: this.props.boundaryData,
       setBoundaryData: this.props.setBoundaryData
     });
     this.setState({ regions: Array.isArray(regions) ? regions : [] });
 
-    // Update params using shared utility
     const paramInteractions = buildParamInteractionsFromBoundary(
       country, '0', '0', 'Admin',
       { country_name: country.name, region_name: '' }
     );
     this.props.setParamInteractions({
       ...paramInteractions,
-      whca_filter: true,
-      whca_countries: WHCA_COUNTRIES.join(',')
+      project_filter: true,
+      project_countries: project.countries.join(',')
     });
 
-    // Zoom to country
     if (country.bbox) {
       this.props.setMapSettings({
         canBound: true,
@@ -639,30 +278,26 @@ class WHCAFilterContainerComponent extends React.Component {
   handleRegionChange = async (region) => {
     if (!region) return;
 
+    const project = PROJECTS[this.state.selectedProject];
     this.setState({ selectedRegion: region, selectedDistrict: null });
 
-    // Fetch districts for selected region
     const districts = await fetchAdminBoundaries(1, region.name, true, {
       boundaryData: this.props.boundaryData,
       setBoundaryData: this.props.setBoundaryData,
-      extraParams: {
-        country_id: this.state.selectedCountry?.name || ''
-      }
+      extraParams: { country_id: this.state.selectedCountry?.name || '' }
     });
     this.setState({ districts: Array.isArray(districts) ? districts : [] });
 
-    // Update params using shared utility
     const paramInteractions = buildParamInteractionsFromBoundary(
       region, '1', '1', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: region.name }
     );
     this.props.setParamInteractions({
       ...paramInteractions,
-      whca_filter: true,
-      whca_countries: WHCA_COUNTRIES.join(',')
+      project_filter: true,
+      project_countries: project.countries.join(',')
     });
 
-    // Zoom to region
     if (region.bbox) {
       this.props.setMapSettings({
         canBound: true,
@@ -674,21 +309,20 @@ class WHCAFilterContainerComponent extends React.Component {
   handleDistrictChange = (district) => {
     if (!district) return;
 
+    const project = PROJECTS[this.state.selectedProject];
     this.setState({ selectedDistrict: district });
 
-    // Update params using shared utility
     const paramInteractions = buildParamInteractionsFromBoundary(
       district, '2', '2', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: this.state.selectedRegion.name }
     );
     this.props.setParamInteractions({
       ...paramInteractions,
-      whca_filter: true,
-      whca_countries: WHCA_COUNTRIES.join(','),
+      project_filter: true,
+      project_countries: project.countries.join(','),
       district_name: district.name
     });
 
-    // Zoom to district
     if (district.bbox) {
       this.props.setMapSettings({
         canBound: true,
@@ -699,27 +333,29 @@ class WHCAFilterContainerComponent extends React.Component {
 
   clearCountry = () => {
     this.setState({ selectedCountry: null, selectedRegion: null, selectedDistrict: null, regions: [], districts: [] });
+    const project = PROJECTS[this.state.selectedProject];
     this.props.setParamInteractions({
-      whca_filter: true,
-      whca_countries: WHCA_COUNTRIES.join(','),
+      project_filter: true,
+      project_countries: project.countries.join(','),
       country_name: '',
       region_name: '',
       district_name: '',
       admin_filter: false
     });
-    this.applyWHCAFilter();
+    this.applyProject(this.state.selectedProject);
   };
 
   clearRegion = () => {
     this.setState({ selectedRegion: null, selectedDistrict: null, districts: [] });
+    const project = PROJECTS[this.state.selectedProject];
     const paramInteractions = buildParamInteractionsFromBoundary(
       this.state.selectedCountry, '0', '0', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: '' }
     );
     this.props.setParamInteractions({
       ...paramInteractions,
-      whca_filter: true,
-      whca_countries: WHCA_COUNTRIES.join(',')
+      project_filter: true,
+      project_countries: project.countries.join(',')
     });
     if (this.state.selectedCountry?.bbox) {
       this.props.setMapSettings({
@@ -732,14 +368,15 @@ class WHCAFilterContainerComponent extends React.Component {
 
   clearDistrict = () => {
     this.setState({ selectedDistrict: null });
+    const project = PROJECTS[this.state.selectedProject];
     const paramInteractions = buildParamInteractionsFromBoundary(
       this.state.selectedRegion, '1', '1', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: this.state.selectedRegion.name }
     );
     this.props.setParamInteractions({
       ...paramInteractions,
-      whca_filter: true,
-      whca_countries: WHCA_COUNTRIES.join(',')
+      project_filter: true,
+      project_countries: project.countries.join(',')
     });
     if (this.state.selectedRegion?.bbox) {
       this.props.setMapSettings({
@@ -751,51 +388,250 @@ class WHCAFilterContainerComponent extends React.Component {
   };
 
   render() {
-    const { loading, applied, whcaCountriesData, selectedCountry, selectedRegion, selectedDistrict, regions, districts } = this.state;
+    const { loading, selectedProject, projectCountriesData,
+      selectedCountry, selectedRegion, selectedDistrict, regions, districts } = this.state;
+
+    const projectOptions = [
+      { label: '+ Select project', value: '' },
+      ...Object.keys(PROJECTS).map(key => ({
+        label: PROJECTS[key].label,
+        value: key
+      }))
+    ];
+
+    const availableCountries = projectCountriesData.filter(
+      c => !selectedCountry || c.code !== selectedCountry.code
+    );
+    const availableRegions = regions.filter(
+      r => !selectedRegion || r.code !== selectedRegion.code
+    );
+    const availableDistricts = districts.filter(
+      d => !selectedDistrict || d.code !== selectedDistrict.code
+    );
 
     return (
       <div className="filter-panel-container">
-        {loading && <p className="loading">Loading...</p>}
-
-        {applied && (
-          <div className="filter-grid">
-            <div className="filter-column">
-              <h3>Filter By Country</h3>
-              <WHCACountrySelector
-                selectedCountry={selectedCountry}
-                whcaCountries={whcaCountriesData}
-                onChange={this.handleCountryChange}
-                onClear={this.clearCountry}
+        <div className="filter-grid">
+          <div className="filter-column">
+            <h3>Project Name</h3>
+            <div className="filter-container">
+              {selectedProject && (
+                <FilterItem label={PROJECTS[selectedProject].label} onClear={this.clearProject} />
+              )}
+              <Dropdown
+                className="boundary-dropdown"
+                theme="theme-dropdown-native"
+                options={projectOptions}
+                value=""
+                onChange={(value) => { if (value) this.applyProject(value); }}
+                native
               />
             </div>
+          </div>
 
-            {selectedCountry && (
-              <div className="filter-column">
-                <h3>Filter By Region</h3>
-                <WHCARegionSelector
-                  selectedRegion={selectedRegion}
-                  regions={regions}
-                  onChange={this.handleRegionChange}
-                  onClear={this.clearRegion}
-                  showOnlyIfParent={true}
-                  parentCode={selectedCountry?.code}
+          {selectedProject && !loading && projectCountriesData.length > 0 && (
+            <div className="filter-column">
+              <h3>Country</h3>
+              <div className="filter-container">
+                {selectedCountry && (
+                  <FilterItem label={selectedCountry.name} onClear={this.clearCountry} />
+                )}
+                <Dropdown
+                  className="boundary-dropdown"
+                  theme="theme-dropdown-native"
+                  options={[
+                    { label: '+ Select country', value: '' },
+                    ...availableCountries.map(c => ({ label: c.name, value: c.code }))
+                  ]}
+                  value=""
+                  onChange={(value) => {
+                    if (value) {
+                      const selected = projectCountriesData.find(c => c.code === value);
+                      if (selected) this.handleCountryChange(selected);
+                    }
+                  }}
+                  native
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            {selectedRegion && (
-              <div className="filter-column">
-                <h3>Filter By District</h3>
-                <WHCADistrictSelector
-                  selectedDistrict={selectedDistrict}
-                  districts={districts}
-                  onChange={this.handleDistrictChange}
-                  onClear={this.clearDistrict}
-                  showOnlyIfParent={true}
-                  parentCode={selectedRegion?.code}
+          {selectedCountry && regions.length > 0 && (
+            <div className="filter-column">
+              <h3>Region</h3>
+              <div className="filter-container">
+                {selectedRegion && (
+                  <FilterItem label={selectedRegion.name} onClear={this.clearRegion} />
+                )}
+                <Dropdown
+                  className="boundary-dropdown"
+                  theme="theme-dropdown-native"
+                  options={[
+                    { label: '+ Select region', value: '' },
+                    ...availableRegions.map(r => ({ label: r.name, value: r.code }))
+                  ]}
+                  value=""
+                  onChange={(value) => {
+                    if (value) {
+                      const selected = regions.find(r => r.code === value);
+                      if (selected) this.handleRegionChange(selected);
+                    }
+                  }}
+                  native
                 />
               </div>
-            )}
+            </div>
+          )}
+
+          {selectedRegion && districts.length > 0 && (
+            <div className="filter-column">
+              <h3>District</h3>
+              <div className="filter-container">
+                {selectedDistrict && (
+                  <FilterItem label={selectedDistrict.name} onClear={this.clearDistrict} />
+                )}
+                <Dropdown
+                  className="boundary-dropdown"
+                  theme="theme-dropdown-native"
+                  options={[
+                    { label: '+ Select district', value: '' },
+                    ...availableDistricts.map(d => ({ label: d.name, value: d.code }))
+                  ]}
+                  value=""
+                  onChange={(value) => {
+                    if (value) {
+                      const selected = districts.find(d => d.code === value);
+                      if (selected) this.handleDistrictChange(selected);
+                    }
+                  }}
+                  native
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {loading && <p className="loading">Loading project data...</p>}
+      </div>
+    );
+  }
+}
+
+export const ProjectFilterContainer = connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(ProjectFilterContainerComponent);
+
+
+// =============================================================================
+// FloodWatch Custom: Watershed/Basin Filter
+// Uses HydroSHEDS Level 6 basins for spatial filtering by watershed
+// =============================================================================
+
+class WatershedFilterContainerComponent extends React.Component {
+  state = {
+    loading: true,
+    basins: [],
+    selectedBasin: null,
+  };
+
+  componentDidMount() {
+    this.loadBasins();
+  }
+
+  loadBasins = async () => {
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+      const response = await fetch(`${apiBase}/api/v1/basins/list?with_points=true`);
+      if (response.ok) {
+        const data = await response.json();
+        this.setState({ basins: data.basins || [], loading: false });
+      } else {
+        this.setState({ loading: false });
+      }
+    } catch (error) {
+      console.error('Error fetching basins:', error);
+      this.setState({ loading: false });
+    }
+  };
+
+  handleBasinChange = (basin) => {
+    if (!basin) return;
+
+    this.setState({ selectedBasin: basin });
+
+    // Set param interactions for basin filtering
+    this.props.setParamInteractions({
+      basin_filter: true,
+      basin_id: basin.hybas_id,
+      admin_filter: false,
+      whca_filter: false,
+      country_name: '',
+      region_name: '',
+      district_name: '',
+    });
+
+    // Zoom to basin bbox
+    if (basin.bbox) {
+      this.props.setMapSettings({
+        canBound: true,
+        bbox: [basin.bbox.west, basin.bbox.south, basin.bbox.east, basin.bbox.north],
+      });
+    }
+  };
+
+  clearBasin = () => {
+    this.setState({ selectedBasin: null });
+    this.props.clearParamInteractions();
+
+    // Reset to default view
+    const { initialBbox } = this.props;
+    if (initialBbox && initialBbox.length === 4) {
+      this.props.setMapSettings({ canBound: true, bbox: [...initialBbox] });
+    }
+  };
+
+  render() {
+    const { loading, basins, selectedBasin } = this.state;
+
+    return (
+      <div className="filter-panel-container">
+        {loading && <p className="loading">Loading basins...</p>}
+
+        {!loading && (
+          <div className="filter-grid">
+            <div className="filter-column">
+              <h3>Filter By Watershed Basin</h3>
+              <div className="filter-container">
+                {selectedBasin && (
+                  <FilterItem
+                    label={`Basin ${selectedBasin.hybas_id} (${selectedBasin.point_count} pts)`}
+                    onClear={this.clearBasin}
+                  />
+                )}
+                <Dropdown
+                  className="boundary-dropdown"
+                  theme="theme-dropdown-native"
+                  options={[
+                    { label: '+ Select basin', value: '' },
+                    ...basins
+                      .filter(b => !selectedBasin || b.hybas_id !== selectedBasin.hybas_id)
+                      .map(b => ({
+                        label: `Basin ${b.hybas_id} (${b.point_count} pts, ${Math.round(b.up_area)} km²)`,
+                        value: String(b.hybas_id),
+                      })),
+                  ]}
+                  value=""
+                  onChange={(value) => {
+                    if (value) {
+                      const selected = basins.find(b => String(b.hybas_id) === value);
+                      if (selected) this.handleBasinChange(selected);
+                    }
+                  }}
+                  native
+                />
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -803,10 +639,10 @@ class WHCAFilterContainerComponent extends React.Component {
   }
 }
 
-export const WHCAFilterContainer = connect(
+export const WatershedFilterContainer = connect(
   mapStateToProps,
   mapDispatchToProps
-)(WHCAFilterContainerComponent);
+)(WatershedFilterContainerComponent);
 
 
 // =============================================================================
