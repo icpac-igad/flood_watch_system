@@ -305,8 +305,8 @@ jobs:
             cp staging.env.example .env
             echo ".env created from staging.env.example"
 
-            # Pull latest images
-            docker compose -f docker-compose.staging.yml --env-file .env pull
+            # Pull latest images (--ignore-pull-failures so one missing image doesn't block others)
+            docker compose -f docker-compose.staging.yml --env-file .env pull --ignore-pull-failures
 
             # Restart services
             docker compose -f docker-compose.staging.yml --env-file .env up -d
