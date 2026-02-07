@@ -50,8 +50,10 @@ GRANT ALL PRIVILEGES ON SCHEMA cms TO ingest_user;
 -- ============================================
 -- DEFAULT SEARCH PATH FOR ALL CONNECTIONS
 -- ============================================
--- Set search_path for main user (CMS needs cms first, then gha for geo queries)
-ALTER ROLE geomanager SET search_path = cms,gha,public;
+-- Set search_path for main user (works for both geomanager and eafw_user)
+DO $$ BEGIN
+    EXECUTE format('ALTER ROLE %I SET search_path = cms,gha,public', current_user);
+END $$;
 
 -- Set search_path for other roles (gha first for geo-focused services)
 ALTER ROLE mapuser SET search_path = gha,public;

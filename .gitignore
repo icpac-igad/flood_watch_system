@@ -49,8 +49,9 @@ backups/
 **/dump*.sql
 **/export*.sql
 
-# DB init data (large compressed dumps)
-eafw_docker/db-init/*.sql.gz
+# DB init data — track compressed init files (needed for fresh deploys)
+# Only ignore ad-hoc dump files, not the init data
+!eafw_docker/db-init/*.sql.gz
 
 # Large GeoJSON files
 *.geojson

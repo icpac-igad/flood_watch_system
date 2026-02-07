@@ -328,6 +328,14 @@ jobs:
             # Deploy services
             docker compose -f docker-compose.staging.yml --env-file .env up -d
 
+            # Wait for DB to be ready (init scripts can take time on first deploy)
+            echo "Waiting for database to be ready..."
+            for i in $(seq 1 30); do
+              docker exec eafw-pgdb pg_isready -U eafw_user 2>/dev/null && break
+              echo "  DB not ready yet ($i/30)..."
+              sleep 5
+            done
+
             # Run DB migrations (add country_code if missing, populate via ST_Within)
             echo "Running DB migrations..."
             docker exec eafw-pgdb psql -U eafw_user -d eafw_db -c "
@@ -357,9 +365,9 @@ jobs:
             # Cleanup dangling images
             docker image prune -f
 
-            # Health check
-            echo "Waiting 30s for services to start..."
-            sleep 30
+            # Health check — allow extra time for first-time DB init (60MB+ static data)
+            echo "Waiting for services to start..."
+            sleep 60
             FAILED=0
             for svc in eafw-pgdb eafw-pgbouncer eafw-cms eafw-api eafw-mapviewer eafw-nginx; do
               STATUS=$(docker inspect --format='{{.State.Status}}' $svc 2>/dev/null)
