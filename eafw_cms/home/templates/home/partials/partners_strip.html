@@ -1,0 +1,44 @@
+{% load wagtailimages_tags %}
+
+{% if footer %}
+{% if footer.partners or footer.member_countries %}
+<section class="home-module home-module--partners">
+    <div class="partners-section">
+        <div class="partners-container">
+            {% if footer and footer.partners %}
+            <div class="partners-group">
+                <span class="partners-label">Partners</span>
+                <div class="partners-logos">
+                    {% for block in footer.partners %}
+                    {% with block.value as partner %}
+                    {% if partner.image %}
+                    <a href="{{ partner.url|default:'#' }}" {% if partner.url %}target="_blank" rel="noopener"{% endif %}>
+                        {% image partner.image height-45 as partner_logo %}
+                        <img src="{{ partner_logo.url }}" alt="{{ partner.name }}" class="partner-logo" title="{{ partner.name }}">
+                    </a>
+                    {% endif %}
+                    {% endwith %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if footer and footer.member_countries %}
+            <div class="members-group">
+                <span class="partners-label">Member Countries</span>
+                <div class="member-flags">
+                    {% for block in footer.member_countries %}
+                    {% with block.value as item %}
+                    <div class="member-flag" data-country-code="{{ item.country|upper }}" title="{{ item.country }}">
+                        <img src="https://flagcdn.com/w40/{{ item.country|lower }}.png" alt="{{ item.country }}">
+                    </div>
+                    {% endwith %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endif %}
+{% endif %}

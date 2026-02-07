@@ -1,0 +1,32 @@
+{% load i18n %}
+
+<div class="risk-ticker-container">
+    <div class="risk-ticker" id="risk-ticker">
+        <div class="ticker-content">
+            <span class="ticker-title" id="dashboard-title">
+                <span id="dashboard-title-text">{{ page.dashboard_title|default:"Latest Situation of Flood Conditions" }}</span> - <span id="title-date">Loading...</span>
+            </span>
+            <span class="ticker-separator">|</span>
+            <span class="ticker-item emergency">
+                <span class="ticker-dot"></span>
+                <span class="ticker-label">{% trans "Emergency" %}:</span>
+                <span class="ticker-count" id="ticker-emergency">-</span>
+            </span>
+            <span class="ticker-item alarm">
+                <span class="ticker-dot"></span>
+                <span class="ticker-label">{% trans "Alarm" %}:</span>
+                <span class="ticker-count" id="ticker-alarm">-</span>
+            </span>
+            <span class="ticker-item warning">
+                <span class="ticker-dot"></span>
+                <span class="ticker-label">{% trans "Warning" %}:</span>
+                <span class="ticker-count" id="ticker-warning">-</span>
+            </span>
+            <span class="ticker-item normal">
+                <span class="ticker-dot"></span>
+                <span class="ticker-label">{% trans "Normal" %}:</span>
+                <span class="ticker-count" id="ticker-normal">-</span>
+            </span>
+        </div>
+    </div>
+</div>

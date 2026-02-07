@@ -1,0 +1,78 @@
+{% load wagtailimages_tags cms_tags %}
+
+{% if footer %}
+<footer class="footer-professional">
+  <div class="footer-content">
+    <div class="footer-brand">
+      {% if footer.logo %}
+        {% image footer.logo max-50x50 class="footer-logo" %}
+      {% endif %}
+      <div class="footer-info">
+        <span class="footer-title">East Africa Flood Watch</span>
+        <span class="footer-desc">{{ footer.description }}</span>
+      </div>
+    </div>
+    <span class="copyright">&copy; {{ footer.copyright_organization }} {% now "Y" %}. All rights reserved.</span>
+  </div>
+</footer>
+{% endif %}
+
+<style>
+  .footer-professional {
+    background-color: var(--footer-bg, #034930);
+    color: var(--footer-text, #fff);
+    padding: 18px 30px;
+    margin-top: auto;
+  }
+
+  .footer-content {
+    max-width: 1600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .footer-logo {
+    height: 64px;
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  .footer-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .footer-title {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .footer-desc {
+    font-size: 0.8rem;
+    line-height: 1.4;
+    opacity: 0.85;
+  }
+
+  .copyright {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+  }
+
+  @media screen and (max-width: 768px) {
+    .footer-brand {
+      flex-direction: column;
+      text-align: center;
+    }
+  }
+</style>

@@ -1,0 +1,29 @@
+{% load wagtailimages_tags lazyimages_tags%}
+
+
+<div class="columns is-mobile is-multiline info-section-row ">
+    <div class="column is-half-desktop is-full-mobile is-flex is-flex-direction-column is-justify-content-center is-align-items">
+        <h1 class="info-title">{{info_block.value.title}} </h1>
+
+        {% if info_block.value.description %}
+        <div class="info-description">
+            {{info_block.value.description}}
+        </div>
+        {% endif %}
+
+
+        <ul class="info-list-items">
+            {% for item in info_block.value.items %}
+            <li>{{item}}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="column is-half-desktop is-full-mobile">
+        {% image info_block.value.image original as info_img %}
+        <figure class="info-image">
+            <img class="progressive__img progressive--not-loaded" data-progressive="{{ info_img.url }}"
+                 src="{% lazy_image_url info_img %}"
+                 alt="{{ info_img.alt }}"/>
+        </figure>
+    </div>
+</div>

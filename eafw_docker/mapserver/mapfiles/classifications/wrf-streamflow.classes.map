@@ -1,0 +1,39 @@
+# WRF-Hydro Stream Flow Classifications
+# Flow levels: 1=Normal, 2=Moderate, 3=High, 4=Very High
+# Water color scheme - deeper blue = higher flow
+
+CLASS
+    NAME "Normal"
+    EXPRESSION ([flow_level] = 1)
+    STYLE
+        COLOR 173 216 230
+        OPACITY 60
+    END
+END
+
+CLASS
+    NAME "Moderate"
+    EXPRESSION ([flow_level] = 2)
+    STYLE
+        COLOR 100 149 237
+        OPACITY 70
+    END
+END
+
+CLASS
+    NAME "High"
+    EXPRESSION ([flow_level] = 3)
+    STYLE
+        COLOR 65 105 225
+        OPACITY 80
+    END
+END
+
+CLASS
+    NAME "Very High"
+    EXPRESSION ([flow_level] = 4)
+    STYLE
+        COLOR 0 0 139
+        OPACITY 90
+    END
+END

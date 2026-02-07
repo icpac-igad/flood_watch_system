@@ -1,0 +1,33 @@
+<div class="report-section response-actions-section mb-4">
+    <h3 class="section-heading">{{ value.heading }}</h3>
+
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Action</th>
+                    <th>Responsible Party</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for action in value.actions %}
+                    <tr>
+                        <td>{{ action.action }}</td>
+                        <td>{{ action.responsible|default:"-" }}</td>
+                        <td>
+                            <span class="badge
+                                {% if action.status == 'completed' %}bg-success
+                                {% elif action.status == 'ongoing' %}bg-primary
+                                {% else %}bg-secondary{% endif %}">
+                                {% if action.status == 'completed' %}✓ Completed
+                                {% elif action.status == 'ongoing' %}⏳ Ongoing
+                                {% else %}📋 Planned{% endif %}
+                            </span>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

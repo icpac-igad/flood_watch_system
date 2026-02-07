@@ -1,0 +1,605 @@
+/**
+ * Flood Analysis Report Styles
+ * Matching ICPAC Drought Watch report design
+ */
+
+.c-flood-analysis {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0;
+  background: #fff;
+  min-height: 100vh;
+
+  // ICPAC Header - matching drought report
+  .icpac-header {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
+    background: #fff;
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .icpac-logo {
+        height: 60px;
+        width: auto;
+      }
+
+      .logo-text {
+        display: flex;
+        flex-direction: column;
+
+        .igad-text {
+          font-size: 24px;
+          font-weight: 700;
+          color: #1a5632;
+          line-height: 1;
+        }
+
+        .icpac-text {
+          font-size: 20px;
+          font-weight: 600;
+          color: #1a5632;
+        }
+
+        .icpac-subtitle {
+          font-size: 10px;
+          color: #666;
+          line-height: 1.2;
+        }
+      }
+    }
+  }
+
+  // Alert Level Color Bar - like drought report
+  .alert-color-bar {
+    display: flex;
+    height: 8px;
+    margin-bottom: 0;
+
+    .color-segment {
+      flex: 1;
+
+      &.normal { background: #4CAF50; }
+      &.watch { background: #2196F3; }
+      &.warning { background: #FFC107; }
+      &.alarm { background: #FF9800; }
+      &.emergency { background: #F44336; }
+    }
+  }
+
+  .c-flood-analysis-body {
+    padding: 24px 48px;
+  }
+
+  // Report Title Section
+  .report-title-section {
+    text-align: center;
+    padding: 30px 0 20px;
+
+    .report-main-title {
+      font-size: 26px;
+      font-weight: 600;
+      color: #333;
+      margin: 0 0 8px 0;
+    }
+
+    .report-reference-date {
+      font-size: 16px;
+      color: #555;
+      margin: 0;
+    }
+  }
+
+  // Report Footer
+  .report-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 0;
+    margin-top: 40px;
+    border-top: 1px solid #e0e0e0;
+    font-size: 12px;
+    color: #666;
+
+    .footer-left {
+      font-weight: 500;
+    }
+
+    .footer-center {
+      color: #888;
+    }
+
+    .footer-right {
+      color: #0066cc;
+    }
+  }
+}
+
+// Global Options Section - matching drought report sections
+.c-global-options {
+  margin-top: 20px;
+  margin-bottom: 30px;
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+    margin: 0 0 8px 0;
+    padding-left: 16px;
+    border-left: 4px solid #FF9800;
+  }
+
+  .section-description {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 16px 0;
+    line-height: 1.5;
+  }
+
+  .options-content {
+    background: #f8f9fa;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .generate-btn {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 16px;
+  }
+}
+
+// Reporting Unit Radio Buttons
+.c-reporting-unit {
+  .MuiFormControlLabel-root {
+    margin-right: 1.5rem;
+
+    .MuiSvgIcon-root {
+      font-size: 1.25rem;
+    }
+  }
+
+  .admin-selectors {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+
+    .MuiFormControl-root {
+      min-width: 180px;
+    }
+  }
+}
+
+// Widgets Section - matching drought report sections
+.c-flood-widgets {
+  margin-top: 30px;
+
+  .widgets-container {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .empty-state {
+    background: #f8f9fa;
+    padding: 40px;
+    text-align: center;
+    border-radius: 4px;
+    color: #666;
+  }
+}
+
+// Section styling - matching drought report
+.report-section {
+  margin-bottom: 30px;
+
+  .section-header {
+    margin-bottom: 16px;
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 500;
+      color: #333;
+      margin: 0 0 8px 0;
+      padding-left: 16px;
+      border-left: 4px solid #FF9800;
+    }
+
+    .section-description {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.5;
+      margin: 0;
+
+      a {
+        color: #0066cc;
+        text-decoration: none;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+
+  .section-content {
+    background: #f8f9fa;
+    border-radius: 4px;
+    padding: 20px;
+  }
+}
+
+// Individual Widget
+.c-flood-widget {
+  background: #fff;
+  margin-bottom: 30px;
+
+  .widget-header {
+    margin-bottom: 16px;
+
+    .widget-title {
+      font-size: 18px;
+      font-weight: 500;
+      color: #333;
+      margin: 0 0 8px 0;
+      padding-left: 16px;
+      border-left: 4px solid #FF9800;
+    }
+
+    .widget-description {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.5;
+
+      a {
+        color: #0066cc;
+        text-decoration: none;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+
+  .widget-content {
+    background: #f8f9fa;
+    border-radius: 4px;
+    padding: 20px;
+  }
+
+  .chart-container {
+    min-height: 350px;
+    background: #fff;
+    border-radius: 4px;
+    padding: 16px;
+    border: 1px solid #e0e0e0;
+  }
+
+  .map-container {
+    min-height: 300px;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+
+    img {
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+  }
+}
+
+// Model Tabs
+.model-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+
+  .model-tab {
+    padding: 0.5rem 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: #f0f0f0;
+    }
+
+    &.active {
+      background: #0c5a27;
+      color: #fff;
+      border-color: #0c5a27;
+    }
+  }
+}
+
+// Alert Level Badges
+.alert-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  &.normal {
+    background: rgba(128, 128, 128, 0.15);
+    color: #666;
+  }
+
+  &.warning {
+    background: rgba(255, 193, 7, 0.2);
+    color: #b8860b;
+  }
+
+  &.alarm {
+    background: rgba(255, 152, 0, 0.2);
+    color: #e65100;
+  }
+
+  &.emergency {
+    background: rgba(211, 47, 47, 0.2);
+    color: #c62828;
+  }
+}
+
+// Action Buttons - compact style
+.c-action-buttons {
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 30px;
+  padding: 0;
+  flex-wrap: wrap;
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+
+    &.pdf-btn {
+      background: #1976d2;
+      color: #fff;
+
+      &:hover {
+        background: #1565c0;
+      }
+    }
+
+    &.share-btn {
+      background: #388e3c;
+      color: #fff;
+
+      &:hover {
+        background: #2e7d32;
+      }
+    }
+
+    &.subscribe-btn {
+      background: #f57c00;
+      color: #fff;
+
+      &:hover {
+        background: #e65100;
+      }
+    }
+
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+}
+
+// Statistics Table - matching drought report style
+.c-stats-table {
+  width: 100%;
+  overflow-x: auto;
+  margin: 20px 0;
+
+  .table-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+    margin: 0 0 12px 0;
+    padding-left: 12px;
+    border-left: 3px solid #FF9800;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+
+    th,
+    td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    th {
+      background: #f5f5f5;
+      font-weight: 600;
+      color: #333;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      color: #555;
+    }
+
+    tr:hover td {
+      background: #fafafa;
+    }
+
+    // Alert level indicator dot
+    .level-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+
+      .level-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+
+        &.emergency { background: #F44336; }
+        &.alarm { background: #FF9800; }
+        &.warning { background: #FFC107; }
+        &.watch { background: #2196F3; }
+        &.normal { background: #4CAF50; }
+      }
+    }
+  }
+}
+
+// Loader
+.widget-loader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+// Error container
+.error-container {
+  margin: 20px 0;
+  padding: 16px 20px;
+  background: #FFEBEE;
+  border-radius: 4px;
+  border-left: 4px solid #F44336;
+
+  .error-message {
+    font-size: 14px;
+    color: #C62828;
+    margin: 0;
+  }
+}
+
+// Loading container
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .c-flood-analysis {
+    .c-flood-analysis-body {
+      padding: 16px 20px;
+    }
+
+    .report-title-section {
+      .report-main-title {
+        font-size: 20px;
+      }
+
+      .report-reference-date {
+        font-size: 14px;
+      }
+    }
+
+    .icpac-header {
+      .logo-container {
+        .icpac-logo {
+          height: 45px;
+        }
+
+        .logo-text {
+          .igad-text {
+            font-size: 18px;
+          }
+
+          .icpac-text {
+            font-size: 16px;
+          }
+        }
+      }
+    }
+  }
+
+  .c-global-options {
+    .options-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .c-action-buttons {
+    flex-direction: column;
+
+    .action-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  .report-footer {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 1200px) {
+  .c-flood-analysis {
+    max-width: 1080px;
+
+    .c-flood-analysis-body {
+      padding: 20px 32px;
+    }
+  }
+}
+
+@media print {
+  .c-flood-analysis {
+    .c-global-options,
+    .c-action-buttons {
+      display: none;
+    }
+
+    .icpac-header {
+      padding: 10px 0;
+    }
+
+    .report-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+    }
+  }
+}

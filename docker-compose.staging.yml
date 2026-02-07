@@ -1,279 +1,304 @@
-services:
-  # PostgreSQL with PostGIS and pgSTAC extensions
-  postgis:
-    image: hkoros/floodwatch-postgis:1.1.0
-    container_name: floodwatch_pgstac_staging
-    environment:
-      POSTGRES_DB: ${DB_NAME:-floodwatch}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-floodwatch_pass}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    volumes:
-      - postgis_data_staging:/var/lib/postgresql/data
-    ports:
-      - "8091:5432"
-    networks:
-      - floodwatch_staging
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-floodwatch}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # Redis for caching and Celery
-  redis:
-    image: hkoros/floodwatch-redis:1.1.0
-    container_name: floodwatch_redis_staging
-    volumes:
-      - redis_data_staging:/data
-    ports:
-      - "9092:6379"
-    networks:
-      - floodwatch_staging
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
-  # Django Backend API
-  backend:
-    image: hkoros/floodwatch-backend:1.1.0
-    container_name: floodwatch_backend_staging
-    volumes:
-      - static_volume:/app/staticfiles
-      - media_volume:/app/media
-      - ./backend/static_data:/app/static:ro,z
-    ports:
-      - "8090:8090"
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    environment:
-      - SERVICE_TYPE=backend
-      - DJANGO_SETTINGS_MODULE=flood_watch_system.settings.staging
-      - DEBUG=${DEBUG:-False}
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-this-in-production}
-      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
-      - DB_NAME=${DB_NAME:-floodwatch}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
-      - DB_HOST=postgis
-      - DB_PORT=5432
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CORS_ALLOWED_ORIGINS=http://197.254.1.10:8094
-      - HOST_URL=http://197.254.1.10:8090
-      - GCS_PROJECT_ID=${GCS_PROJECT_ID:-}
-      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
-      - GCS_CREDENTIALS_JSON=${GCS_CREDENTIALS_JSON:-}
-      - GCS_GEOSFM_PREFIX=${GCS_GEOSFM_PREFIX:-geosfm_output_icpac_pc/}
-      - SFTP_HOST=${SFTP_HOST:-}
-      - SFTP_PORT=${SFTP_PORT:-22}
-      - SFTP_USERNAME=${SFTP_USERNAME:-}
-      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
-      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE:-}
-      - FTP_HOST=${FTP_HOST:-}
-      - FTP_PORT=${FTP_PORT:-21}
-      - FTP_USER=${FTP_USER:-}
-      - FTP_PASSWORD=${FTP_PASSWORD:-}
-      - FTP_REMOTE_DIR=${FTP_REMOTE_DIR:-output/Combined}
-    depends_on:
-      postgis:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - floodwatch_staging
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8090/admin/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    restart: unless-stopped
-
-  # FastAPI Service
-  fastapi:
-    image: hkoros/floodwatch-fastapi:1.1.0
-    container_name: floodwatch_fastapi_staging
-    ports:
-      - "8093:8001"
-    environment:
-      - DB_NAME=${DB_NAME:-floodwatch}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
-      - DB_HOST=postgis
-      - DB_PORT=5432
-    depends_on:
-      postgis:
-        condition: service_healthy
-    networks:
-      - floodwatch_staging
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
-
-  # Celery Worker
-  celery:
-    image: hkoros/floodwatch-backend:1.1.0
-    container_name: floodwatch_celery_staging
-    volumes:
-      - ./backend/static_data:/app/static:ro,z
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    environment:
-      - SERVICE_TYPE=celery
-      - DJANGO_SETTINGS_MODULE=flood_watch_system.settings.staging
-      - DEBUG=${DEBUG:-False}
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-this-in-production}
-      - DB_NAME=${DB_NAME:-floodwatch}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
-      - DB_HOST=postgis
-      - DB_PORT=5432
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - GCS_PROJECT_ID=${GCS_PROJECT_ID:-}
-      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
-      - GCS_CREDENTIALS_JSON=${GCS_CREDENTIALS_JSON:-}
-      - GCS_GEOSFM_PREFIX=${GCS_GEOSFM_PREFIX:-geosfm_output_icpac_pc/}
-      - SFTP_HOST=${SFTP_HOST:-}
-      - SFTP_PORT=${SFTP_PORT:-22}
-      - SFTP_USERNAME=${SFTP_USERNAME:-}
-      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
-      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE:-}
-      - JSON_REMOTE_DIR=${JSON_REMOTE_DIR:-}
-      - FTP_HOST=${FTP_HOST:-}
-      - FTP_PORT=${FTP_PORT:-21}
-      - FTP_USER=${FTP_USER:-}
-      - FTP_PASSWORD=${FTP_PASSWORD:-}
-      - FTP_REMOTE_DIR=${FTP_REMOTE_DIR:-output/Combined}
-    depends_on:
-      postgis:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
-    networks:
-      - floodwatch_staging
-    restart: unless-stopped
-
-  # Celery Beat for Scheduled Tasks
-  celery-beat:
-    image: hkoros/floodwatch-backend:1.1.0
-    container_name: floodwatch_celery_beat_staging
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-    environment:
-      - SERVICE_TYPE=celery-beat
-      - DJANGO_SETTINGS_MODULE=flood_watch_system.settings.staging
-      - DEBUG=${DEBUG:-False}
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-this-in-production}
-      - DB_NAME=${DB_NAME:-floodwatch}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-floodwatch_pass}
-      - DB_HOST=postgis
-      - DB_PORT=5432
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - SFTP_HOST=${SFTP_HOST:-}
-      - SFTP_PORT=${SFTP_PORT:-22}
-      - SFTP_USERNAME=${SFTP_USERNAME:-}
-      - SFTP_PASSWORD=${SFTP_PASSWORD:-}
-      - REMOTE_FOLDER_BASE=${REMOTE_FOLDER_BASE:-}
-      - JSON_REMOTE_DIR=${JSON_REMOTE_DIR:-}
-      - FTP_HOST=${FTP_HOST:-}
-      - FTP_PORT=${FTP_PORT:-21}
-      - FTP_USER=${FTP_USER:-}
-      - FTP_PASSWORD=${FTP_PASSWORD:-}
-      - FTP_REMOTE_DIR=${FTP_REMOTE_DIR:-output/Combined}
-    depends_on:
-      postgis:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
-    networks:
-      - floodwatch_staging
-    restart: unless-stopped
-
-  # React Frontend
-  frontend:
-    image: hkoros/floodwatch-frontend:1.1.0
-    container_name: floodwatch_frontend_staging
-    ports:
-      - "8094:8080"
-    environment:
-      - VITE_API_URL=/api
-    depends_on:
-      - backend
-    networks:
-      - floodwatch_staging
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
-
-  # TiPg - Vector Tiles Service (Replaces MapServer/MapCache)
-  tipg:
-    image: hkoros/floodwatch-tipg:1.1.0
-    container_name: floodwatch_tipg_staging
-    ports:
-      - "8095:80"
-    environment:
-      - POSTGRES_USER=${DB_USER:-postgres}
-      - POSTGRES_PASS=${DB_PASSWORD:-floodwatch_pass}
-      - POSTGRES_DBNAME=${DB_NAME:-floodwatch}
-      - POSTGRES_HOST=postgis
-      - POSTGRES_PORT=5432
-      - TIPG_DB_SCHEMAS=["pgstac"]
-      - TIPG_TABLE_PATTERN=^Impact_.*
-      - WEB_CONCURRENCY=4
-      - TIPG_TILE_RESOLUTION=4096
-      - TIPG_TILE_BUFFER=256
-      - TIPG_MAX_FEATURES_PER_TILE=50000
-      - TIPG_DEFAULT_MINZOOM=0
-      - TIPG_DEFAULT_MAXZOOM=22
-    depends_on:
-      postgis:
-        condition: service_healthy
-    networks:
-      - floodwatch_staging
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
+# EAFW FloodWatch - Staging
+# Hosts: 197.254.1.10, 10.10.1.13, 0.0.0.0, 127.0.0.1
+# Ports: 9060-9069 (nginx entry: 9068)
+# Usage: docker compose -f docker-compose.staging.yml up -d
 
 networks:
-  floodwatch_staging:
+  default:
+    name: eafw_network
     driver: bridge
 
 volumes:
-  postgis_data_staging:
-    driver: local
-  redis_data_staging:
-    driver: local
-  static_volume:
-    driver: local
-  media_volume:
-    driver: local
+  eafw_pgdata:
+    name: eafw_pgdata
+  eafw_static:
+    name: eafw_static
+  eafw_media:
+    name: eafw_media
+  eafw_mapviewer_static:
+    name: eafw_mapviewer_static
+  eafw_geomanager_data:
+    name: eafw_geomanager_data
+  eafw_mapcache_tiles:
+    name: eafw_mapcache_tiles
+  eafw_jobs_data:
+    name: eafw_jobs_data
+  eafw_jobs_logs:
+    name: eafw_jobs_logs
+  eafw_backups:
+    name: eafw_backups
+
+services:
+  eafw_db:
+    container_name: ${DB_CNTR_NAME:-eafw-pgdb}
+    command: postgres -c 'max_connections=${PG_MAX_CONNECTIONS:-120}'
+    image: postgis/postgis:${PG_VERSION:-16-3.4}
+    restart: ${RESTART_POLICY:-always}
+    environment:
+      - POSTGRES_USER=${CMS_DB_USER}
+      - POSTGRES_DB=${CMS_DB_NAME}
+      - POSTGRES_PASSWORD=${CMS_DB_PASSWORD}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${DB_HOST_PORT:-9060}:5432
+    volumes:
+      - eafw_pgdata:/var/lib/postgresql/data/
+      - eafw_backups:/backups
+      - ./eafw_docker/db-init:/docker-entrypoint-initdb.d/:z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CMS_DB_USER:-eafw_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  eafw_pgbouncer:
+    image: edoburu/pgbouncer:${PGB_VERSION:-v1.23.1-p3}
+    container_name: ${PGBOUNCER_CNTR_NAME:-eafw-pgbouncer}
+    restart: ${RESTART_POLICY:-always}
+    shm_size: "4gb"
+    depends_on:
+      eafw_db:
+        condition: service_healthy
+    ports:
+      - ${PGB_HOST_IP:-${HOST_IP:-0.0.0.0}}:${PGB_HOST_PORT:-9061}:${PGB_LISTEN_PORT:-6432}
+    environment:
+      - LISTEN_PORT=${PGB_LISTEN_PORT:-6432}
+      - DB_HOST=${PG_HOST:-eafw_db}
+      - DB_PORT=${PG_PORT:-5432}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_USER=${CMS_DB_USER}
+      - DB_PASSWORD=${CMS_DB_PASSWORD}
+      - AUTH_USER=${CMS_DB_USER}
+      - AUTH_TYPE=${PG_AUTH_METHOD:-scram-sha-256}
+      - AUTH_DBNAME=${CMS_DB_NAME}
+      - ADMIN_USERS=${CMS_DB_USER}
+      - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-1024}
+      - POOL_MODE=${PGB_POOL_MODE:-session}
+      - DEFAULT_POOL_SIZE=${PGB_DEFAULT_POOL_SIZE:-120}
+      - SERVER_IDLE_TIMEOUT=${PGB_SERVER_IDLE_TIMEOUT:-600}
+      - CLIENT_IDLE_TIMEOUT=${PGB_CLIENT_IDLE_TIMEOUT:-1500}
+      - IDLE_TRANSACTION_TIMEOUT=${PGB_IDLE_TRANSACTION_TIMEOUT:-1200}
+      - VERBOSE=${PGB_VERBOSE:-1}
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits,search_path
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+
+  eafw_memcached:
+    image: memcached:${MEMCACHED_VERSION:-1.6-alpine}
+    container_name: ${MEMCACHED_CNTR_NAME:-eafw-memcached}
+    restart: ${RESTART_POLICY:-always}
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${CACHE_HOST_PORT:-9062}:11211
+    entrypoint:
+      - memcached
+      - -m 1024
+      - -I 10m
+
+  eafw_cms:
+    platform: linux/x86_64
+    container_name: ${WEB_CNTR_NAME:-eafw-cms}
+    image: ${WEB_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-cms:latest}
+    restart: ${RESTART_POLICY:-always}
+    command: >
+      sh -c "/wait
+      && ./docker-entrypoint.sh
+      && /opt/venv/bin/gunicorn geomanagerweb.asgi
+      --bind 0.0.0.0:8000 --workers=${CMS_NUM_OF_WORKERS:-4} --worker-class=uvicorn.workers.UvicornWorker"
+    expose:
+      - "8000"
+    environment:
+      - WAIT_HOSTS=eafw_db:5432,eafw_memcached:11211
+      - WAIT_TIMEOUT=${WEB_WAIT_TIME:-120}
+      - DEBUG=${CMS_DEBUG:-False}
+      - WAGTAIL_SITE_NAME=${CMS_SITE_NAME:-East Africa Flood Watch}
+      - ADMIN_URL_PATH=${ADMIN_URL_PATH:-cms-admin}
+      - TIME_ZONE=${TIME_ZONE:-Africa/Nairobi}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-197.254.1.10,10.10.1.13,0.0.0.0,127.0.0.1,localhost}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://197.254.1.10,http://10.10.1.13,http://127.0.0.1,http://localhost,http://197.254.1.10:9068,http://10.10.1.13:9068}
+      - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@${PGB_HOST:-eafw_pgbouncer}:${PGB_PORT:-6432}/${CMS_DB_NAME}
+      - MEMCACHED_URI=${MEMCACHED_URI:-eafw_memcached:11211}
+      - MAPVIEWER_SERVER_URL=${MAPVIEWER_SERVER_URL:-http://eafw_mapviewer:3000}
+      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://197.254.1.10:9068}
+      - CMS_BASE_URL=${CMS_BASE_URL:-http://197.254.1.10:9068}
+      - LANGUAGE_CODE=${CMS_DEFAULT_LANGUAGE_CODE:-en}
+      - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
+      - GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-geomanagerweb.settings.production}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-False}
+      - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE:-False}
+      - DJANGO_ALLOW_ASYNC_UNSAFE=${ALLOW_ASYNC_UNSAFE:-true}
+      - SFTP_HOST=${SFTP_HOST}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME}
+      - SFTP_PASSWORD=${SFTP_PASSWORD}
+      - ENSEMBLE_FTP_HOST=${ENSEMBLE_FTP_HOST}
+      - ENSEMBLE_FTP_PORT=${ENSEMBLE_FTP_PORT:-21}
+      - ENSEMBLE_FTP_USER=${ENSEMBLE_FTP_USER}
+      - ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}
+      - ENSEMBLE_FTP_DIR=${ENSEMBLE_FTP_DIR}
+    depends_on:
+      eafw_db:
+        condition: service_healthy
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${WEB_HOST_PORT:-9063}:8000
+    volumes:
+      - eafw_static:/opt/eafw_cms/static
+      - eafw_media:/opt/eafw_cms/media
+      - eafw_geomanager_data:/geomanager/data
+      - ./eafw_docker/volumes/cms/.cache:/root/.cache:z
+      - ./eafw_cms/home/templates:/opt/eafw_cms/home/templates:z
+      - ./eafw_docker/cms/seed:/opt/eafw_cms/seed:z
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  eafw_mapviewer:
+    platform: linux/x86_64
+    container_name: ${MAPVIEWER_CNTR_NAME:-eafw-mapviewer}
+    image: ${MAPVIEWER_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-mapviewer:latest}
+    restart: ${RESTART_POLICY:-always}
+    volumes:
+      - eafw_mapviewer_static:/app/nginx/.next/static
+      - ./eafw_docker/volumes/mapviewer/.cache:/root/.cache:z
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${UI_HOST_PORT:-9064}:3000
+
+  eafw_mapserver:
+    container_name: ${MAPSERVER_CNTR_NAME:-eafw-mapserver}
+    image: ${MAPSERVER_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-mapserver:latest}
+    restart: ${RESTART_POLICY:-always}
+    user: "0:0"
+    depends_on:
+      - eafw_pgbouncer
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${MS_HOST_PORT:-9065}:${MS_APP_PORT:-80}
+    environment:
+      - MS_DEBUGLEVEL=${MS_DEBUGLEVEL:-2}
+      - MS_ERRORFILE=${MS_ERRORFILE:-stderr}
+      - MAPFILES_DIR=${MS_MAPFILES_DIR:-/opt/mapfiles}
+      - MS_MAPFILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.map
+      - MAPSERVER_CONFIG_FILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.conf
+      - MAX_PROCESSES=${MS_MAX_PROCESSES:-10}
+      - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
+      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://197.254.1.10:9065/mapserver/}
+      - DB_HOST=${PGB_HOST:-eafw_pgbouncer}
+      - DB_MAP_USER=${CMS_DB_USER}
+      - DB_MAP_USER_PASSWORD=${CMS_DB_PASSWORD}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_PORT=${PGB_PORT:-6432}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    volumes:
+      - ${MS_MAPFILES_VOLUME:-./data/mapfiles}:/opt/mapfiles:z
+
+  eafw_mapcache:
+    image: ${MAPCACHE_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-mapcache:latest}
+    container_name: ${MAPCACHE_CNTR_NAME:-eafw-mapcache}
+    restart: ${RESTART_POLICY:-always}
+    user: "0:0"
+    depends_on:
+      - eafw_mapserver
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${MC_HOST_PORT:-9066}:${MC_APP_PORT:-80}
+    volumes:
+      - eafw_mapcache_tiles:/opt/tiles
+    environment:
+      - SERVICE_URL=${MC_SERVICE_URL:-http://197.254.1.10:9066/mapcache/}
+      - SOURCE_URL=${MC_SOURCE_URL:-http://eafw_mapserver/mapserver/?}
+      - MAPCACHE_CONFIG_FILE=${MC_CONFIG_FILE:-/opt/mapcache/mapcache.xml}
+      - WEB_GRID_EXTENTS=${WEB_GRID_EXTENTS:-2337709 -1329087 5792092 2632018}
+      - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
+      - TILES_DIR=${APP_TILES_DIR:-/opt/tiles}
+      - MAX_PROCESSES=${MC_MAX_PROCESSES:-10}
+      - TILESET_EXPIRE_SEC=${MC_TILESET_EXPIRE_SEC:-3600}
+      - THREADED_FETCHING=${MC_THREADED_FETCHING:-true}
+      - NUM_THREADS=${MC_THREADS:-10}
+      - ERROR_REPORTING=${MC_ERROR_REPORTING:-empty_img}
+      - LOG_LEVEL=${MC_LOG_LEVEL:-debug}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+
+  eafw_tileserv:
+    container_name: ${TILESERV_CNTR_NAME:-eafw-tileserv}
+    image: pramsey/pg_tileserv:${TILESERV_VERSION:-latest}
+    restart: ${RESTART_POLICY:-always}
+    depends_on:
+      - eafw_pgbouncer
+    environment:
+      - DATABASE_URL=postgresql://${CMS_DB_USER}:${CMS_DB_PASSWORD}@eafw_pgbouncer:${PGB_LISTEN_PORT:-6432}/${CMS_DB_NAME}
+      - TS_BASEPATH=/pg/tileserv
+      - TS_DEBUG=${TILESERV_DEBUG:-false}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${TILESERV_HOST_PORT:-9067}:7800
+
+  eafw_nginx:
+    container_name: ${NGINX_CNTR_NAME:-eafw-nginx}
+    image: nginx:${NGINX_VERSION:-1.27-alpine}
+    restart: ${RESTART_POLICY:-always}
+    volumes:
+      - eafw_static:/wagtail_static:ro
+      - eafw_media:/wagtail_media:ro
+      - eafw_mapviewer_static:/mapviewer/static:ro
+      - ./eafw_docker/nginx/nginx.staging.conf:/etc/nginx/nginx.conf:z
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${CMS_HOST_PORT:-9068}:80
+    depends_on:
+      - eafw_cms
+
+  eafw_api:
+    platform: linux/x86_64
+    container_name: ${API_CNTR_NAME:-eafw-api}
+    image: ${API_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-api:latest}
+    restart: ${RESTART_POLICY:-always}
+    depends_on:
+      - eafw_pgbouncer
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${API_HOST_PORT:-9069}:9060
+    environment:
+      - EAFW_DATABASE_HOST=${PGB_HOST:-eafw_pgbouncer}
+      - EAFW_DATABASE_PORT=${PGB_LISTEN_PORT:-6432}
+      - EAFW_DATABASE_NAME=${CMS_DB_NAME}
+      - EAFW_DATABASE_USER=${CMS_DB_USER}
+      - EAFW_DATABASE_PASSWORD=${CMS_DB_PASSWORD}
+      - EAFW_DEBUG=${API_DEBUG:-false}
+      - EAFW_CORS_ORIGINS=["*"]
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9060/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  eafw_jobs:
+    platform: linux/x86_64
+    container_name: ${JOBS_CNTR_NAME:-eafw-jobs}
+    image: ${JOBS_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-jobs:latest}
+    restart: ${RESTART_POLICY:-always}
+    depends_on:
+      - eafw_db
+    environment:
+      - DB_HOST=${DB_JOBS_HOST:-eafw_db}
+      - DB_PORT=${DB_JOBS_PORT:-5432}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_USER=${CMS_DB_USER}
+      - DB_PASSWORD=${CMS_DB_PASSWORD}
+      - FLOODPROOFS_SFTP_HOST=${FLOODPROOFS_SFTP_HOST:-197.254.113.173}
+      - FLOODPROOFS_SFTP_PORT=${FLOODPROOFS_SFTP_PORT:-22}
+      - FLOODPROOFS_SFTP_USER=${FLOODPROOFS_SFTP_USER:-floodproofs}
+      - FLOODPROOFS_SFTP_PASSWORD=${FLOODPROOFS_SFTP_PASSWORD}
+      - FLOODPROOFS_REMOTE_DIR=${FLOODPROOFS_REMOTE_DIR:-/home/floodproofs/merged_forecasts}
+      - DRIVE_FOLDER_ID=${DRIVE_FOLDER_ID}
+      - GOOGLE_CREDENTIALS_FILE=/opt/credentials/google-credentials.json
+      - SYNC_SOURCE=${SYNC_SOURCE:-drive}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-21600}
+      - SYNC_DAYS=${SYNC_DAYS:-7}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    volumes:
+      - eafw_jobs_data:/opt/data
+      - eafw_jobs_logs:/opt/logs
+      - eafw_backups:/backups
+      - ./eafw_jobs/credentials:/opt/credentials:z

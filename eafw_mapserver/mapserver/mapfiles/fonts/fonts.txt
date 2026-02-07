@@ -1,0 +1,2 @@
+# Font definitions for MapServer
+# Add custom fonts here as: fontname /path/to/font.ttf

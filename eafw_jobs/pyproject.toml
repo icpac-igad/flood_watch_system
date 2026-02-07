@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "pyfloodwatch"
+version = "0.1.0"
+description = "FloodWatch data jobs - automated data syncing and ingestion"
+authors = ["ICPAC <info@icpac.net>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+psycopg2-binary = "^2.9.9"
+paramiko = "^3.4.0"
+python-dotenv = "^1.0.0"
+watchdog = "^4.0.0"
+APScheduler = "^3.10.4"
+google-api-python-client = "^2.108.0"
+google-auth = "^2.25.0"
+google-auth-httplib2 = "^0.2.0"
+google-auth-oauthlib = "^1.2.0"
+numpy = "^1.26.0"
+xarray = "^2024.1.0"
+pandas = "^2.1.0"
+netCDF4 = "^1.6.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

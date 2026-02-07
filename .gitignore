@@ -1,106 +1,95 @@
-# Ignore database files
-*.sqlite3
-*.local
-# Ignore environment variables
-.env
-env/
-# Ignore compiled files
-*.pyc
+# Python bytecode
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.claude/
 
-# Ignore Django migrations
-migrations/
+# Virtual environments
+.venv/
+venv/
+ENV/
 
-# Ignore media files
-media/
-media_local/
-
-# Ignore IDE specific files
-.vscode/
-.idea/
-
-# Ignore cloud IDE specific files
-.replit
-replit.nix
-
-# Ignore system files
-.DS_Store
-Thumbs.db
-
+# Node
 node_modules/
+.next/
 
-mapserver/impact_shapefiles/
-mapserver/rasters/
-mapserver/shapefiles/
-mapserver/timeseries_data/
-mapserver/
-data/
-frontend/public/
-!frontend/public/map-markers/
-frontend/dist/
-Deterministic_forecast/
-deterministic_merged/
-merged/
-Impact_forecast/
-merged_geojson_output/
-merged_geojson_sftp_test/
-# TiPG/TiTiler migration documentation and configuration files
-migration_requirements_tipg_titiler.json
-architecture_tipg_titiler.md
-docker-compose-tipg-titiler.yml
-backend_integration_workflow.md
-one_day_migration_plan.json
-mapserver_data/
-/mapserver/mapfiles/
-gcp/
-# COG files
-*.cog.tif
-cogs/
-
-# PostGIS backup files
-*.sql.gz
-*.dump
-*.claude
-
-# Log files
-*.log
-*.log.*
-logs/
-backend/logs/
-
-# Legacy scripts with potential secrets
-archived_scripts/current_scripts/legacy/
+# IDE
+.idea/
+.vscode/
+*.swp
 
 # Environment files with secrets
+.env
 .env.local
 .env.staging
 .env.production
-**/.env.sftp
-**/.env.local
-backend/.env
-.envs/
-.envs
+staging.env
+production.env
+!.env.sample
+!.env.example
 
-# Scripts with hardcoded credentials
-pull_from_sftp.sh
-push_from_sftp_server.sh
-download_from_sftp.sh
-STAGING_DEPLOY_COMMANDS.txt
+# Database data volumes
+pgdata/
+data/pgdata/
 
-# Archived scripts and files
-archived/
-archives/
-archives
-env_backup/
-env_backup_*/
-.env_backup_*/
-*_backup/
-backup_*/
+# Media uploads
+media/
 
-# Ignore data inside static_data and staticfiles, but keep the folders
-backend/static_data/*
-!backend/static_data/.gitkeep
-backend/staticfiles/*
-!backend/staticfiles/.gitkeep
+# Logs
+*.log
+logs/
 
-.venv
+# SQL data files (large)
+backup.sql
+backups/
+*.sql.gz
+**/ingest_*.sql
+**/backup*.sql
+**/dump*.sql
+**/export*.sql
+
+# DB init data — track compressed init files (needed for fresh deploys)
+# Only ignore ad-hoc dump files, not the init data
+!eafw_docker/db-init/*.sql.gz
+
+# Large GeoJSON files
+*.geojson
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker volume data
+**/volumes/
+
+# Credentials (secrets)
+credentials/
+*.pem
+*.key
+google-credentials.json
+
+# Test coverage
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Cache
+.cache/
+**/cache/
+**/.cache/
+
+# Runtime data (root level only, not src/data)
+/data
+eafw_jobs/data/
+eafw_jobs/logs/
+
+# Backup files (large)
+*.dump
+*.tar.gz
+*backup*.sh
+backup-*.sh
+
+# MapServer generated files
+eafw_docker/mapserver/mapfiles/symbols/

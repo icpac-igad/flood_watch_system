@@ -1,0 +1,156 @@
+/**
+ * Global Options Styles
+ */
+
+.c-global-options {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+
+  .section-title {
+    margin-bottom: 1.5rem;
+    width: 100%;
+    background-color: #f3f5fa;
+    font-weight: 600;
+    font-size: 1.1rem;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid #ffc107;
+    color: #333;
+  }
+
+  .options-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+  }
+
+  .options-col {
+    flex: 1;
+    min-width: 280px;
+  }
+
+  .options-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .form-group {
+    flex: 1;
+    min-width: 150px;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+  }
+
+  .form-input,
+  .form-select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.9rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    color: #374151;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &:focus {
+      outline: none;
+      border-color: #0c5a27;
+      box-shadow: 0 0 0 3px rgba(12, 90, 39, 0.1);
+    }
+
+    &:disabled {
+      background: #f3f4f6;
+      cursor: not-allowed;
+    }
+  }
+
+  .radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .radio-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #374151;
+
+    input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      margin-right: 0.5rem;
+      cursor: pointer;
+      accent-color: #0c5a27;
+    }
+
+    .radio-text {
+      user-select: none;
+    }
+
+    &:hover {
+      color: #0c5a27;
+    }
+  }
+
+  .reporting-unit-section {
+    .form-label {
+      margin-bottom: 0.75rem;
+    }
+  }
+
+  .admin-selectors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed #e5e7eb;
+  }
+
+  .generate-btn {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e5e7eb;
+
+    button {
+      min-width: 200px;
+      padding: 0.75rem 2rem;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .c-global-options {
+    padding: 1rem;
+
+    .options-row {
+      flex-direction: column;
+    }
+
+    .radio-group {
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .admin-selectors {
+      flex-direction: column;
+    }
+  }
+}

@@ -1,0 +1,48 @@
+<div class="report-section affected-areas-section mb-4">
+    <h3 class="section-heading">{{ value.heading }}</h3>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Area</th>
+                    <th>Admin Level</th>
+                    {% if value.show_population %}<th class="text-end">Population Affected</th>{% endif %}
+                    {% if value.show_households %}<th class="text-end">Households</th>{% endif %}
+                    {% if value.show_flood_depth %}<th>Flood Depth</th>{% endif %}
+                    <th>Alert Level</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for area in value.areas %}
+                    <tr>
+                        <td><strong>{{ area.area_name }}</strong></td>
+                        <td>{{ area.admin_level|default:"-" }}</td>
+                        {% if value.show_population %}
+                            <td class="text-end">{{ area.population_affected|default:"-" }}</td>
+                        {% endif %}
+                        {% if value.show_households %}
+                            <td class="text-end">{{ area.households_affected|default:"-" }}</td>
+                        {% endif %}
+                        {% if value.show_flood_depth %}
+                            <td>{{ area.flood_depth|default:"-" }}</td>
+                        {% endif %}
+                        <td>
+                            {% if area.alert_level %}
+                                <span class="badge
+                                    {% if area.alert_level == 'emergency' %}bg-danger
+                                    {% elif area.alert_level == 'alarm' %}bg-warning text-dark
+                                    {% elif area.alert_level == 'warning' %}bg-warning text-dark
+                                    {% else %}bg-success{% endif %}">
+                                    {{ area.alert_level|title }}
+                                </span>
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>{{ area.notes|default:"-" }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

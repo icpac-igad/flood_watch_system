@@ -1,0 +1,1237 @@
+{% extends "base.html" %}
+{% load wagtailimages_tags static lazyimages_tags wagtailcore_tags wagtailiconchooser_tags i18n %}
+
+{% block body_class %}homepage{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260207-2">
+{% endblock %}
+
+{% block content %}
+<div class="home-wireframe">
+    <section class="home-module home-module--hero">
+        {% include "home/partials/hero_section.html" %}
+    </section>
+
+    <section class="home-module home-module--analysis">
+        <div class="analysis-shell">
+            {% include "home/partials/risk_ticker.html" %}
+            {% include "home/partials/analysis_section.html" %}
+        </div>
+    </section>
+
+    {% include "home/partials/partners_strip.html" %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{# MapLibre GL JS from CDN #}
+<link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
+
+<script>
+    // Global variables
+    let miniMap = null;
+    let countriesData = [];
+    let selectedCountry = null;
+    let resizeTimer = null;
+    let mapResizeFrame = null;
+    let selectedMapScope = 'all';
+    let pointLayerEventsBound = false;
+    let adminLayerEventsBound = false;
+    let admin0FeaturesCache = null;
+    let scopeBoundsByScope = { all: null, whca: null };
+
+    const ADMIN0_SOURCE_ID = 'admin0-boundary-source';
+    const ADMIN0_FILL_LAYER_ID = 'admin0-boundary-fill';
+    const ADMIN0_LINE_LAYER_ID = 'admin0-boundary-line';
+    const FOCUS_MASK_SOURCE_ID = 'focus-mask-source';
+    const FOCUS_MASK_LAYER_ID = 'focus-mask-layer';
+    const WHCA_ADMIN0_CODES = new Set(['ETH', 'RWA', 'SSD', 'SDN', 'UGA']);
+    const WHCA_MEMBER_CODES = new Set(['SD', 'SS', 'UG', 'ET', 'RW']);
+    const ISO2_TO_ISO3 = Object.freeze({
+        BI: 'BDI',
+        DJ: 'DJI',
+        ER: 'ERI',
+        ET: 'ETH',
+        KE: 'KEN',
+        RW: 'RWA',
+        SD: 'SDN',
+        SO: 'SOM',
+        SS: 'SSD',
+        TZ: 'TZA',
+        UG: 'UGA'
+    });
+    const ISO3_TO_ISO2 = Object.freeze({
+        BDI: 'BI',
+        DJI: 'DJ',
+        ERI: 'ER',
+        ETH: 'ET',
+        KEN: 'KE',
+        RWA: 'RW',
+        SDN: 'SD',
+        SOM: 'SO',
+        SSD: 'SS',
+        TZA: 'TZ',
+        UGA: 'UG'
+    });
+    const BASE_COUNTRY_SECTION_TITLE = '{{ page.country_cards_title|default:"Regional Flood Situation"|escapejs }}';
+    const BASE_DASHBOARD_TITLE = '{{ page.dashboard_title|default:"Latest Situation of Flood Conditions"|escapejs }}';
+    const WHCA_COUNTRY_SECTION_TITLE = 'Nile Basin Flood Situation';
+    const WHCA_DASHBOARD_TITLE = 'Latest Situation of Nile Basin Flood Conditions';
+
+    const MAP_SCOPE_CONFIG = {
+        all: {
+            scopeParam: 'all'
+        },
+        whca: {
+            scopeParam: 'whca'
+        }
+    };
+
+    // CMS Configuration
+    const mapConfig = {
+        centerLat: {{ page.mini_map_center_lat|default:5.0 }},
+        centerLng: {{ page.mini_map_center_lng|default:38.0 }},
+        zoom: {{ page.mini_map_initial_zoom|default:5 }},
+        maxCards: {{ page.max_country_cards|default:11 }},
+        bounds: [[20.0, -14.0], [53.5, 24.0]],
+        pointFilter: '{{ page.point_filter_mode|default:"all" }}'
+    };
+
+    // Alert colors
+    const alertColors = {
+        emergency: '{{ multimodal_settings.emergency_color|default:"#d32f2f" }}',
+        alarm: '{{ multimodal_settings.alarm_color|default:"#ff9800" }}',
+        warning: '{{ multimodal_settings.warning_color|default:"#ffc107" }}',
+        normal: '{{ multimodal_settings.normal_color|default:"#4caf50" }}'
+    };
+
+    // Country flag URLs (using flagcdn.com)
+    const flagUrls = {
+        'ET': 'https://flagcdn.com/w80/et.png',
+        'SD': 'https://flagcdn.com/w80/sd.png',
+        'SS': 'https://flagcdn.com/w80/ss.png',
+        'UG': 'https://flagcdn.com/w80/ug.png',
+        'RW': 'https://flagcdn.com/w80/rw.png',
+        'KE': 'https://flagcdn.com/w80/ke.png',
+        'TZ': 'https://flagcdn.com/w80/tz.png',
+        'SO': 'https://flagcdn.com/w80/so.png',
+        'DJ': 'https://flagcdn.com/w80/dj.png',
+        'ER': 'https://flagcdn.com/w80/er.png',
+        'BI': 'https://flagcdn.com/w80/bi.png'
+    };
+
+    // Use Django API endpoints (DRF-style paths) for homepage widgets.
+    const apiEndpoints = {
+        geojson: [
+            '/api/multimodal/geojson',
+            '/api/multimodal/geojson/'
+        ],
+        countrySummary: [
+            '/api/country-summary-with-bounds/',
+            '/api/country-summary-with-bounds'
+        ],
+        situationSummary: [
+            '/api/situation-summary/',
+            '/api/situation-summary'
+        ],
+        admin0: [
+            '/api/v1/boundaries/admin0',
+            '/api/v1/boundaries/admin0/'
+        ]
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        setHomepageLayoutHeights();
+        initMapScopeControl();
+        updateScopeHeadings();
+        initRiskTickerLoop();
+        updateMemberCountriesByScope();
+        initMiniMap();
+        loadCountryData();
+        loadSituationSummary();
+        initHeroSlideshow();
+        window.addEventListener('resize', handleHomepageResize);
+        window.addEventListener('load', handleHomepageResize);
+
+        // Refresh every 5 minutes
+        setInterval(() => {
+            loadCountryData();
+            loadSituationSummary();
+            if (miniMap) loadMapPoints();
+        }, 5 * 60 * 1000);
+    });
+
+    // ========================================
+    // VIEWPORT FIT HELPERS
+    // ========================================
+    function setHomepageLayoutHeights() {
+        const compact = window.innerHeight < 860 || window.innerWidth < 1200;
+        document.body.classList.toggle('homepage-tight', compact);
+    }
+
+    function scheduleMiniMapResize(delay = 0) {
+        if (!miniMap) return;
+
+        const runResize = () => {
+            if (!miniMap) return;
+            miniMap.resize();
+        };
+
+        if (delay > 0) {
+            window.setTimeout(() => {
+                requestAnimationFrame(runResize);
+            }, delay);
+            return;
+        }
+
+        if (mapResizeFrame) {
+            cancelAnimationFrame(mapResizeFrame);
+        }
+        mapResizeFrame = requestAnimationFrame(() => {
+            runResize();
+            mapResizeFrame = null;
+        });
+    }
+
+    function getAutoFitCardLimit(totalCountries) {
+        const section = document.querySelector('.country-section');
+        const header = section ? section.querySelector('.country-section-header') : null;
+
+        if (!section || !header || !totalCountries) {
+            return Math.min(mapConfig.maxCards, totalCountries || mapConfig.maxCards);
+        }
+
+        const availableHeight = section.clientHeight - header.offsetHeight - 8;
+        if (availableHeight <= 80) {
+            return Math.max(2, Math.min(4, mapConfig.maxCards, totalCountries));
+        }
+
+        const estimatedCardHeight = window.innerWidth <= 1200 ? 34 : 38;
+        const calculated = Math.floor(availableHeight / estimatedCardHeight);
+        const minCards = window.innerWidth > 900 ? 5 : (window.innerWidth > 700 ? 4 : 3);
+
+        return Math.max(minCards, Math.min(mapConfig.maxCards, calculated, totalCountries));
+    }
+
+    function handleHomepageResize() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            setHomepageLayoutHeights();
+            initRiskTickerLoop();
+            scheduleMiniMapResize();
+            if (countriesData.length) renderCountryList(countriesData);
+        }, 120);
+    }
+
+    function initRiskTickerLoop() {
+        const ticker = document.getElementById('risk-ticker');
+        if (!ticker) return;
+
+        const baseContent = ticker.querySelector('.ticker-content');
+        if (!baseContent) return;
+
+        ticker.querySelectorAll('.ticker-content.is-clone').forEach((clone) => clone.remove());
+
+        const container = ticker.parentElement;
+        const baseWidth = Math.max(baseContent.offsetWidth, 1);
+        let totalWidth = baseWidth;
+
+        while (container && totalWidth < container.offsetWidth * 2) {
+            const clone = baseContent.cloneNode(true);
+            clone.classList.add('is-clone');
+            clone.setAttribute('aria-hidden', 'true');
+            ticker.appendChild(clone);
+            totalWidth += baseWidth;
+        }
+
+        ticker.style.setProperty('--ticker-shift', `${baseWidth}px`);
+        const speedPxPerSecond = 80;
+        const duration = Math.max(16, Math.round(baseWidth / speedPxPerSecond));
+        ticker.style.setProperty('--ticker-duration', `${duration}s`);
+    }
+
+    // ========================================
+    // API HELPERS
+    // ========================================
+    async function fetchJsonWithFallback(urls) {
+        let lastError = null;
+
+        for (const url of urls) {
+            try {
+                const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} for ${url}`);
+                }
+
+                let payload = await response.json();
+                if (typeof payload === 'string') {
+                    payload = JSON.parse(payload);
+                }
+                return payload;
+            } catch (error) {
+                lastError = error;
+                console.warn('Endpoint failed:', url, error);
+            }
+        }
+
+        throw lastError || new Error('All API endpoints failed');
+    }
+
+    function buildUrlsWithParams(urls, params) {
+        const searchParams = new URLSearchParams();
+        Object.entries(params || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') {
+                searchParams.set(key, value);
+            }
+        });
+
+        const query = searchParams.toString();
+        if (!query) return urls;
+        return urls.map((url) => `${url}?${query}`);
+    }
+
+    // ========================================
+    // HERO SLIDESHOW
+    // ========================================
+    function initHeroSlideshow() {
+        const slides = document.querySelectorAll('.hero-slide');
+        const indicators = document.querySelectorAll('.hero-indicator');
+
+        if (slides.length <= 1) return;
+
+        let currentSlide = 0;
+        const slideInterval = 5000; // 5 seconds
+
+        function showSlide(index) {
+            slides.forEach((slide, i) => {
+                slide.classList.toggle('active', i === index);
+            });
+            indicators.forEach((indicator, i) => {
+                indicator.classList.toggle('active', i === index);
+            });
+            currentSlide = index;
+        }
+
+        function nextSlide() {
+            const next = (currentSlide + 1) % slides.length;
+            showSlide(next);
+        }
+
+        // Auto-advance slides
+        setInterval(nextSlide, slideInterval);
+
+        // Click indicators to change slide
+        indicators.forEach((indicator, index) => {
+            indicator.addEventListener('click', () => showSlide(index));
+        });
+    }
+
+    // ========================================
+    // MINI-MAP SCOPE FILTER (ALL / WHCA)
+    // ========================================
+    function initMapScopeControl() {
+        const control = document.getElementById('map-scope-control');
+        if (!control) return;
+
+        control.addEventListener('click', async (event) => {
+            const button = event.target.closest('.map-scope-btn[data-scope]');
+            if (!button) return;
+            await setMapScope(button.getAttribute('data-scope'));
+        });
+
+        updateMapScopeUI();
+    }
+
+    function updateMapScopeUI() {
+        document.querySelectorAll('.map-scope-btn[data-scope]').forEach((btn) => {
+            const isActive = btn.getAttribute('data-scope') === selectedMapScope;
+            btn.classList.toggle('active', isActive);
+        });
+    }
+
+    async function setMapScope(nextScope) {
+        if (!Object.prototype.hasOwnProperty.call(MAP_SCOPE_CONFIG, nextScope)) return;
+        if (nextScope === selectedMapScope && !selectedCountry) return;
+
+        selectedMapScope = nextScope;
+        selectedCountry = null;
+        updateMapScopeUI();
+        updateMemberCountriesByScope();
+        updateScopeHeadings();
+
+        if (miniMap && miniMap.isStyleLoaded()) {
+            const scopeBounds = await loadAdmin0Boundaries();
+            await loadMapPoints();
+            fitMapToScopeBounds(scopeBounds, nextScope);
+        }
+
+        await loadCountryData();
+        await loadSituationSummary();
+    }
+
+    function updateMemberCountriesByScope() {
+        const membersGroup = document.querySelector('.members-group');
+        if (!membersGroup) return;
+
+        const flags = Array.from(document.querySelectorAll('.member-flag[data-country-code]'));
+        if (!flags.length) return;
+
+        let visibleCount = 0;
+        flags.forEach((flag) => {
+            const code = (flag.getAttribute('data-country-code') || '').toUpperCase();
+            const isVisible = selectedMapScope !== 'whca' || WHCA_MEMBER_CODES.has(code);
+            flag.style.display = isVisible ? '' : 'none';
+            if (isVisible) visibleCount += 1;
+        });
+
+        const label = membersGroup.querySelector('.partners-label');
+        if (label) {
+            label.textContent = selectedMapScope === 'whca' ? 'WHCA Countries' : 'Member Countries';
+        }
+
+        membersGroup.style.display = visibleCount > 0 ? '' : 'none';
+    }
+
+    function getCountryByCode(code) {
+        const normalizedCode = (code || '').toUpperCase();
+        return countriesData.find((country) => (country.code || '').toUpperCase() === normalizedCode) || null;
+    }
+
+    function getCountryNameByCode(code) {
+        const country = getCountryByCode(code);
+        return country?.name || null;
+    }
+
+    function getScopePanelTitle() {
+        return selectedMapScope === 'whca'
+            ? WHCA_COUNTRY_SECTION_TITLE
+            : (BASE_COUNTRY_SECTION_TITLE || 'Regional Flood Situation');
+    }
+
+    function getScopeTickerTitle() {
+        return selectedMapScope === 'whca'
+            ? WHCA_DASHBOARD_TITLE
+            : (BASE_DASHBOARD_TITLE || 'Latest Situation of Flood Conditions');
+    }
+
+    function updateScopeHeadings() {
+        const countryTitleEl = document.getElementById('country-section-title');
+        const countryName = getCountryNameByCode(selectedCountry);
+        const panelTitle = countryName ? `${getScopePanelTitle()} - ${countryName}` : getScopePanelTitle();
+
+        if (countryTitleEl) {
+            countryTitleEl.textContent = panelTitle;
+        }
+
+        const tickerTitle = countryName ? `${getScopeTickerTitle()} (${countryName})` : getScopeTickerTitle();
+        document.querySelectorAll('[id="dashboard-title-text"]').forEach((el) => {
+            el.textContent = tickerTitle;
+        });
+    }
+
+    function toBoundsPair(bounds) {
+        if (!bounds) return null;
+
+        if (Array.isArray(bounds) && bounds.length === 2) {
+            return bounds;
+        }
+
+        const west = Number(bounds.west);
+        const south = Number(bounds.south);
+        const east = Number(bounds.east);
+        const north = Number(bounds.north);
+        if ([west, south, east, north].every(Number.isFinite)) {
+            return [[west, south], [east, north]];
+        }
+
+        return null;
+    }
+
+    function expandBounds(bounds, ratio = 0.08, minPaddingDeg = 0.2) {
+        const pair = toBoundsPair(bounds);
+        if (!pair) return null;
+
+        const [[west, south], [east, north]] = pair;
+        const spanLng = Math.max(0, east - west);
+        const spanLat = Math.max(0, north - south);
+        const padLng = Math.max(minPaddingDeg, spanLng * ratio);
+        const padLat = Math.max(minPaddingDeg, spanLat * ratio);
+
+        const clampedSouth = Math.max(-85, south - padLat);
+        const clampedNorth = Math.min(85, north + padLat);
+        const clampedWest = Math.max(-180, west - padLng);
+        const clampedEast = Math.min(180, east + padLng);
+
+        return [[clampedWest, clampedSouth], [clampedEast, clampedNorth]];
+    }
+
+    function setMapBoundsConstraint(bounds, isCountryFocus = false) {
+        if (!miniMap) return;
+
+        const fallback = mapConfig.bounds;
+        const target = toBoundsPair(bounds) || fallback;
+        const expanded = expandBounds(target, isCountryFocus ? 0.15 : 0.1, isCountryFocus ? 0.15 : 0.3) || target;
+        miniMap.setMaxBounds(expanded);
+    }
+
+    function applyCountryFiltersToMapLayers() {
+        if (!miniMap || !miniMap.isStyleLoaded()) return;
+
+        const iso2 = (selectedCountry || '').toUpperCase();
+        const iso3 = ISO2_TO_ISO3[iso2] || '';
+
+        if (miniMap.getLayer('forecast-points-layer')) {
+            miniMap.setFilter(
+                'forecast-points-layer',
+                iso2 ? ['==', ['upcase', ['coalesce', ['get', 'country_code'], '']], iso2] : null
+            );
+        }
+
+        if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) {
+            miniMap.setFilter(
+                ADMIN0_FILL_LAYER_ID,
+                iso3 ? ['==', ['upcase', ['coalesce', ['get', 'gid_0'], '']], iso3] : null
+            );
+        }
+
+        if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) {
+            miniMap.setFilter(
+                ADMIN0_LINE_LAYER_ID,
+                iso3 ? ['==', ['upcase', ['coalesce', ['get', 'gid_0'], '']], iso3] : null
+            );
+        }
+
+        applyFocusMaskLayer();
+    }
+
+    function cloneRing(ring) {
+        return Array.isArray(ring)
+            ? ring
+                .filter((coord) => Array.isArray(coord) && coord.length >= 2)
+                .map((coord) => [Number(coord[0]), Number(coord[1])])
+                .filter((coord) => Number.isFinite(coord[0]) && Number.isFinite(coord[1]))
+            : [];
+    }
+
+    function closeRing(ring) {
+        if (!Array.isArray(ring) || ring.length === 0) return [];
+
+        const first = ring[0];
+        const last = ring[ring.length - 1];
+        if (first[0] === last[0] && first[1] === last[1]) {
+            return ring;
+        }
+
+        return [...ring, [first[0], first[1]]];
+    }
+
+    function ringSignedArea(ring) {
+        if (!Array.isArray(ring) || ring.length < 4) return 0;
+        let area = 0;
+        for (let i = 0; i < ring.length - 1; i += 1) {
+            const [x1, y1] = ring[i];
+            const [x2, y2] = ring[i + 1];
+            area += (x1 * y2) - (x2 * y1);
+        }
+        return area / 2;
+    }
+
+    function normalizeRing(ring, clockwise = false) {
+        const cloned = closeRing(cloneRing(ring));
+        if (cloned.length < 4) return null;
+
+        const isClockwise = ringSignedArea(cloned) < 0;
+        if (isClockwise !== clockwise) {
+            return [...cloned].reverse();
+        }
+
+        return cloned;
+    }
+
+    function collectOuterRingsFromGeometry(geometry) {
+        if (!geometry || !geometry.type || !Array.isArray(geometry.coordinates)) {
+            return [];
+        }
+
+        if (geometry.type === 'Polygon') {
+            const outer = normalizeRing(geometry.coordinates[0], true);
+            return outer ? [outer] : [];
+        }
+
+        if (geometry.type === 'MultiPolygon') {
+            return geometry.coordinates
+                .map((polygonCoords) => normalizeRing(polygonCoords?.[0], true))
+                .filter(Boolean);
+        }
+
+        return [];
+    }
+
+    function buildFocusMaskData(features) {
+        if (!Array.isArray(features) || features.length === 0) return null;
+
+        const worldOuterRing = normalizeRing([
+            [-180, -85],
+            [180, -85],
+            [180, 85],
+            [-180, 85]
+        ], false);
+
+        if (!worldOuterRing) return null;
+
+        const holes = features.flatMap((feature) => collectOuterRingsFromGeometry(feature?.geometry));
+        if (!holes.length) return null;
+
+        return {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [worldOuterRing, ...holes]
+                }
+            }]
+        };
+    }
+
+    function getScopedAdmin0Features() {
+        let features = Array.isArray(admin0FeaturesCache) ? [...admin0FeaturesCache] : [];
+        if (selectedMapScope === 'whca') {
+            features = features.filter((feature) =>
+                WHCA_ADMIN0_CODES.has((feature.properties?.gid_0 || '').toUpperCase())
+            );
+        }
+        return features;
+    }
+
+    function getFocusMaskFeatures() {
+        const scopedFeatures = getScopedAdmin0Features();
+        if (!scopedFeatures.length) return [];
+
+        if (selectedCountry) {
+            const iso3 = ISO2_TO_ISO3[(selectedCountry || '').toUpperCase()] || '';
+            return scopedFeatures.filter(
+                (feature) => (feature.properties?.gid_0 || '').toUpperCase() === iso3
+            );
+        }
+
+        if (selectedMapScope === 'whca') {
+            return scopedFeatures;
+        }
+
+        return [];
+    }
+
+    function clearFocusMaskLayer() {
+        if (!miniMap) return;
+        if (miniMap.getLayer(FOCUS_MASK_LAYER_ID)) miniMap.removeLayer(FOCUS_MASK_LAYER_ID);
+        if (miniMap.getSource(FOCUS_MASK_SOURCE_ID)) miniMap.removeSource(FOCUS_MASK_SOURCE_ID);
+    }
+
+    function getFocusMaskBeforeLayerId() {
+        if (!miniMap) return undefined;
+        if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) return ADMIN0_FILL_LAYER_ID;
+        if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) return ADMIN0_LINE_LAYER_ID;
+        if (miniMap.getLayer('forecast-points-layer')) return 'forecast-points-layer';
+        return undefined;
+    }
+
+    function applyFocusMaskLayer() {
+        if (!miniMap || !miniMap.isStyleLoaded()) return;
+
+        const features = getFocusMaskFeatures();
+        if (!features.length) {
+            clearFocusMaskLayer();
+            return;
+        }
+
+        const maskData = buildFocusMaskData(features);
+        if (!maskData) {
+            clearFocusMaskLayer();
+            return;
+        }
+
+        const beforeId = getFocusMaskBeforeLayerId();
+        if (!miniMap.getSource(FOCUS_MASK_SOURCE_ID)) {
+            miniMap.addSource(FOCUS_MASK_SOURCE_ID, {
+                type: 'geojson',
+                data: maskData
+            });
+
+            miniMap.addLayer({
+                id: FOCUS_MASK_LAYER_ID,
+                type: 'fill',
+                source: FOCUS_MASK_SOURCE_ID,
+                paint: {
+                    'fill-color': '#e7edf3',
+                    'fill-opacity': 0.88
+                }
+            }, beforeId);
+            return;
+        }
+
+        miniMap.getSource(FOCUS_MASK_SOURCE_ID).setData(maskData);
+        if (!miniMap.getLayer(FOCUS_MASK_LAYER_ID)) {
+            miniMap.addLayer({
+                id: FOCUS_MASK_LAYER_ID,
+                type: 'fill',
+                source: FOCUS_MASK_SOURCE_ID,
+                paint: {
+                    'fill-color': '#e7edf3',
+                    'fill-opacity': 0.88
+                }
+            }, beforeId);
+            return;
+        }
+
+        if (beforeId && beforeId !== FOCUS_MASK_LAYER_ID) {
+            miniMap.moveLayer(FOCUS_MASK_LAYER_ID, beforeId);
+        }
+    }
+
+    function updateBoundsFromCoordinates(coords, boundsState) {
+        if (!Array.isArray(coords)) return;
+
+        // Leaf coordinate pair [lng, lat]
+        if (
+            coords.length >= 2 &&
+            typeof coords[0] === 'number' &&
+            typeof coords[1] === 'number'
+        ) {
+            const lng = coords[0];
+            const lat = coords[1];
+            if (lng < boundsState.minLng) boundsState.minLng = lng;
+            if (lat < boundsState.minLat) boundsState.minLat = lat;
+            if (lng > boundsState.maxLng) boundsState.maxLng = lng;
+            if (lat > boundsState.maxLat) boundsState.maxLat = lat;
+            return;
+        }
+
+        coords.forEach((nested) => updateBoundsFromCoordinates(nested, boundsState));
+    }
+
+    function computeFeatureCollectionBounds(features) {
+        if (!Array.isArray(features) || features.length === 0) return null;
+
+        const boundsState = {
+            minLng: Infinity,
+            minLat: Infinity,
+            maxLng: -Infinity,
+            maxLat: -Infinity
+        };
+
+        features.forEach((feature) => {
+            const geometry = feature?.geometry;
+            if (!geometry?.coordinates) return;
+            updateBoundsFromCoordinates(geometry.coordinates, boundsState);
+        });
+
+        if (!Number.isFinite(boundsState.minLng) || !Number.isFinite(boundsState.minLat) ||
+            !Number.isFinite(boundsState.maxLng) || !Number.isFinite(boundsState.maxLat)) {
+            return null;
+        }
+
+        return [
+            [boundsState.minLng, boundsState.minLat],
+            [boundsState.maxLng, boundsState.maxLat]
+        ];
+    }
+
+    function fitMapToScopeBounds(bounds, scope) {
+        if (!miniMap) return;
+
+        const isWhcaScope = scope === 'whca';
+        const targetBounds = isWhcaScope
+            ? (toBoundsPair(bounds) || mapConfig.bounds)
+            : mapConfig.bounds;
+        const padding = isWhcaScope ? 52 : 64;
+        const maxZoom = isWhcaScope ? 5.1 : 4.4;
+        const expandedBounds = expandBounds(
+            targetBounds,
+            isWhcaScope ? 0.16 : 0.24,
+            isWhcaScope ? 0.5 : 1.0
+        ) || targetBounds;
+
+        scopeBoundsByScope[scope] = targetBounds;
+        setMapBoundsConstraint(expandedBounds, false);
+
+        miniMap.fitBounds(expandedBounds, {
+            padding,
+            duration: 700,
+            maxZoom
+        });
+    }
+
+    function fitMapToCountryBounds(bounds) {
+        if (!miniMap) return;
+        const targetBounds = toBoundsPair(bounds);
+        if (!targetBounds) return;
+
+        setMapBoundsConstraint(targetBounds, true);
+        miniMap.fitBounds(targetBounds, {
+            padding: 42,
+            duration: 800
+        });
+    }
+
+    function normalizeAdmin0Feature(feature) {
+        if (!feature) return null;
+        let geometry = feature.geometry;
+        if (typeof geometry === 'string') {
+            try {
+                geometry = JSON.parse(geometry);
+            } catch (error) {
+                return null;
+            }
+        }
+
+        if (!geometry || !geometry.type || !geometry.coordinates) {
+            return null;
+        }
+
+        return {
+            type: 'Feature',
+            properties: feature.properties || {},
+            geometry
+        };
+    }
+
+    async function getAdmin0Features() {
+        if (admin0FeaturesCache) return admin0FeaturesCache;
+
+        const payload = await fetchJsonWithFallback(apiEndpoints.admin0);
+        const features = Array.isArray(payload?.features) ? payload.features : [];
+        admin0FeaturesCache = features.map(normalizeAdmin0Feature).filter(Boolean);
+        return admin0FeaturesCache;
+    }
+
+    async function loadAdmin0Boundaries() {
+        if (!miniMap || !miniMap.isStyleLoaded()) return null;
+
+        if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) miniMap.removeLayer(ADMIN0_LINE_LAYER_ID);
+        if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) miniMap.removeLayer(ADMIN0_FILL_LAYER_ID);
+        if (miniMap.getSource(ADMIN0_SOURCE_ID)) miniMap.removeSource(ADMIN0_SOURCE_ID);
+
+        let admin0Features = [];
+        try {
+            admin0Features = await getAdmin0Features();
+        } catch (error) {
+            console.error('Failed to load admin0 boundaries:', error);
+        }
+
+        if (selectedMapScope === 'whca') {
+            admin0Features = admin0Features.filter((feature) =>
+                WHCA_ADMIN0_CODES.has((feature.properties?.gid_0 || '').toUpperCase())
+            );
+        }
+
+        const scopeBounds = computeFeatureCollectionBounds(admin0Features);
+
+        miniMap.addSource(ADMIN0_SOURCE_ID, {
+            type: 'geojson',
+            data: {
+                type: 'FeatureCollection',
+                features: admin0Features
+            }
+        });
+
+        miniMap.addLayer({
+            id: ADMIN0_FILL_LAYER_ID,
+            type: 'fill',
+            source: ADMIN0_SOURCE_ID,
+            paint: {
+                'fill-color': '#2a6f97',
+                'fill-opacity': 0.1
+            }
+        });
+
+        miniMap.addLayer({
+            id: ADMIN0_LINE_LAYER_ID,
+            type: 'line',
+            source: ADMIN0_SOURCE_ID,
+            paint: {
+                'line-color': '#0f3854',
+                'line-width': ['interpolate', ['linear'], ['zoom'], 3, 1.1, 6, 1.7, 9, 2.3],
+                'line-opacity': 0.95
+            }
+        });
+
+        if (scopeBounds) {
+            scopeBoundsByScope[selectedMapScope] = scopeBounds;
+        }
+        applyCountryFiltersToMapLayers();
+
+        if (!adminLayerEventsBound) {
+            miniMap.on('click', ADMIN0_FILL_LAYER_ID, (event) => {
+                const feature = event.features?.[0];
+                const iso3 = (feature?.properties?.gid_0 || '').toUpperCase();
+                const iso2 = ISO3_TO_ISO2[iso3];
+                if (!iso2) return;
+
+                const clickedBounds = computeFeatureCollectionBounds(feature ? [feature] : []);
+                selectCountry(iso2, clickedBounds);
+            });
+
+            miniMap.on('mouseenter', ADMIN0_FILL_LAYER_ID, () => {
+                miniMap.getCanvas().style.cursor = 'pointer';
+            });
+            miniMap.on('mouseleave', ADMIN0_FILL_LAYER_ID, () => {
+                miniMap.getCanvas().style.cursor = '';
+            });
+
+            adminLayerEventsBound = true;
+        }
+
+        return scopeBounds;
+    }
+
+    // ========================================
+    // MINI-MAP INITIALIZATION
+    // ========================================
+    function initMiniMap() {
+        const mapContainer = document.getElementById('mini-map');
+        if (!mapContainer) return;
+
+        try {
+            miniMap = new maplibregl.Map({
+                container: 'mini-map',
+                style: {
+                    version: 8,
+                    sources: {
+                        'carto-light': {
+                            type: 'raster',
+                            tiles: ['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'],
+                            tileSize: 256
+                        }
+                    },
+                    layers: [{
+                        id: 'carto-light-layer',
+                        type: 'raster',
+                        source: 'carto-light',
+                        minzoom: 0,
+                        maxzoom: 19
+                    }]
+                },
+                center: [mapConfig.centerLng, mapConfig.centerLat],
+                zoom: mapConfig.zoom,
+                attributionControl: false,
+                interactive: true,
+                dragPan: true,
+                scrollZoom: true,
+                boxZoom: true,
+                doubleClickZoom: true,
+                touchZoomRotate: true,
+                keyboard: true
+            });
+
+            // Simple zoom controls only
+            miniMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+            miniMap.scrollZoom.enable();
+            miniMap.boxZoom.enable();
+            miniMap.dragPan.enable();
+            miniMap.doubleClickZoom.enable();
+            miniMap.keyboard.enable();
+            miniMap.touchZoomRotate.enable();
+
+            miniMap.on('load', async function() {
+                document.getElementById('map-loading').style.display = 'none';
+
+                scheduleMiniMapResize();
+                // Fit to East Africa bounds
+                miniMap.fitBounds(mapConfig.bounds, { padding: 64, duration: 0, maxZoom: 4.4 });
+                setMapBoundsConstraint(mapConfig.bounds, false);
+                scheduleMiniMapResize(140);
+
+                const scopeBounds = await loadAdmin0Boundaries();
+                await loadMapPoints();
+                fitMapToScopeBounds(scopeBounds, 'all');
+            });
+
+        } catch (error) {
+            console.error('Failed to initialize map:', error);
+            document.getElementById('map-loading').innerHTML = '<span style="color: #c62828;">Failed to load map</span>';
+        }
+    }
+
+    // ========================================
+    // LOAD MAP POINTS
+    // ========================================
+    async function loadMapPoints() {
+        if (!miniMap) return;
+
+        try {
+            const params = {};
+            if (mapConfig.pointFilter !== 'all') params.filter = mapConfig.pointFilter;
+            if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+
+            const geojsonUrls = buildUrlsWithParams(apiEndpoints.geojson, params);
+            const geojson = await fetchJsonWithFallback(geojsonUrls);
+            if (!geojson || !Array.isArray(geojson.features)) {
+                throw new Error('Invalid GeoJSON response');
+            }
+
+            // Add alert_level based on thresholds
+            const thresholds = {
+                warning: {{ multimodal_settings.warning_threshold|default:150 }},
+                alarm: {{ multimodal_settings.alarm_threshold|default:300 }},
+                emergency: {{ multimodal_settings.emergency_threshold|default:450 }}
+            };
+
+            geojson.features = geojson.features.map(f => {
+                const dailyAvg = f.properties.daily_avg || 0;
+                let alertLevel = 'normal';
+
+                if (dailyAvg >= thresholds.emergency) alertLevel = 'emergency';
+                else if (dailyAvg >= thresholds.alarm) alertLevel = 'alarm';
+                else if (dailyAvg >= thresholds.warning) alertLevel = 'warning';
+
+                f.properties.alert_level = alertLevel;
+                return f;
+            });
+
+            // Remove existing
+            if (miniMap.getLayer('forecast-points-layer')) miniMap.removeLayer('forecast-points-layer');
+            if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
+
+            miniMap.addSource('forecast-points', { type: 'geojson', data: geojson });
+
+            miniMap.addLayer({
+                id: 'forecast-points-layer',
+                type: 'circle',
+                source: 'forecast-points',
+                paint: {
+                    'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 4, 8, 7, 12, 10],
+                    'circle-color': [
+                        'match', ['get', 'alert_level'],
+                        'emergency', alertColors.emergency,
+                        'alarm', alertColors.alarm,
+                        'warning', alertColors.warning,
+                        alertColors.normal
+                    ],
+                    'circle-stroke-width': 1.5,
+                    'circle-stroke-color': 'white',
+                    'circle-opacity': 0.9
+                }
+            });
+
+            if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) {
+                miniMap.moveLayer('forecast-points-layer');
+            }
+
+            applyCountryFiltersToMapLayers();
+
+            if (!pointLayerEventsBound) {
+                // Click popup
+                miniMap.on('click', 'forecast-points-layer', function(e) {
+                    const props = e.features[0].properties;
+                    const coords = e.features[0].geometry.coordinates.slice();
+
+                    new maplibregl.Popup({ closeButton: true, maxWidth: '220px' })
+                        .setLngLat(coords)
+                        .setHTML(`
+                            <div class="popup-title">${props.admin_name || 'Forecast Point'}</div>
+                            <div class="popup-value">Alert: <span class="${props.alert_level}">${props.alert_level.toUpperCase()}</span></div>
+                            <div class="popup-value">Discharge: <span>${Math.round(props.daily_avg || 0)} m³/s</span></div>
+                        `)
+                        .addTo(miniMap);
+                });
+
+                miniMap.on('mouseenter', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = 'pointer');
+                miniMap.on('mouseleave', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = '');
+                pointLayerEventsBound = true;
+            }
+
+        } catch (error) {
+            console.error('Error loading map points:', error);
+        }
+    }
+
+    // ========================================
+    // LOAD COUNTRY DATA
+    // ========================================
+    async function loadCountryData() {
+        try {
+            const params = {};
+            if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+            const urls = buildUrlsWithParams(apiEndpoints.countrySummary, params);
+            const data = await fetchJsonWithFallback(urls);
+            countriesData = data.countries || [];
+
+            renderCountryList(countriesData);
+
+        } catch (error) {
+            console.error('Error loading country data:', error);
+            const container = document.getElementById('country-list');
+            if (container) {
+                container.innerHTML = '<div class="country-loading"><span style="color:#c62828;">Failed to load data</span></div>';
+            }
+        }
+    }
+
+    // ========================================
+    // UPDATE RISK TICKER - From situation-summary API
+    // ========================================
+    function updateRiskTicker(riskCounts) {
+        const updateAll = (id, value) => {
+            document.querySelectorAll(`[id="${id}"]`).forEach((el) => {
+                el.textContent = value;
+            });
+        };
+
+        updateAll('ticker-emergency', riskCounts.emergency || 0);
+        updateAll('ticker-alarm', riskCounts.alarm || 0);
+        updateAll('ticker-warning', riskCounts.warning || 0);
+        updateAll('ticker-normal', riskCounts.normal || 0);
+    }
+
+    // ========================================
+    // RENDER COUNTRY LIST
+    // ========================================
+    function renderCountryList(countries) {
+        const container = document.getElementById('country-list');
+        if (!container) return;
+
+        // Filter out "Unknown" country
+        countries = countries.filter(c => c.code !== 'UN' && c.name !== 'Unknown');
+
+        if (!countries || countries.length === 0) {
+            container.innerHTML = '<div class="country-loading"><span style="color:#4caf50;">No flood alerts</span></div>';
+            scheduleMiniMapResize(40);
+            return;
+        }
+
+        // Calculate max for bar scaling
+        const maxTotal = Math.max(...countries.map(c => c.emergency + c.alarm + c.warning), 1);
+        const cardLimit = getAutoFitCardLimit(countries.length);
+
+        let html = '';
+        countries.slice(0, cardLimit).forEach(country => {
+            const code = (country.code || '').toUpperCase();
+            const name = country.name || code;
+            const flagUrl = flagUrls[code] || `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
+            const isSelected = selectedCountry === code;
+
+            const total = country.emergency + country.alarm + country.warning;
+            const emergencyPct = total > 0 ? (country.emergency / maxTotal * 100) : 0;
+            const alarmPct = total > 0 ? (country.alarm / maxTotal * 100) : 0;
+            const warningPct = total > 0 ? (country.warning / maxTotal * 100) : 0;
+
+            html += `
+                <div class="country-item${isSelected ? ' selected' : ''}" data-code="${code}" data-bounds='${JSON.stringify(country.bounds)}' onclick="selectCountry('${code}')">
+                    <div class="country-flag">
+                        <img src="${flagUrl}" alt="${name}" onerror="this.style.display='none'">
+                    </div>
+                    <div class="country-info">
+                        <div class="country-name">${name}</div>
+                        <div class="country-bar">
+                            ${emergencyPct > 0 ? `<div class="country-bar-segment emergency" style="width:${emergencyPct}%"></div>` : ''}
+                            ${alarmPct > 0 ? `<div class="country-bar-segment alarm" style="width:${alarmPct}%"></div>` : ''}
+                            ${warningPct > 0 ? `<div class="country-bar-segment warning" style="width:${warningPct}%"></div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        updateScopeHeadings();
+        initRiskTickerLoop();
+        scheduleMiniMapResize(40);
+    }
+
+    // ========================================
+    // SELECT COUNTRY - ZOOM MAP
+    // ========================================
+    function selectCountry(code, preferredBounds = null) {
+        const normalizedCode = (code || '').toUpperCase();
+        if (!normalizedCode) return;
+
+        if (selectedCountry === normalizedCode) {
+            selectedCountry = null;
+            document.querySelectorAll('.country-item').forEach((el) => el.classList.remove('selected'));
+            applyCountryFiltersToMapLayers();
+            updateScopeHeadings();
+            initRiskTickerLoop();
+
+            const scopeBounds = scopeBoundsByScope[selectedMapScope] || mapConfig.bounds;
+            fitMapToScopeBounds(scopeBounds, selectedMapScope);
+            return;
+        }
+
+        document.querySelectorAll('.country-item').forEach(el => el.classList.remove('selected'));
+
+        const item = document.querySelector(`.country-item[data-code="${normalizedCode}"]`);
+        let selectedBounds = toBoundsPair(preferredBounds);
+
+        if (item) {
+            item.classList.add('selected');
+
+            const boundsStr = item.getAttribute('data-bounds');
+            if (boundsStr && boundsStr !== 'null') {
+                try {
+                    selectedBounds = selectedBounds || toBoundsPair(JSON.parse(boundsStr));
+                } catch (error) {}
+            }
+        }
+
+        if (!selectedBounds) {
+            const country = getCountryByCode(normalizedCode);
+            selectedBounds = toBoundsPair(country?.bounds);
+        }
+
+        selectedCountry = normalizedCode;
+        applyCountryFiltersToMapLayers();
+        updateScopeHeadings();
+        initRiskTickerLoop();
+
+        if (selectedBounds) {
+            fitMapToCountryBounds(selectedBounds);
+        }
+    }
+
+    // ========================================
+    // LOAD SITUATION SUMMARY & TICKER DATA
+    // ========================================
+    async function loadSituationSummary() {
+        try {
+            const params = {};
+            if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+            const urls = buildUrlsWithParams(apiEndpoints.situationSummary, params);
+            const data = await fetchJsonWithFallback(urls);
+
+            // Update date in ticker
+            if (data.data_date) {
+                // Parse as UTC date to avoid timezone shifting the DB date
+                const parts = data.data_date.split('-').map(Number);
+                if (parts.length === 3) {
+                    const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+                    const options = { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' };
+                    const dateStr = date.toLocaleDateString('en-US', options);
+                    document.querySelectorAll('[id="title-date"]').forEach((el) => {
+                        el.textContent = `(${dateStr})`;
+                    });
+                } else {
+                    document.querySelectorAll('[id="title-date"]').forEach((el) => {
+                        el.textContent = `(${data.data_date})`;
+                    });
+                }
+            }
+
+            // Update ticker with correct risk counts from API
+            if (data.risk_counts) {
+                updateRiskTicker(data.risk_counts);
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            document.querySelectorAll('[id="title-date"]').forEach((el) => {
+                el.textContent = '';
+            });
+        }
+    }
+
+</script>
+{% endblock %}

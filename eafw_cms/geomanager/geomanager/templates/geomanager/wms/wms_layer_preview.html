@@ -1,0 +1,78 @@
+{% extends "wagtailadmin/base.html" %}
+{% load i18n %}
+{% load l10n %}
+{% load wagtailadmin_tags wagtailimages_tags static geomanager_tags %}
+{% block titletag %}
+    {% blocktranslate trimmed with title=page.get_admin_display_title %}
+        Preview Layers {{ title }}
+    {% endblocktranslate %}
+{% endblock %}
+
+{% block extra_css %}
+    {{ block.super }}
+
+    {{ form_media.css }}
+
+    <link rel="stylesheet" href="{% static 'geomanager/css/vendor/maplibre-gl.css' %}">
+    <link rel="stylesheet" href="{% static 'geomanager/css/preview-map.css' %}">
+{% endblock %}
+
+
+{% block content %}
+    {% if navigation_items %}
+        {% breadcrumbs_component navigation_items %}
+    {% endif %}
+
+    {% trans "Preview" as preview_str %}
+
+    {% include "wagtailadmin/shared/header.html" with title=preview_str|add:" - "|add:selected_layer.title subtitle=page.get_admin_display_title icon="view" %}
+
+    <div class="nice-padding">
+
+        <div class="w-field__input" data-field-input="">
+            <label class="w-field__label" for="layer_select" id="layer_select-label">
+                {% translate "Select Layer" %}
+            </label>
+            <select name="select" id="layer_select">
+                {% for layer in dataset.wms_layers.all %}
+                    <option value="{{ layer.pk }}"
+                            {% if selected_layer and selected_layer.pk == layer.pk %}selected{% endif %}>{{ layer.title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div id="preview-map" style="position: relative">
+            <div class="layer-timestamps-wrapper">
+                <div class="w-field__input">
+                    <label class="w-field__label" for="timestamps_select" id="timestamps_select-label">
+                        {% translate "Time" %}
+                    </label>
+                    <select name="select" id="timestamps_select">
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }}
+
+    {{ form_media.js }}
+    <script src="{% static 'geomanager/js/vendor/maplibre-gl.js' %}"></script>
+    <script src="{% static 'geomanager/js/vendor/ol.min.js' %}"></script>
+
+    <script>
+        let dataLayers = '{{ dataset_layers|escapejs }}';
+        if (dataLayers) {
+            dataLayers = JSON.parse(dataLayers)
+        }
+        window.geomanager_opts = {
+            dataLayers: dataLayers
+        }
+    </script>
+
+    <!-- Main script -->
+    <script src="{% static 'geomanager/js/wms-preview.js' %}"></script>
+
+{% endblock %}

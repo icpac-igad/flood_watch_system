@@ -1,0 +1,319 @@
+@import "@/styles/settings.scss";
+
+.c-timeseries-chart {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  .widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+
+    .header-left {
+      h3 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+        margin: 0 0 4px 0;
+      }
+
+      p {
+        font-size: 13px;
+        color: #666;
+        margin: 0;
+      }
+    }
+
+    .trend-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 13px;
+      font-weight: 500;
+
+      &.increasing {
+        background: #FFEBEE;
+        color: #C62828;
+      }
+
+      &.decreasing {
+        background: #E8F5E9;
+        color: #2E7D32;
+      }
+
+      &.stable {
+        background: #E3F2FD;
+        color: #1565C0;
+      }
+
+      .trend-icon {
+        font-size: 16px;
+      }
+    }
+  }
+
+  .chart-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #eee;
+
+    .time-range-selector {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #555;
+      }
+
+      .range-buttons {
+        display: flex;
+        gap: 4px;
+
+        .range-btn {
+          padding: 6px 12px;
+          border: 1px solid #ddd;
+          background: white;
+          border-radius: 4px;
+          font-size: 12px;
+          cursor: pointer;
+          transition: all 0.2s;
+
+          &:hover {
+            border-color: $green;
+          }
+
+          &.active {
+            background: $green;
+            border-color: $green;
+            color: white;
+          }
+        }
+      }
+    }
+
+    .chart-options {
+      display: flex;
+      gap: 16px;
+
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: #555;
+        cursor: pointer;
+
+        input {
+          cursor: pointer;
+        }
+      }
+    }
+  }
+
+  .model-selector {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+
+    > label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+    }
+
+    .model-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+
+      .model-chip {
+        padding: 6px 14px;
+        border: 2px solid;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: transparent;
+
+        &:hover {
+          opacity: 0.8;
+        }
+
+        &.ensemble {
+          border-color: #666;
+          color: #666;
+
+          &.active {
+            background: #666;
+            color: white;
+          }
+        }
+      }
+    }
+  }
+
+  .chart-container {
+    position: relative;
+    min-height: 350px;
+
+    .chart-loader {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .no-data {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 350px;
+      color: #999;
+      font-size: 14px;
+    }
+  }
+
+  .chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+    margin-top: 12px;
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #666;
+
+      .legend-line {
+        width: 20px;
+        height: 2px;
+
+        &.historical {
+          background: #666;
+        }
+
+        &.forecast {
+          background: linear-gradient(90deg, #666 50%, transparent 50%);
+          background-size: 6px 2px;
+        }
+      }
+
+      &.threshold {
+        padding: 2px 8px;
+        border-radius: 4px;
+
+        &.warning {
+          background: #FFF8E1;
+          color: #F57F17;
+        }
+
+        &.alarm {
+          background: #FFF3E0;
+          color: #E65100;
+        }
+
+        &.emergency {
+          background: #FFEBEE;
+          color: #C62828;
+        }
+      }
+    }
+  }
+
+  // Custom tooltip
+  .custom-tooltip {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+
+    .tooltip-date {
+      font-size: 12px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .tooltip-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 12px;
+      margin-bottom: 4px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .tooltip-name {
+        font-weight: 500;
+      }
+
+      .tooltip-value {
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .c-timeseries-chart {
+    .widget-header {
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .chart-controls {
+      flex-direction: column;
+      align-items: flex-start;
+
+      .time-range-selector {
+        flex-direction: column;
+        align-items: flex-start;
+
+        .range-buttons {
+          flex-wrap: wrap;
+        }
+      }
+    }
+
+    .model-selector {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .chart-container {
+      min-height: 280px;
+    }
+  }
+}

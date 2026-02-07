@@ -1,0 +1,129 @@
+{% load wagtailimages_tags i18n %}
+
+<div class="dashboard-container">
+    <div class="dashboard-grid">
+        {% if page.show_mini_map %}
+        <div class="map-section" style="--map-height: {{ page.mini_map_height|default:500 }}px;">
+            <div class="map-wrapper">
+                <div id="mini-map"></div>
+                <div class="map-loading" id="map-loading">
+                    <div class="spinner"></div>
+                    <span>{% trans "Loading map..." %}</span>
+                </div>
+
+                {% if page.show_category_menu %}
+                <div class="c-menu-control {% if page.category_menu_style == 'card_list' %}card-style{% endif %}">
+                    <div class="c-map-menu" style="--menu-bg: {{ page.category_menu_bg_color|default:'rgba(68, 65, 65, 0.84)' }}; --menu-active: {{ page.category_menu_active_color|default:'#f7a600' }};">
+                        {% if page.map_categories.all %}
+                        {% for category in page.map_categories.all %}
+                        {% if category.is_active %}
+                        <div class="menu-category{% if category.is_default %} active{% endif %}" data-category-id="{{ category.geomanager_category_id|default:'' }}">
+                            <div class="category-icon">
+                                {% if category.icon %}
+                                {% image category.icon width-40 as cat_icon %}
+                                <img src="{{ cat_icon.url }}" alt="{{ category.name }}">
+                                {% endif %}
+                            </div>
+                            <div class="layer-title">
+                                <div>{{ category.name }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                        {% elif dataset_categories %}
+                        {% for category in dataset_categories %}
+                        {% if category.title == "Multimodal" or category.title == "Impact" or category.title == "Weather Information" or category.title == "Weather" %}
+                        <div class="menu-category{% if category.title == 'Multimodal' %} active{% endif %}" data-category-id="{{ category.id }}">
+                            <div class="category-icon" title="{{ category.title }}">
+                                <span class="category-initial">{{ category.title|slice:":1" }}</span>
+                            </div>
+                            <div class="layer-title">
+                                <div>{{ category.title }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if page.show_map_logo and page.map_logo %}
+                <div class="c-map-logo">
+                    <a href="{{ page.map_logo_link|default:'/mapviewer/' }}" {% if page.map_logo_link != '#' %}target="_blank" rel="noopener"{% endif %}>
+                        {% image page.map_logo width-100 as map_logo_img %}
+                        <img src="{{ map_logo_img.url }}" alt="FloodWatch">
+                    </a>
+                </div>
+                {% endif %}
+
+                <div class="map-scope-control" id="map-scope-control" role="group" aria-label="{% trans 'Mini map country filter' %}">
+                    <button type="button" class="map-scope-btn active" data-scope="all">{% trans "All Countries" %}</button>
+                    <button type="button" class="map-scope-btn" data-scope="whca">{% trans "WHCA Project" %}</button>
+                </div>
+
+                <div class="c-legend legend-{{ page.legend_position|default:'bottom-left' }}">
+                    <div class="c-legend-title">{{ page.legend_title|default:"Flood Alert Level" }}</div>
+                    <ul class="c-legend-basic">
+                        {% for item in page.map_legend_items.all %}
+                        <li class="c-legend-item">
+                            {% if item.icon %}
+                            {% image item.icon width-24 as legend_icon %}
+                            <img src="{{ legend_icon.url }}" alt="{{ item.label }}" class="c-legend-item-icon">
+                            {% else %}
+                            <div class="c-legend-item-icon {{ item.alert_level }}" {% if item.color %}style="background-color: {{ item.color }}"{% endif %}></div>
+                            {% endif %}
+                            <span class="c-legend-item-label">{{ item.label }}</span>
+                        </li>
+                        {% empty %}
+                        <li class="c-legend-item">
+                            <span style="color: #999; font-style: italic;">{% trans "Configure legend in CMS" %}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <div class="map-attribution">
+                    &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors
+                </div>
+
+                <a href="/mapviewer/" class="map-cta-btn">
+                    {% trans "Go to mapviewer" %}
+                    <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
+                </a>
+            </div>
+
+            {% if page.map_external_links.all %}
+            <div class="map-external-links">
+                {% for link in page.map_external_links.all %}
+                <a href="{{ link.url }}" {% if link.open_in_new_tab %}target="_blank" rel="noopener"{% endif %} class="external-link" style="background: {{ link.button_color }}">
+                    {{ link.label }}
+                    <svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if page.show_country_cards %}
+        <div class="country-section" style="--map-height: {{ page.mini_map_height|default:500 }}px;">
+            <div class="country-section-header">
+                <h2 class="country-section-title" id="country-section-title">{{ page.country_cards_title|default:"Flood Alert Level per Country proportion" }}</h2>
+                <div class="alert-legend-pills">
+                    <span class="alert-pill emergency">{% trans "Emergency" %}</span>
+                    <span class="alert-pill alarm">{% trans "Alarm" %}</span>
+                    <span class="alert-pill warning">{% trans "Warning" %}</span>
+                </div>
+            </div>
+
+            <div class="country-list" id="country-list">
+                <div class="country-loading">
+                    <div class="spinner"></div>
+                    <span>{% trans "Loading country data..." %}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>

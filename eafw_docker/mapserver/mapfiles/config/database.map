@@ -1,0 +1,6 @@
+# Database connection configuration
+# Placeholders are replaced by docker-entrypoint.sh
+
+CONNECTIONTYPE postgis
+PROCESSING "CLOSE_CONNECTION=DEFER"
+CONNECTION "host=[DB_HOST] dbname=[DB_NAME] user=[DB_USER] password=[DB_PWD] port=[DB_PORT]"

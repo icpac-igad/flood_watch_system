@@ -1,0 +1,31 @@
+<div class="report-section forecast-section mb-4">
+    <h3 class="section-heading">{{ value.heading }}</h3>
+
+    {% if value.introduction %}
+        <p class="mb-3">{{ value.introduction }}</p>
+    {% endif %}
+
+    <div class="forecast-timeline">
+        {% for forecast in value.forecasts %}
+            <div class="forecast-day d-flex align-items-center mb-2 p-2 rounded
+                {% if forecast.risk_level == 'emergency' %}bg-danger text-white
+                {% elif forecast.risk_level == 'alarm' %}bg-warning
+                {% elif forecast.risk_level == 'warning' %}bg-warning-subtle
+                {% else %}bg-success-subtle{% endif %}">
+                <div class="forecast-date me-3">
+                    <strong>{{ forecast.date|date:"D, M d" }}</strong>
+                </div>
+                <div class="forecast-description flex-grow-1">
+                    {{ forecast.description }}
+                </div>
+                <span class="badge
+                    {% if forecast.risk_level == 'emergency' %}bg-dark
+                    {% elif forecast.risk_level == 'alarm' %}bg-danger
+                    {% elif forecast.risk_level == 'warning' %}bg-warning text-dark
+                    {% else %}bg-success{% endif %}">
+                    {{ forecast.risk_level|title }}
+                </span>
+            </div>
+        {% endfor %}
+    </div>
+</div>

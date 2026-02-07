@@ -1,0 +1,84 @@
+.c-discharge-chart {
+  padding: 10px 0;
+  margin-top: 10px;
+  border-top: 1px solid #e0e0e0;
+
+  .chart-header {
+    margin-bottom: 15px;
+
+    h4 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+  }
+
+  .custom-tooltip {
+    background-color: rgba(255, 255, 255, 0.95);
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 8px 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+    .label {
+      margin: 0 0 5px 0;
+      font-weight: 600;
+      font-size: 11px;
+      color: #333;
+    }
+
+    p {
+      margin: 3px 0;
+      font-size: 11px;
+    }
+  }
+
+  .chart-info {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+
+    .info-text {
+      margin: 0;
+      font-size: 12px;
+      color: #666;
+
+      strong {
+        color: #333;
+      }
+    }
+
+    .status-normal {
+      color: #4CAF50;
+      font-weight: 600;
+    }
+
+    .status-warning {
+      color: #FFA726;
+      font-weight: 600;
+    }
+
+    .status-alarm {
+      color: #FF5722;
+      font-weight: 600;
+    }
+
+    .status-emergency {
+      color: #B71C1C;
+      font-weight: 700;
+    }
+  }
+}
+
+.c-discharge-chart-empty {
+  padding: 20px;
+  text-align: center;
+  color: #999;
+
+  p {
+    margin: 0;
+    font-size: 13px;
+  }
+}

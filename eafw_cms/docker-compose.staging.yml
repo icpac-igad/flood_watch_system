@@ -1,0 +1,221 @@
+services:
+  geomanager_db:
+    container_name: eafw-pgdb
+    command: postgres -c 'max_connections=120'
+    image: hkoros/eafw-postgis:v1.0.0
+    restart: always
+    environment:
+      - POSTGRES_USER=${CMS_DB_USER}
+      - POSTGRES_DB=${CMS_DB_NAME}
+      - POSTGRES_PASSWORD=${CMS_DB_PASSWORD}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    ports:
+      - ${HOST_IP}:${DB_HOST_PORT}:5432
+    volumes:
+      - ${CMS_DB_VOLUME}:/var/lib/postgresql/data/:z
+
+  pgbouncer:
+    image: hkoros/eafw-pgbouncer:v1.0.0
+    container_name: eafw-pgbouncer
+    restart: always
+    shm_size: "4gb"
+    depends_on:
+      - geomanager_db
+    ports:
+      - ${HOST_IP}:${PGB_HOST_PORT}:6432
+    environment:
+      - LISTEN_PORT=6432
+      - DB_HOST=geomanager_db
+      - DB_PORT=5432
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_USER=${CMS_DB_USER}
+      - DB_PASSWORD=${CMS_DB_PASSWORD}
+      - AUTH_USER=${CMS_DB_USER}
+      - AUTH_TYPE=scram-sha-256
+      - AUTH_DBNAME=${CMS_DB_NAME}
+      - ADMIN_USERS=${CMS_DB_USER}
+      - MAX_CLIENT_CONN=1024
+      - POOL_MODE=session
+      - DEFAULT_POOL_SIZE=120
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+
+  geomanager_memcached:
+    image: hkoros/eafw-memcached:v1.0.0
+    container_name: eafw-memcached
+    restart: always
+    ports:
+      - ${HOST_IP}:${CACHE_HOST_PORT}:11211
+    entrypoint:
+      - memcached
+      - -m 1024
+      - -I 10m
+
+  geomanager_web:
+    platform: linux/x86_64
+    container_name: eafw-cms-web
+    image: hkoros/eafw-cms-web:v1.0.1
+    restart: always
+    command: >
+      sh -c "/wait
+      && ./docker-entrypoint.sh
+      && /opt/venv/bin/gunicorn geomanagerweb.asgi
+      --bind 0.0.0.0:8000 --workers=${CMS_NUM_OF_WORKERS} --worker-class=uvicorn.workers.UvicornWorker"
+    environment:
+      - WAIT_HOSTS=geomanager_db:5432,geomanager_memcached:11211
+      - WAIT_TIMEOUT=120
+      - DEBUG=${CMS_DEBUG:-False}
+      - WAGTAIL_SITE_NAME=${CMS_SITE_NAME}
+      - ADMIN_URL_PATH=${ADMIN_URL_PATH:-cms-admin}
+      - TIME_ZONE=${TIME_ZONE:-Africa/Nairobi}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
+      - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@pgbouncer:6432/${CMS_DB_NAME}
+      - MEMCACHED_URI=geomanager_memcached:11211
+      - MAPVIEWER_SERVER_URL=http://geomanager_mapviewer:3000
+      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL}
+      - CMS_BASE_URL=${CMS_BASE_URL}
+      - LANGUAGE_CODE=${CMS_DEFAULT_LANGUAGE_CODE:-en}
+      - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
+      - GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
+      - DJANGO_SETTINGS_MODULE=geomanagerweb.settings.production
+      - DJANGO_ALLOW_ASYNC_UNSAFE=true
+      - SFTP_HOST=${SFTP_HOST}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME}
+      - SFTP_PASSWORD=${SFTP_PASSWORD}
+      - ENSEMBLE_FTP_HOST=${ENSEMBLE_FTP_HOST}
+      - ENSEMBLE_FTP_PORT=${ENSEMBLE_FTP_PORT:-21}
+      - ENSEMBLE_FTP_USER=${ENSEMBLE_FTP_USER}
+      - ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}
+      - ENSEMBLE_FTP_DIR=${ENSEMBLE_FTP_DIR}
+    depends_on:
+      - geomanager_db
+      - geomanager_memcached
+    ports:
+      - ${HOST_IP}:${WEB_HOST_PORT}:8000
+    volumes:
+      - ${CMS_STATIC_VOLUME}:/home/app/static:z
+      - ${CMS_MEDIA_VOLUME}:/home/app/media:z
+      - ${GEOMANAGER_AUTO_INGEST_DATA_VOLUME}:/geomanager/data:z
+
+  geomanager_mapviewer:
+    platform: linux/x86_64
+    container_name: eafw-mapviewer
+    image: hkoros/eafw-mapviewer:v1.0.1
+    restart: always
+    ports:
+      - ${HOST_IP}:${UI_HOST_PORT}:3000
+
+  geomanager_mapserver:
+    container_name: eafw-mapserver
+    image: hkoros/eafw-mapserver:v1.0.0
+    restart: always
+    user: root
+    depends_on:
+      - pgbouncer
+    ports:
+      - ${HOST_IP}:${MS_HOST_PORT}:80
+    volumes:
+      - ${MAPSERVER_DATA_DIR}:/data/floodwatch:z
+      - ${MAPFILES_DIR}:/opt/mapfiles:z
+    environment:
+      - MS_DEBUGLEVEL=2
+      - MS_ERRORFILE=stderr
+      - MAPFILES_DIR=/opt/mapfiles
+      - MS_MAPFILE=/opt/mapfiles/mapserver.map
+      - OGC_MAPFILE=/opt/mapfiles/ogcapi.map
+      - MAPSERVER_CONFIG_FILE=/opt/mapfiles/mapserver.conf
+      - MAX_PROCESSES=10
+      - WGS84_GRID_EXTENTS=21 -11.75 51 24
+      - MS_MAP_EXTENT=21 -11.75 51 24
+      - MS_SERVICE_URL=${MS_SERVICE_URL}
+      - DB_HOST=pgbouncer
+      - DB_MAP_USER=${CMS_DB_USER}
+      - DB_MAP_USER_PASSWORD=${CMS_DB_PASSWORD}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_PORT=6432
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+
+  geomanager_mapcache:
+    image: hkoros/eafw-mapcache:v1.0.0
+    container_name: eafw-mapcache
+    restart: always
+    user: root
+    depends_on:
+      - geomanager_mapserver
+    ports:
+      - ${HOST_IP}:${MC_HOST_PORT}:80
+    volumes:
+      - ${MC_TILESET_CONFIG}:/opt/mapcache/tilesets.json:z
+      - ${MC_TILES_DIR}:/opt/tiles:z
+    environment:
+      - SERVICE_URL=${MC_SERVICE_URL}
+      - SOURCE_URL=http://geomanager_mapserver/mapserver/?
+      - MAPCACHE_CONFIG_FILE=/opt/mapcache/mapcache.xml
+      - WGS84_GRID_EXTENTS=21 -11.75 51 24
+      - WEB_GRID_EXTENTS=2431100.704849455 -1308087.33339139 5723568.9861822715 2632789.6832915153
+      - TILES_DIR=/opt/tiles
+      - MAX_PROCESSES=10
+      - TILESET_EXPIRE_SEC=3600
+      - ERROR_REPORTING=empty_img
+      - THREADED_FETCHING=true
+      - NUM_THREADS=10
+      - LOG_LEVEL=debug
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+
+  geomanager_tileserv:
+    container_name: eafw-tileserv
+    image: hkoros/eafw-tileserv:v1.0.0
+    restart: always
+    depends_on:
+      - pgbouncer
+    environment:
+      - DATABASE_URL=postgresql://${CMS_DB_USER}:${CMS_DB_PASSWORD}@geomanager_db:5432/${CMS_DB_NAME}
+      - TS_BASEPATH=/pg/tileserv
+      - TS_DEBUG=false
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    ports:
+      - ${HOST_IP}:${TILESERV_HOST_PORT}:7800
+
+  geomanager_nginx:
+    container_name: eafw-nginx
+    image: hkoros/eafw-nginx:v1.0.0
+    restart: always
+    volumes:
+      - ${CMS_STATIC_VOLUME}:/wagtail_static:z
+      - ${CMS_MEDIA_VOLUME}:/wagtail_media:z
+      - ${NGINX_CONF}:/etc/nginx/nginx.conf:z
+    ports:
+      - ${HOST_IP}:${CMS_HOST_PORT}:80
+    depends_on:
+      - geomanager_web
+
+  floodwatch_jobs:
+    platform: linux/x86_64
+    container_name: eafw-floodwatch-jobs
+    image: hkoros/eafw-floodwatch-jobs:v1.0.1
+    restart: always
+    depends_on:
+      - geomanager_db
+    environment:
+      - DB_HOST=geomanager_db
+      - DB_PORT=5432
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_USER=${CMS_DB_USER}
+      - DB_PASSWORD=${CMS_DB_PASSWORD}
+      - FLOODPROOFS_SFTP_HOST=${SFTP_HOST}
+      - FLOODPROOFS_SFTP_PORT=${SFTP_PORT:-22}
+      - FLOODPROOFS_SFTP_USER=${SFTP_USERNAME}
+      - FLOODPROOFS_SFTP_PASSWORD=${SFTP_PASSWORD}
+      - FLOODPROOFS_REMOTE_DIR=${FLOODPROOFS_REMOTE_DIR:-/home/floodproofs/merged_forecasts}
+      - DRIVE_FOLDER_ID=${DRIVE_FOLDER_ID}
+      - GOOGLE_CREDENTIALS_FILE=/app/credentials/google-credentials.json
+      - SYNC_SOURCE=${SYNC_SOURCE:-sftp}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-21600}
+      - SYNC_DAYS=${SYNC_DAYS:-7}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    volumes:
+      - ${JOBS_DATA_VOLUME}:/app/data:z
+      - ${JOBS_LOGS_VOLUME}:/app/logs:z
+      - ${JOBS_CREDENTIALS_VOLUME}:/app/credentials:z

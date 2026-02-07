@@ -1,0 +1,411 @@
+# EAFW FloodWatch - Build & Deploy to Staging
+# Triggers on push to eafw branch
+# Only builds images when their source files change
+
+name: Build & Deploy to Staging
+
+on:
+  push:
+    branches:
+      - eafw
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force rebuild all images'
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.changes.outputs.api }}
+      cms: ${{ steps.changes.outputs.cms }}
+      mapviewer: ${{ steps.changes.outputs.mapviewer }}
+      mapserver: ${{ steps.changes.outputs.mapserver }}
+      mapcache: ${{ steps.changes.outputs.mapcache }}
+      jobs: ${{ steps.changes.outputs.jobs }}
+      deploy_only: ${{ steps.changes.outputs.deploy_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for changes
+        id: changes
+        run: |
+          # Get changed files
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+          echo "Changed files: $CHANGED"
+
+          # Check each component
+          if echo "$CHANGED" | grep -qE "^eafw_api/"; then
+            echo "api=true" >> $GITHUB_OUTPUT
+          else
+            echo "api=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE "^eafw_cms/|^eafw_docker/cms/"; then
+            echo "cms=true" >> $GITHUB_OUTPUT
+          else
+            echo "cms=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE "^eafw_mapviewer/|^eafw_docker/mapviewer/"; then
+            echo "mapviewer=true" >> $GITHUB_OUTPUT
+          else
+            echo "mapviewer=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE "^eafw_docker/mapserver/"; then
+            echo "mapserver=true" >> $GITHUB_OUTPUT
+          else
+            echo "mapserver=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE "^eafw_docker/mapcache/"; then
+            echo "mapcache=true" >> $GITHUB_OUTPUT
+          else
+            echo "mapcache=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED" | grep -qE "^eafw_jobs/|^eafw_docker/jobs/"; then
+            echo "jobs=true" >> $GITHUB_OUTPUT
+          else
+            echo "jobs=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check if only config/deploy files changed (no build needed)
+          if echo "$CHANGED" | grep -qvE "^eafw_api/|^eafw_cms/|^eafw_docker/cms/|^eafw_mapviewer/|^eafw_docker/mapviewer/|^eafw_docker/mapserver/|^eafw_docker/mapcache/|^eafw_jobs/|^eafw_docker/jobs/"; then
+            echo "deploy_only=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_only=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-api:
+    name: Build API
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.api == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push API
+        uses: docker/build-push-action@v5
+        with:
+          context: ./eafw_api
+          file: eafw_api/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-api:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-cms:
+    name: Build CMS
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.cms == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push CMS
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: eafw_docker/cms/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-cms:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-cms:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-mapviewer:
+    name: Build Mapviewer
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mapviewer == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Mapviewer
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: eafw_docker/mapviewer/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-mapviewer:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-mapviewer:${{ github.sha }}
+          build-args: |
+            CMS_API=/api
+            BASE_PATH=/
+            ASSET_PREFIX=
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-mapserver:
+    name: Build Mapserver
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mapserver == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Mapserver
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: eafw_docker/mapserver/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-mapserver:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-mapserver:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-mapcache:
+    name: Build Mapcache
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.mapcache == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Mapcache
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: eafw_docker/mapcache/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-mapcache:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-mapcache:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-jobs:
+    name: Build Jobs
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.jobs == 'true' || github.event.inputs.force_build == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Jobs
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: eafw_docker/jobs/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/eafw-jobs:latest
+            ${{ env.IMAGE_PREFIX }}/eafw-jobs:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [detect-changes, build-api, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs]
+    if: always() && !cancelled()
+    steps:
+      - name: Deploy to staging server
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+          DJANGO_SECRET_KEY: ${{ secrets.STAGING_DJANGO_SECRET_KEY }}
+          SFTP_PASSWORD: ${{ secrets.STAGING_SFTP_PASSWORD }}
+          ENSEMBLE_FTP_PASSWORD: ${{ secrets.STAGING_ENSEMBLE_FTP_PASSWORD }}
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          port: 22
+          command_timeout: 60m
+          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,SFTP_PASSWORD,ENSEMBLE_FTP_PASSWORD
+          script: |
+            set -e
+            cd ~
+
+            # Login to GitHub Container Registry
+            echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
+
+            # Safe repo update (never rm -rf)
+            if [ -d "eafw/.git" ]; then
+              echo "Updating existing repo..."
+              cd eafw
+              git fetch origin
+              git reset --hard origin/eafw
+            else
+              echo "Cloning repo..."
+              git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
+              cd eafw
+            fi
+
+            echo "Current directory: $(pwd)"
+
+            # Smart .env — create from template only on first deploy
+            if [ ! -f .env ]; then
+              cp staging.env.example .env
+              echo "FIRST DEPLOY: created .env from template"
+            fi
+
+            # Inject secrets from GitHub Secrets (always update these)
+            sed -i "s|^CMS_DB_PASSWORD=.*|CMS_DB_PASSWORD=${DB_PASSWORD}|" .env
+            sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${DJANGO_SECRET_KEY}|" .env
+            sed -i "s|^SFTP_PASSWORD=.*|SFTP_PASSWORD=${SFTP_PASSWORD}|" .env
+            sed -i "s|^FLOODPROOFS_SFTP_PASSWORD=.*|FLOODPROOFS_SFTP_PASSWORD=${SFTP_PASSWORD}|" .env
+            sed -i "s|^ENSEMBLE_FTP_PASSWORD=.*|ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}|" .env
+
+            # Backup database before deploy (skip if DB is unhealthy/restarting)
+            DB_STATUS=$(docker inspect --format='{{.State.Status}}' eafw-pgdb 2>/dev/null || echo "none")
+            DB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' eafw-pgdb 2>/dev/null || echo "none")
+            if [ "$DB_STATUS" = "running" ] && [ "$DB_HEALTH" != "unhealthy" ]; then
+              echo "Backing up database..."
+              mkdir -p ~/eafw-backups
+              BACKUP="$HOME/eafw-backups/db_$(date +%Y%m%d_%H%M%S).dump"
+              docker exec eafw-pgdb pg_dump -U eafw_user -Fc eafw_db > "$BACKUP" || echo "WARN: backup failed, continuing deploy"
+              if [ -f "$BACKUP" ] && [ -s "$BACKUP" ]; then
+                echo "Backup saved: $BACKUP ($(du -h "$BACKUP" | cut -f1))"
+              fi
+              # Keep last 5 backups
+              ls -t ~/eafw-backups/db_*.dump 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null
+            else
+              echo "DB not healthy ($DB_STATUS/$DB_HEALTH), skipping backup"
+            fi
+
+            # If DB is crash-looping, reset corrupt pgdata volume
+            # Init scripts only run on empty data dir — partial init = permanent crash loop
+            if [ "$DB_STATUS" = "restarting" ] || [ "$DB_STATUS" = "exited" ]; then
+              echo "DB is in failed state ($DB_STATUS), resetting pgdata volume..."
+              docker compose -f docker-compose.staging.yml --env-file .env down 2>/dev/null || true
+              docker volume rm eafw_pgdata 2>/dev/null || true
+              echo "pgdata volume removed. Fresh init will run on next start."
+            fi
+
+            # Pull latest images
+            docker compose -f docker-compose.staging.yml --env-file .env pull --ignore-pull-failures
+
+            # Deploy services (|| true: don't let set -e kill script during init)
+            docker compose -f docker-compose.staging.yml --env-file .env up -d || true
+
+            # Wait for DB to be ready (init loads 60MB+ on first deploy)
+            echo "Waiting for database to be ready..."
+            DB_READY=0
+            for i in $(seq 1 60); do
+              if docker exec eafw-pgdb pg_isready -U eafw_user 2>/dev/null; then
+                DB_READY=1
+                echo "DB ready after $((i*5))s"
+                break
+              fi
+              [ $((i % 10)) -eq 0 ] && echo "  Still waiting ($i/60)..."
+              sleep 5
+            done
+            if [ "$DB_READY" -eq 0 ]; then
+              echo "=== DB LOGS ==="
+              docker logs eafw-pgdb 2>&1 | tail -30
+              echo "FATAL: DB did not start"
+              exit 1
+            fi
+
+            # Run DB migrations (add country_code if missing, populate via ST_Within)
+            echo "Running DB migrations..."
+            docker exec eafw-pgdb psql -U eafw_user -d eafw_db -c "
+              ALTER TABLE gha.multimodal_control_points ADD COLUMN IF NOT EXISTS country_code VARCHAR(2);
+            " 2>/dev/null || true
+            # Populate country_code if any rows are NULL
+            docker exec eafw-pgdb psql -U eafw_user -d eafw_db -c "
+              UPDATE gha.multimodal_control_points cp
+              SET country_code = CASE
+                WHEN LOWER(a0.country) = 'ethiopia' THEN 'ET'
+                WHEN LOWER(a0.country) = 'kenya' THEN 'KE'
+                WHEN LOWER(a0.country) = 'uganda' THEN 'UG'
+                WHEN LOWER(a0.country) = 'sudan' THEN 'SD'
+                WHEN LOWER(a0.country) = 'south sudan' THEN 'SS'
+                WHEN LOWER(a0.country) IN ('tanzania','zanzibar') THEN 'TZ'
+                WHEN LOWER(a0.country) = 'rwanda' THEN 'RW'
+                WHEN LOWER(a0.country) = 'burundi' THEN 'BI'
+                WHEN LOWER(a0.country) = 'somalia' THEN 'SO'
+                WHEN LOWER(a0.country) = 'djibouti' THEN 'DJ'
+                WHEN LOWER(a0.country) = 'eritrea' THEN 'ER'
+                ELSE 'UN'
+              END
+              FROM gha.admin0 a0
+              WHERE ST_Within(cp.geom, a0.geom) AND cp.country_code IS NULL;
+            " 2>/dev/null || true
+
+            # Cleanup dangling images
+            docker image prune -f
+
+            # Health check
+            echo "Waiting 30s for remaining services..."
+            sleep 30
+            FAILED=0
+            for svc in eafw-pgdb eafw-pgbouncer eafw-cms eafw-api eafw-mapviewer eafw-nginx; do
+              STATUS=$(docker inspect --format='{{.State.Status}}' $svc 2>/dev/null)
+              if [ "$STATUS" != "running" ]; then
+                echo "WARN: $svc is $STATUS"
+                docker logs $svc 2>&1 | tail -5
+                FAILED=1
+              fi
+            done
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+            [ $FAILED -eq 1 ] && echo "SOME SERVICES NOT HEALTHY" && exit 1
+            echo "Deploy successful!"

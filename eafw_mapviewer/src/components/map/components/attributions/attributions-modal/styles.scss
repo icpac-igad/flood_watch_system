@@ -1,0 +1,61 @@
+@import "@/styles/settings.scss";
+
+.c-modal-attributions {
+  .modal-content {
+    min-width: 290px;
+  }
+  .modal-attributions-content {
+    .logos {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: rem(20px);
+
+      a {
+        margin-bottom: rem(15px);
+      }
+
+      .maplibre-logo {
+        width: rem(100px);
+        height: rem(25px);
+      }
+    }
+
+    .links {
+      display: flex;
+      flex-direction: column;
+      font-size: rem(12px);
+
+      * {
+        margin-bottom: rem(15px);
+        font-weight: 500;
+      }
+
+      a {
+        color: $primary-color;
+
+        &:hover {
+          color: $dark-green;
+          text-decoration: underline;
+        }
+      }
+    }
+  }
+
+  .map-disclaimer {
+    width: 100%;
+
+    p {
+      font-size: 11px;
+    }
+
+    a {
+      color: $primary-color;
+      font-size: 12px;
+
+      &:hover {
+        color: $dark-green;
+        text-decoration: underline;
+      }
+    }
+  }
+}
