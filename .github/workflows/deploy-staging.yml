@@ -272,13 +272,14 @@ jobs:
           DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
           DJANGO_SECRET_KEY: ${{ secrets.STAGING_DJANGO_SECRET_KEY }}
           SFTP_PASSWORD: ${{ secrets.STAGING_SFTP_PASSWORD }}
+          ENSEMBLE_FTP_PASSWORD: ${{ secrets.STAGING_ENSEMBLE_FTP_PASSWORD }}
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           key: ${{ secrets.STAGING_SSH_KEY }}
           port: 22
           command_timeout: 60m
-          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,SFTP_PASSWORD
+          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,SFTP_PASSWORD,ENSEMBLE_FTP_PASSWORD
           script: |
             set -e
             cd ~
@@ -309,7 +310,9 @@ jobs:
             # Inject secrets from GitHub Secrets (always update these)
             sed -i "s|^CMS_DB_PASSWORD=.*|CMS_DB_PASSWORD=${DB_PASSWORD}|" .env
             sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${DJANGO_SECRET_KEY}|" .env
+            sed -i "s|^SFTP_PASSWORD=.*|SFTP_PASSWORD=${SFTP_PASSWORD}|" .env
             sed -i "s|^FLOODPROOFS_SFTP_PASSWORD=.*|FLOODPROOFS_SFTP_PASSWORD=${SFTP_PASSWORD}|" .env
+            sed -i "s|^ENSEMBLE_FTP_PASSWORD=.*|ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}|" .env
 
             # Backup database before deploy (skip if DB is unhealthy/restarting)
             DB_STATUS=$(docker inspect --format='{{.State.Status}}' eafw-pgdb 2>/dev/null || echo "none")
@@ -340,16 +343,27 @@ jobs:
             # Pull latest images
             docker compose -f docker-compose.staging.yml --env-file .env pull --ignore-pull-failures
 
-            # Deploy services
-            docker compose -f docker-compose.staging.yml --env-file .env up -d
+            # Deploy services (|| true: don't let set -e kill script during init)
+            docker compose -f docker-compose.staging.yml --env-file .env up -d || true
 
-            # Wait for DB to be ready (init scripts can take time on first deploy)
+            # Wait for DB to be ready (init loads 60MB+ on first deploy)
             echo "Waiting for database to be ready..."
-            for i in $(seq 1 30); do
-              docker exec eafw-pgdb pg_isready -U eafw_user 2>/dev/null && break
-              echo "  DB not ready yet ($i/30)..."
+            DB_READY=0
+            for i in $(seq 1 60); do
+              if docker exec eafw-pgdb pg_isready -U eafw_user 2>/dev/null; then
+                DB_READY=1
+                echo "DB ready after $((i*5))s"
+                break
+              fi
+              [ $((i % 10)) -eq 0 ] && echo "  Still waiting ($i/60)..."
               sleep 5
             done
+            if [ "$DB_READY" -eq 0 ]; then
+              echo "=== DB LOGS ==="
+              docker logs eafw-pgdb 2>&1 | tail -30
+              echo "FATAL: DB did not start"
+              exit 1
+            fi
 
             # Run DB migrations (add country_code if missing, populate via ST_Within)
             echo "Running DB migrations..."
@@ -380,14 +394,15 @@ jobs:
             # Cleanup dangling images
             docker image prune -f
 
-            # Health check — allow extra time for first-time DB init (60MB+ static data)
-            echo "Waiting for services to start..."
-            sleep 60
+            # Health check
+            echo "Waiting 30s for remaining services..."
+            sleep 30
             FAILED=0
             for svc in eafw-pgdb eafw-pgbouncer eafw-cms eafw-api eafw-mapviewer eafw-nginx; do
               STATUS=$(docker inspect --format='{{.State.Status}}' $svc 2>/dev/null)
               if [ "$STATUS" != "running" ]; then
                 echo "WARN: $svc is $STATUS"
+                docker logs $svc 2>&1 | tail -5
                 FAILED=1
               fi
             done
