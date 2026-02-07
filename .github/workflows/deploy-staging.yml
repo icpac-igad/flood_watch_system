@@ -311,15 +311,27 @@ jobs:
             sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${DJANGO_SECRET_KEY}|" .env
             sed -i "s|^FLOODPROOFS_SFTP_PASSWORD=.*|FLOODPROOFS_SFTP_PASSWORD=${SFTP_PASSWORD}|" .env
 
-            # Backup database before deploy
-            if docker ps --format '{{.Names}}' | grep -q eafw-pgdb; then
+            # Backup database before deploy (skip if DB is unhealthy/restarting)
+            DB_STATUS=$(docker inspect --format='{{.State.Status}}' eafw-pgdb 2>/dev/null || echo "none")
+            DB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' eafw-pgdb 2>/dev/null || echo "none")
+            if [ "$DB_STATUS" = "running" ] && [ "$DB_HEALTH" != "unhealthy" ]; then
               echo "Backing up database..."
               mkdir -p ~/eafw-backups
               BACKUP="$HOME/eafw-backups/db_$(date +%Y%m%d_%H%M%S).dump"
-              docker exec eafw-pgdb pg_dump -U eafw_user -Fc eafw_db > "$BACKUP"
-              echo "Backup saved: $BACKUP ($(du -h "$BACKUP" | cut -f1))"
+              docker exec eafw-pgdb pg_dump -U eafw_user -Fc eafw_db > "$BACKUP" || echo "WARN: backup failed, continuing deploy"
+              if [ -f "$BACKUP" ] && [ -s "$BACKUP" ]; then
+                echo "Backup saved: $BACKUP ($(du -h "$BACKUP" | cut -f1))"
+              fi
               # Keep last 5 backups
               ls -t ~/eafw-backups/db_*.dump 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null
+            else
+              echo "DB not healthy ($DB_STATUS/$DB_HEALTH), skipping backup"
+            fi
+
+            # Stop unhealthy containers before redeploy
+            if [ "$DB_STATUS" = "restarting" ]; then
+              echo "Stopping restart-looping containers..."
+              docker compose -f docker-compose.staging.yml --env-file .env down 2>/dev/null || true
             fi
 
             # Pull latest images
