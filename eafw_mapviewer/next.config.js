@@ -17,6 +17,18 @@ const nextConfig = {
       }
     });
 
+    // SVG sprite loader for ?sprite imports
+    config.module.rules.push({
+      test: /\.svg$/,
+      resourceQuery: /sprite/,
+      use: [
+        {
+          loader: "svg-sprite-loader",
+          options: { extract: false },
+        },
+      ],
+    });
+
     config.resolve.alias = {
       ...config.resolve.alias,
       "mapbox-gl": "maplibre-gl",
