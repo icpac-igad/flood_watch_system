@@ -328,10 +328,13 @@ jobs:
               echo "DB not healthy ($DB_STATUS/$DB_HEALTH), skipping backup"
             fi
 
-            # Stop unhealthy containers before redeploy
-            if [ "$DB_STATUS" = "restarting" ]; then
-              echo "Stopping restart-looping containers..."
+            # If DB is crash-looping, reset corrupt pgdata volume
+            # Init scripts only run on empty data dir — partial init = permanent crash loop
+            if [ "$DB_STATUS" = "restarting" ] || [ "$DB_STATUS" = "exited" ]; then
+              echo "DB is in failed state ($DB_STATUS), resetting pgdata volume..."
               docker compose -f docker-compose.staging.yml --env-file .env down 2>/dev/null || true
+              docker volume rm eafw_pgdata 2>/dev/null || true
+              echo "pgdata volume removed. Fresh init will run on next start."
             fi
 
             # Pull latest images
