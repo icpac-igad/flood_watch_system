@@ -55,7 +55,7 @@ dependencies = [
     "ruff>=0.13.3",
     "shapely>=2.1.2",
     "validate-pyproject>=0.24.1",
-    "wagtail==6.3.2",
+    "wagtail>=6.3.6,<6.4",
     "wagtail-adminsortable>=0.1",
     "wagtail-cache>=3.0.0",
     "wagtail-color-panel>=1.4.1",

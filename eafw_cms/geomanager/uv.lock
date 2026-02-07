@@ -1139,7 +1139,7 @@ requires-dist = [
     { name = "ruff", specifier = ">=0.13.3" },
     { name = "shapely", specifier = ">=2.1.2" },
     { name = "validate-pyproject", specifier = ">=0.24.1" },
-    { name = "wagtail", specifier = "==6.3.2" },
+    { name = "wagtail", specifier = ">=6.3.6,<6.4" },
     { name = "wagtail-adminsortable", specifier = ">=0.1" },
     { name = "wagtail-cache", specifier = ">=3.0.0" },
     { name = "wagtail-color-panel", specifier = ">=1.4.1" },
@@ -2986,7 +2986,7 @@ wheels = [
 
 [[package]]
 name = "wagtail"
-version = "6.3.2"
+version = "6.3.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyascii" },
@@ -3007,9 +3007,9 @@ dependencies = [
     { name = "telepath" },
     { name = "willow", extra = ["heif"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e9/95/58c1528cdf041218cb7c9e358afbdc1138ca593919f600c0690dfe4a023b/wagtail-6.3.2.tar.gz", hash = "sha256:e4271222bd2498040a60dd5e27228dcd481cc2310aa8fc951f0f4e23d20fbc50", size = 6637960, upload-time = "2025-01-02T12:02:19.138Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/9a/b7527da94d5f559df33cf29ae6549e935b1065ec16da7c0627745c4be3aa/wagtail-6.3.6.tar.gz", hash = "sha256:53831f6febd7c00b572ca6494bda7de8dd28e10e648d56c721e8e8a61aba0515", size = 6640569, upload-time = "2026-02-03T11:46:33.389Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/0b/3514c43c506d9046b34c00235998b4769289d0216e0abd3dd874c3537658/wagtail-6.3.2-py3-none-any.whl", hash = "sha256:ac72f7138281ef47360057ebfb835a8eae34048efeed10ca9f4aabbc8f4e4ea5", size = 9127166, upload-time = "2025-01-02T12:02:09.244Z" },
+    { url = "https://files.pythonhosted.org/packages/b4/10/454ecdc3b1dbfff72402d99a1e9dd3658e5e0fde11551b4d3e79191e1da3/wagtail-6.3.6-py3-none-any.whl", hash = "sha256:edc5eef5d8ee84a51db2875cfda83c3f2bc0f0060f6ae2b7e59d636f803e6f70", size = 9130991, upload-time = "2026-02-03T11:46:30.956Z" },
 ]
 
 [[package]]

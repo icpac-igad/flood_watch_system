@@ -25,7 +25,7 @@ dependencies = [
     "wagtail-metadata==5.0.0",
     "wagtail-adminsortable @ git+https://github.com/wmo-raf/wagtail-admin-sortable.git@master",
     "geomanager",
-    "wagtail==6.3.2",
+    "wagtail>=6.3.6,<6.4",
     "wagtail-color-panel>=1.4.0",
     "django-countries>=7.6",
     "wagtail-localize>=1.12.2",
