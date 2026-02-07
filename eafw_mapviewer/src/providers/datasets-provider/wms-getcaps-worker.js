@@ -1,5 +1,5 @@
 import * as Comlink from "comlink";
-import xmldom from "xmldom";
+import * as xmldom from "@xmldom/xmldom";
 import WMSCapabilities from "wms-capabilities";
 import { get } from "axios";
 import { subMonths, subDays } from "date-fns";

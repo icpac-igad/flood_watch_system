@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const path = require("path");
-const optimizedImages = require("next-optimized-images");
 const withBundleAnalyzer = require("@next/bundle-analyzer")({
   enabled: process.env.ANALYZE === "true",
 });
@@ -56,6 +55,6 @@ const nextConfig = {
 };
 
 module.exports = () => {
-  const plugins = [optimizedImages, withBundleAnalyzer];
+  const plugins = [withBundleAnalyzer];
   return plugins.reduce((acc, next) => next(acc), nextConfig);
 };
