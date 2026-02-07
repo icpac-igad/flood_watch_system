@@ -29,7 +29,7 @@
                 <div class="member-flags">
                     {% for block in footer.member_countries %}
                     {% with block.value as item %}
-                    <div class="member-flag" title="{{ item.country }}">
+                    <div class="member-flag" data-country-code="{{ item.country|upper }}" title="{{ item.country }}">
                         <img src="https://flagcdn.com/w40/{{ item.country|lower }}.png" alt="{{ item.country }}">
                     </div>
                     {% endwith %}

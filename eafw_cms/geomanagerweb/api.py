@@ -5,6 +5,14 @@ from django.views import View
 from datetime import datetime
 from django.utils.html import strip_tags
 
+# WHCA project countries (ISO2) for scope fallback when whca_selected is unset
+WHCA_COUNTRY_CODES = ("SD", "SS", "UG", "ET", "RW")
+WHCA_COUNTRY_CODES_SQL = ",".join(f"'{code}'" for code in WHCA_COUNTRY_CODES)
+WHCA_SCOPE_SQL_CONDITION = (
+    "(COALESCE(cp.whca_selected, FALSE) IS TRUE OR "
+    f"UPPER(COALESCE(cp.country_code, '')) IN ({WHCA_COUNTRY_CODES_SQL}))"
+)
+
 # Create API router
 api_router = WagtailAPIRouter("webapi")
 
@@ -343,6 +351,9 @@ class MultimodalForecastGeoJSONView(View):
             - 'active': Warning level and above (daily_avg >= warning_threshold)
             - 'alarm': Alarm level and above (daily_avg >= alarm_threshold)
             - 'emergency': Emergency only (daily_avg >= emergency_threshold)
+        scope: Country scope filter:
+            - 'all': All countries (default)
+            - 'whca': WHCA project countries only (uses cp.whca_selected = true)
     """
 
     def get(self, request):
@@ -355,6 +366,15 @@ class MultimodalForecastGeoJSONView(View):
 
         # Get filter parameter for alert level filtering
         filter_mode = request.GET.get('filter', 'all')
+
+        # Optional country scope filter
+        scope_mode = request.GET.get('scope', 'all').strip().lower()
+        if scope_mode not in ('all', 'whca'):
+            response = JsonResponse({
+                'error': 'Invalid scope. Use all or whca'
+            }, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
 
         # Get thresholds from CMS settings
         try:
@@ -376,6 +396,10 @@ class MultimodalForecastGeoJSONView(View):
             filter_sql = f"WHERE daily_avg >= {alarm_threshold}"
         elif filter_mode == 'emergency':
             filter_sql = f"WHERE daily_avg >= {emergency_threshold}"
+
+        scope_sql = ""
+        if scope_mode == 'whca':
+            scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
 
         with connection.cursor() as cursor:
             try:
@@ -412,6 +436,8 @@ class MultimodalForecastGeoJSONView(View):
                             cp.zone,
                             cp.gridcode,
                             cp.admin_name,
+                            cp.country_code,
+                            cp.whca_selected,
                             cp.hybas_id,
                             cp.geom,
                             f.data_date,
@@ -448,6 +474,7 @@ class MultimodalForecastGeoJSONView(View):
                             ON f.point_id = cp.point_id
                             AND f.data_date = qp.query_date
                             AND f.forecast_date = ff.forecast_date
+                        {scope_sql}
                     )
                     SELECT json_build_object(
                         'type', 'FeatureCollection',
@@ -460,6 +487,8 @@ class MultimodalForecastGeoJSONView(View):
                                     'zone', zone,
                                     'gridcode', gridcode,
                                     'admin_name', admin_name,
+                                    'country_code', country_code,
+                                    'whca_selected', whca_selected,
                                     'hybas_id', hybas_id,
                                     'data_date', data_date::text,
                                     'forecast_date', forecast_date::text,
@@ -1061,6 +1090,16 @@ class CountrySummaryWithBoundsView(View):
     def get(self, request):
         from django.db import connection
 
+        scope_mode = request.GET.get('scope', 'all').strip().lower()
+        if scope_mode not in ('all', 'whca'):
+            response = JsonResponse({'error': 'Invalid scope. Use all or whca'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        scope_sql = ""
+        if scope_mode == 'whca':
+            scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
+
         with connection.cursor() as cursor:
             try:
                 # Get the latest available data date from multimodal forecasts
@@ -1092,7 +1131,7 @@ class CountrySummaryWithBoundsView(View):
                 # Uses first forecast day (same basis as situation-summary).
                 # Fast path derives ISO country code from admin_name prefix,
                 # then falls back to spatial join only when prefix is missing/invalid.
-                cursor.execute("""
+                cursor.execute(f"""
                     WITH query_params AS (
                         SELECT %s::date as query_date
                     ),
@@ -1115,6 +1154,7 @@ class CountrySummaryWithBoundsView(View):
                             ON f.point_id = cp.point_id
                             AND f.data_date = qp.query_date
                             AND f.forecast_date = ff.forecast_date
+                        {scope_sql}
                     ),
                     point_country AS (
                         SELECT
@@ -1263,6 +1303,7 @@ class CountrySummaryWithBoundsView(View):
 
                 result = {
                     'data_date': latest_date.strftime('%Y-%m-%d'),
+                    'scope': scope_mode,
                     'countries': countries,
                     'thresholds': {
                         'warning': warning_threshold,
@@ -1300,6 +1341,17 @@ class SituationSummaryView(View):
         # Get optional horizon parameter (days ahead, default 7)
         horizon = int(request.GET.get('horizon', 7))
         requested_date = request.GET.get('date') or request.GET.get('forecast_date')
+        scope_mode = request.GET.get('scope', 'all').strip().lower()
+        if scope_mode not in ('all', 'whca'):
+            response = JsonResponse({
+                'error': 'Invalid scope. Use all or whca'
+            }, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        scope_where_sql = ""
+        if scope_mode == 'whca':
+            scope_where_sql = f" AND {WHCA_SCOPE_SQL_CONDITION}"
 
         with connection.cursor() as cursor:
             try:
@@ -1354,7 +1406,7 @@ class SituationSummaryView(View):
                     emergency_threshold = 450.0
 
                 # Query to get summary statistics using latest normalized data
-                cursor.execute("""
+                cursor.execute(f"""
                     WITH query_params AS (
                         SELECT %s::date as query_date
                     ),
@@ -1376,6 +1428,7 @@ class SituationSummaryView(View):
                             ON f.point_id = cp.point_id
                             AND f.data_date = qp.query_date
                             AND f.forecast_date = ff.forecast_date
+                        WHERE 1=1 {scope_where_sql}
                     ),
                     risk_levels AS (
                         SELECT
@@ -1399,8 +1452,11 @@ class SituationSummaryView(View):
                                 WHEN mf.daily_avg >= %s THEN 'warning'
                                 ELSE 'normal'
                             END as risk_level
-                        FROM gha.multimodal_forecasts mf, query_params qp
+                        FROM gha.multimodal_forecasts mf
+                        JOIN gha.multimodal_control_points cp ON cp.point_id = mf.point_id
+                        CROSS JOIN query_params qp
                         WHERE mf.data_date = qp.query_date
+                        {scope_where_sql}
                     )
                     SELECT
                         (SELECT COUNT(*) FROM risk_levels WHERE risk_level = 'emergency') as emergency_count,
@@ -1423,7 +1479,7 @@ class SituationSummaryView(View):
                 row = cursor.fetchone()
 
                 # Get country breakdown
-                cursor.execute("""
+                cursor.execute(f"""
                     WITH query_params AS (
                         SELECT %s::date as query_date
                     ),
@@ -1446,6 +1502,7 @@ class SituationSummaryView(View):
                             ON f.point_id = cp.point_id
                             AND f.data_date = qp.query_date
                             AND f.forecast_date = ff.forecast_date
+                        WHERE 1=1 {scope_where_sql}
                     ),
                     risk_levels AS (
                         SELECT
@@ -1492,6 +1549,7 @@ class SituationSummaryView(View):
                 if row:
                     summary = {
                         'data_date': query_date.strftime('%Y-%m-%d'),
+                        'scope': scope_mode,
                         'horizon_days': horizon,
                         'risk_counts': {
                             'emergency': row[0] or 0,
@@ -1511,6 +1569,7 @@ class SituationSummaryView(View):
                 else:
                     summary = {
                         'data_date': query_date.strftime('%Y-%m-%d'),
+                        'scope': scope_mode,
                         'horizon_days': horizon,
                         'risk_counts': {
                             'emergency': 0,

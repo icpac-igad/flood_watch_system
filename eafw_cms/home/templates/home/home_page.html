@@ -4,7 +4,7 @@
 {% block body_class %}homepage{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260206-7">
+<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260207-2">
 {% endblock %}
 
 {% block content %}
@@ -36,6 +36,58 @@
     let selectedCountry = null;
     let resizeTimer = null;
     let mapResizeFrame = null;
+    let selectedMapScope = 'all';
+    let pointLayerEventsBound = false;
+    let adminLayerEventsBound = false;
+    let admin0FeaturesCache = null;
+    let scopeBoundsByScope = { all: null, whca: null };
+
+    const ADMIN0_SOURCE_ID = 'admin0-boundary-source';
+    const ADMIN0_FILL_LAYER_ID = 'admin0-boundary-fill';
+    const ADMIN0_LINE_LAYER_ID = 'admin0-boundary-line';
+    const FOCUS_MASK_SOURCE_ID = 'focus-mask-source';
+    const FOCUS_MASK_LAYER_ID = 'focus-mask-layer';
+    const WHCA_ADMIN0_CODES = new Set(['ETH', 'RWA', 'SSD', 'SDN', 'UGA']);
+    const WHCA_MEMBER_CODES = new Set(['SD', 'SS', 'UG', 'ET', 'RW']);
+    const ISO2_TO_ISO3 = Object.freeze({
+        BI: 'BDI',
+        DJ: 'DJI',
+        ER: 'ERI',
+        ET: 'ETH',
+        KE: 'KEN',
+        RW: 'RWA',
+        SD: 'SDN',
+        SO: 'SOM',
+        SS: 'SSD',
+        TZ: 'TZA',
+        UG: 'UGA'
+    });
+    const ISO3_TO_ISO2 = Object.freeze({
+        BDI: 'BI',
+        DJI: 'DJ',
+        ERI: 'ER',
+        ETH: 'ET',
+        KEN: 'KE',
+        RWA: 'RW',
+        SDN: 'SD',
+        SOM: 'SO',
+        SSD: 'SS',
+        TZA: 'TZ',
+        UGA: 'UG'
+    });
+    const BASE_COUNTRY_SECTION_TITLE = '{{ page.country_cards_title|default:"Regional Flood Situation"|escapejs }}';
+    const BASE_DASHBOARD_TITLE = '{{ page.dashboard_title|default:"Latest Situation of Flood Conditions"|escapejs }}';
+    const WHCA_COUNTRY_SECTION_TITLE = 'Nile Basin Flood Situation';
+    const WHCA_DASHBOARD_TITLE = 'Latest Situation of Nile Basin Flood Conditions';
+
+    const MAP_SCOPE_CONFIG = {
+        all: {
+            scopeParam: 'all'
+        },
+        whca: {
+            scopeParam: 'whca'
+        }
+    };
 
     // CMS Configuration
     const mapConfig = {
@@ -43,7 +95,7 @@
         centerLng: {{ page.mini_map_center_lng|default:38.0 }},
         zoom: {{ page.mini_map_initial_zoom|default:5 }},
         maxCards: {{ page.max_country_cards|default:11 }},
-        bounds: [[21.8, -12.0], [52.0, 18.0]],
+        bounds: [[20.0, -14.0], [53.5, 24.0]],
         pointFilter: '{{ page.point_filter_mode|default:"all" }}'
     };
 
@@ -83,12 +135,19 @@
         situationSummary: [
             '/api/situation-summary/',
             '/api/situation-summary'
+        ],
+        admin0: [
+            '/api/v1/boundaries/admin0',
+            '/api/v1/boundaries/admin0/'
         ]
     };
 
     document.addEventListener('DOMContentLoaded', function() {
         setHomepageLayoutHeights();
+        initMapScopeControl();
+        updateScopeHeadings();
         initRiskTickerLoop();
+        updateMemberCountriesByScope();
         initMiniMap();
         loadCountryData();
         loadSituationSummary();
@@ -220,6 +279,19 @@
         throw lastError || new Error('All API endpoints failed');
     }
 
+    function buildUrlsWithParams(urls, params) {
+        const searchParams = new URLSearchParams();
+        Object.entries(params || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') {
+                searchParams.set(key, value);
+            }
+        });
+
+        const query = searchParams.toString();
+        if (!query) return urls;
+        return urls.map((url) => `${url}?${query}`);
+    }
+
     // ========================================
     // HERO SLIDESHOW
     // ========================================
@@ -257,6 +329,566 @@
     }
 
     // ========================================
+    // MINI-MAP SCOPE FILTER (ALL / WHCA)
+    // ========================================
+    function initMapScopeControl() {
+        const control = document.getElementById('map-scope-control');
+        if (!control) return;
+
+        control.addEventListener('click', async (event) => {
+            const button = event.target.closest('.map-scope-btn[data-scope]');
+            if (!button) return;
+            await setMapScope(button.getAttribute('data-scope'));
+        });
+
+        updateMapScopeUI();
+    }
+
+    function updateMapScopeUI() {
+        document.querySelectorAll('.map-scope-btn[data-scope]').forEach((btn) => {
+            const isActive = btn.getAttribute('data-scope') === selectedMapScope;
+            btn.classList.toggle('active', isActive);
+        });
+    }
+
+    async function setMapScope(nextScope) {
+        if (!Object.prototype.hasOwnProperty.call(MAP_SCOPE_CONFIG, nextScope)) return;
+        if (nextScope === selectedMapScope && !selectedCountry) return;
+
+        selectedMapScope = nextScope;
+        selectedCountry = null;
+        updateMapScopeUI();
+        updateMemberCountriesByScope();
+        updateScopeHeadings();
+
+        if (miniMap && miniMap.isStyleLoaded()) {
+            const scopeBounds = await loadAdmin0Boundaries();
+            await loadMapPoints();
+            fitMapToScopeBounds(scopeBounds, nextScope);
+        }
+
+        await loadCountryData();
+        await loadSituationSummary();
+    }
+
+    function updateMemberCountriesByScope() {
+        const membersGroup = document.querySelector('.members-group');
+        if (!membersGroup) return;
+
+        const flags = Array.from(document.querySelectorAll('.member-flag[data-country-code]'));
+        if (!flags.length) return;
+
+        let visibleCount = 0;
+        flags.forEach((flag) => {
+            const code = (flag.getAttribute('data-country-code') || '').toUpperCase();
+            const isVisible = selectedMapScope !== 'whca' || WHCA_MEMBER_CODES.has(code);
+            flag.style.display = isVisible ? '' : 'none';
+            if (isVisible) visibleCount += 1;
+        });
+
+        const label = membersGroup.querySelector('.partners-label');
+        if (label) {
+            label.textContent = selectedMapScope === 'whca' ? 'WHCA Countries' : 'Member Countries';
+        }
+
+        membersGroup.style.display = visibleCount > 0 ? '' : 'none';
+    }
+
+    function getCountryByCode(code) {
+        const normalizedCode = (code || '').toUpperCase();
+        return countriesData.find((country) => (country.code || '').toUpperCase() === normalizedCode) || null;
+    }
+
+    function getCountryNameByCode(code) {
+        const country = getCountryByCode(code);
+        return country?.name || null;
+    }
+
+    function getScopePanelTitle() {
+        return selectedMapScope === 'whca'
+            ? WHCA_COUNTRY_SECTION_TITLE
+            : (BASE_COUNTRY_SECTION_TITLE || 'Regional Flood Situation');
+    }
+
+    function getScopeTickerTitle() {
+        return selectedMapScope === 'whca'
+            ? WHCA_DASHBOARD_TITLE
+            : (BASE_DASHBOARD_TITLE || 'Latest Situation of Flood Conditions');
+    }
+
+    function updateScopeHeadings() {
+        const countryTitleEl = document.getElementById('country-section-title');
+        const countryName = getCountryNameByCode(selectedCountry);
+        const panelTitle = countryName ? `${getScopePanelTitle()} - ${countryName}` : getScopePanelTitle();
+
+        if (countryTitleEl) {
+            countryTitleEl.textContent = panelTitle;
+        }
+
+        const tickerTitle = countryName ? `${getScopeTickerTitle()} (${countryName})` : getScopeTickerTitle();
+        document.querySelectorAll('[id="dashboard-title-text"]').forEach((el) => {
+            el.textContent = tickerTitle;
+        });
+    }
+
+    function toBoundsPair(bounds) {
+        if (!bounds) return null;
+
+        if (Array.isArray(bounds) && bounds.length === 2) {
+            return bounds;
+        }
+
+        const west = Number(bounds.west);
+        const south = Number(bounds.south);
+        const east = Number(bounds.east);
+        const north = Number(bounds.north);
+        if ([west, south, east, north].every(Number.isFinite)) {
+            return [[west, south], [east, north]];
+        }
+
+        return null;
+    }
+
+    function expandBounds(bounds, ratio = 0.08, minPaddingDeg = 0.2) {
+        const pair = toBoundsPair(bounds);
+        if (!pair) return null;
+
+        const [[west, south], [east, north]] = pair;
+        const spanLng = Math.max(0, east - west);
+        const spanLat = Math.max(0, north - south);
+        const padLng = Math.max(minPaddingDeg, spanLng * ratio);
+        const padLat = Math.max(minPaddingDeg, spanLat * ratio);
+
+        const clampedSouth = Math.max(-85, south - padLat);
+        const clampedNorth = Math.min(85, north + padLat);
+        const clampedWest = Math.max(-180, west - padLng);
+        const clampedEast = Math.min(180, east + padLng);
+
+        return [[clampedWest, clampedSouth], [clampedEast, clampedNorth]];
+    }
+
+    function setMapBoundsConstraint(bounds, isCountryFocus = false) {
+        if (!miniMap) return;
+
+        const fallback = mapConfig.bounds;
+        const target = toBoundsPair(bounds) || fallback;
+        const expanded = expandBounds(target, isCountryFocus ? 0.15 : 0.1, isCountryFocus ? 0.15 : 0.3) || target;
+        miniMap.setMaxBounds(expanded);
+    }
+
+    function applyCountryFiltersToMapLayers() {
+        if (!miniMap || !miniMap.isStyleLoaded()) return;
+
+        const iso2 = (selectedCountry || '').toUpperCase();
+        const iso3 = ISO2_TO_ISO3[iso2] || '';
+
+        if (miniMap.getLayer('forecast-points-layer')) {
+            miniMap.setFilter(
+                'forecast-points-layer',
+                iso2 ? ['==', ['upcase', ['coalesce', ['get', 'country_code'], '']], iso2] : null
+            );
+        }
+
+        if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) {
+            miniMap.setFilter(
+                ADMIN0_FILL_LAYER_ID,
+                iso3 ? ['==', ['upcase', ['coalesce', ['get', 'gid_0'], '']], iso3] : null
+            );
+        }
+
+        if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) {
+            miniMap.setFilter(
+                ADMIN0_LINE_LAYER_ID,
+                iso3 ? ['==', ['upcase', ['coalesce', ['get', 'gid_0'], '']], iso3] : null
+            );
+        }
+
+        applyFocusMaskLayer();
+    }
+
+    function cloneRing(ring) {
+        return Array.isArray(ring)
+            ? ring
+                .filter((coord) => Array.isArray(coord) && coord.length >= 2)
+                .map((coord) => [Number(coord[0]), Number(coord[1])])
+                .filter((coord) => Number.isFinite(coord[0]) && Number.isFinite(coord[1]))
+            : [];
+    }
+
+    function closeRing(ring) {
+        if (!Array.isArray(ring) || ring.length === 0) return [];
+
+        const first = ring[0];
+        const last = ring[ring.length - 1];
+        if (first[0] === last[0] && first[1] === last[1]) {
+            return ring;
+        }
+
+        return [...ring, [first[0], first[1]]];
+    }
+
+    function ringSignedArea(ring) {
+        if (!Array.isArray(ring) || ring.length < 4) return 0;
+        let area = 0;
+        for (let i = 0; i < ring.length - 1; i += 1) {
+            const [x1, y1] = ring[i];
+            const [x2, y2] = ring[i + 1];
+            area += (x1 * y2) - (x2 * y1);
+        }
+        return area / 2;
+    }
+
+    function normalizeRing(ring, clockwise = false) {
+        const cloned = closeRing(cloneRing(ring));
+        if (cloned.length < 4) return null;
+
+        const isClockwise = ringSignedArea(cloned) < 0;
+        if (isClockwise !== clockwise) {
+            return [...cloned].reverse();
+        }
+
+        return cloned;
+    }
+
+    function collectOuterRingsFromGeometry(geometry) {
+        if (!geometry || !geometry.type || !Array.isArray(geometry.coordinates)) {
+            return [];
+        }
+
+        if (geometry.type === 'Polygon') {
+            const outer = normalizeRing(geometry.coordinates[0], true);
+            return outer ? [outer] : [];
+        }
+
+        if (geometry.type === 'MultiPolygon') {
+            return geometry.coordinates
+                .map((polygonCoords) => normalizeRing(polygonCoords?.[0], true))
+                .filter(Boolean);
+        }
+
+        return [];
+    }
+
+    function buildFocusMaskData(features) {
+        if (!Array.isArray(features) || features.length === 0) return null;
+
+        const worldOuterRing = normalizeRing([
+            [-180, -85],
+            [180, -85],
+            [180, 85],
+            [-180, 85]
+        ], false);
+
+        if (!worldOuterRing) return null;
+
+        const holes = features.flatMap((feature) => collectOuterRingsFromGeometry(feature?.geometry));
+        if (!holes.length) return null;
+
+        return {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [worldOuterRing, ...holes]
+                }
+            }]
+        };
+    }
+
+    function getScopedAdmin0Features() {
+        let features = Array.isArray(admin0FeaturesCache) ? [...admin0FeaturesCache] : [];
+        if (selectedMapScope === 'whca') {
+            features = features.filter((feature) =>
+                WHCA_ADMIN0_CODES.has((feature.properties?.gid_0 || '').toUpperCase())
+            );
+        }
+        return features;
+    }
+
+    function getFocusMaskFeatures() {
+        const scopedFeatures = getScopedAdmin0Features();
+        if (!scopedFeatures.length) return [];
+
+        if (selectedCountry) {
+            const iso3 = ISO2_TO_ISO3[(selectedCountry || '').toUpperCase()] || '';
+            return scopedFeatures.filter(
+                (feature) => (feature.properties?.gid_0 || '').toUpperCase() === iso3
+            );
+        }
+
+        if (selectedMapScope === 'whca') {
+            return scopedFeatures;
+        }
+
+        return [];
+    }
+
+    function clearFocusMaskLayer() {
+        if (!miniMap) return;
+        if (miniMap.getLayer(FOCUS_MASK_LAYER_ID)) miniMap.removeLayer(FOCUS_MASK_LAYER_ID);
+        if (miniMap.getSource(FOCUS_MASK_SOURCE_ID)) miniMap.removeSource(FOCUS_MASK_SOURCE_ID);
+    }
+
+    function getFocusMaskBeforeLayerId() {
+        if (!miniMap) return undefined;
+        if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) return ADMIN0_FILL_LAYER_ID;
+        if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) return ADMIN0_LINE_LAYER_ID;
+        if (miniMap.getLayer('forecast-points-layer')) return 'forecast-points-layer';
+        return undefined;
+    }
+
+    function applyFocusMaskLayer() {
+        if (!miniMap || !miniMap.isStyleLoaded()) return;
+
+        const features = getFocusMaskFeatures();
+        if (!features.length) {
+            clearFocusMaskLayer();
+            return;
+        }
+
+        const maskData = buildFocusMaskData(features);
+        if (!maskData) {
+            clearFocusMaskLayer();
+            return;
+        }
+
+        const beforeId = getFocusMaskBeforeLayerId();
+        if (!miniMap.getSource(FOCUS_MASK_SOURCE_ID)) {
+            miniMap.addSource(FOCUS_MASK_SOURCE_ID, {
+                type: 'geojson',
+                data: maskData
+            });
+
+            miniMap.addLayer({
+                id: FOCUS_MASK_LAYER_ID,
+                type: 'fill',
+                source: FOCUS_MASK_SOURCE_ID,
+                paint: {
+                    'fill-color': '#e7edf3',
+                    'fill-opacity': 0.88
+                }
+            }, beforeId);
+            return;
+        }
+
+        miniMap.getSource(FOCUS_MASK_SOURCE_ID).setData(maskData);
+        if (!miniMap.getLayer(FOCUS_MASK_LAYER_ID)) {
+            miniMap.addLayer({
+                id: FOCUS_MASK_LAYER_ID,
+                type: 'fill',
+                source: FOCUS_MASK_SOURCE_ID,
+                paint: {
+                    'fill-color': '#e7edf3',
+                    'fill-opacity': 0.88
+                }
+            }, beforeId);
+            return;
+        }
+
+        if (beforeId && beforeId !== FOCUS_MASK_LAYER_ID) {
+            miniMap.moveLayer(FOCUS_MASK_LAYER_ID, beforeId);
+        }
+    }
+
+    function updateBoundsFromCoordinates(coords, boundsState) {
+        if (!Array.isArray(coords)) return;
+
+        // Leaf coordinate pair [lng, lat]
+        if (
+            coords.length >= 2 &&
+            typeof coords[0] === 'number' &&
+            typeof coords[1] === 'number'
+        ) {
+            const lng = coords[0];
+            const lat = coords[1];
+            if (lng < boundsState.minLng) boundsState.minLng = lng;
+            if (lat < boundsState.minLat) boundsState.minLat = lat;
+            if (lng > boundsState.maxLng) boundsState.maxLng = lng;
+            if (lat > boundsState.maxLat) boundsState.maxLat = lat;
+            return;
+        }
+
+        coords.forEach((nested) => updateBoundsFromCoordinates(nested, boundsState));
+    }
+
+    function computeFeatureCollectionBounds(features) {
+        if (!Array.isArray(features) || features.length === 0) return null;
+
+        const boundsState = {
+            minLng: Infinity,
+            minLat: Infinity,
+            maxLng: -Infinity,
+            maxLat: -Infinity
+        };
+
+        features.forEach((feature) => {
+            const geometry = feature?.geometry;
+            if (!geometry?.coordinates) return;
+            updateBoundsFromCoordinates(geometry.coordinates, boundsState);
+        });
+
+        if (!Number.isFinite(boundsState.minLng) || !Number.isFinite(boundsState.minLat) ||
+            !Number.isFinite(boundsState.maxLng) || !Number.isFinite(boundsState.maxLat)) {
+            return null;
+        }
+
+        return [
+            [boundsState.minLng, boundsState.minLat],
+            [boundsState.maxLng, boundsState.maxLat]
+        ];
+    }
+
+    function fitMapToScopeBounds(bounds, scope) {
+        if (!miniMap) return;
+
+        const isWhcaScope = scope === 'whca';
+        const targetBounds = isWhcaScope
+            ? (toBoundsPair(bounds) || mapConfig.bounds)
+            : mapConfig.bounds;
+        const padding = isWhcaScope ? 52 : 64;
+        const maxZoom = isWhcaScope ? 5.1 : 4.4;
+        const expandedBounds = expandBounds(
+            targetBounds,
+            isWhcaScope ? 0.16 : 0.24,
+            isWhcaScope ? 0.5 : 1.0
+        ) || targetBounds;
+
+        scopeBoundsByScope[scope] = targetBounds;
+        setMapBoundsConstraint(expandedBounds, false);
+
+        miniMap.fitBounds(expandedBounds, {
+            padding,
+            duration: 700,
+            maxZoom
+        });
+    }
+
+    function fitMapToCountryBounds(bounds) {
+        if (!miniMap) return;
+        const targetBounds = toBoundsPair(bounds);
+        if (!targetBounds) return;
+
+        setMapBoundsConstraint(targetBounds, true);
+        miniMap.fitBounds(targetBounds, {
+            padding: 42,
+            duration: 800
+        });
+    }
+
+    function normalizeAdmin0Feature(feature) {
+        if (!feature) return null;
+        let geometry = feature.geometry;
+        if (typeof geometry === 'string') {
+            try {
+                geometry = JSON.parse(geometry);
+            } catch (error) {
+                return null;
+            }
+        }
+
+        if (!geometry || !geometry.type || !geometry.coordinates) {
+            return null;
+        }
+
+        return {
+            type: 'Feature',
+            properties: feature.properties || {},
+            geometry
+        };
+    }
+
+    async function getAdmin0Features() {
+        if (admin0FeaturesCache) return admin0FeaturesCache;
+
+        const payload = await fetchJsonWithFallback(apiEndpoints.admin0);
+        const features = Array.isArray(payload?.features) ? payload.features : [];
+        admin0FeaturesCache = features.map(normalizeAdmin0Feature).filter(Boolean);
+        return admin0FeaturesCache;
+    }
+
+    async function loadAdmin0Boundaries() {
+        if (!miniMap || !miniMap.isStyleLoaded()) return null;
+
+        if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) miniMap.removeLayer(ADMIN0_LINE_LAYER_ID);
+        if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) miniMap.removeLayer(ADMIN0_FILL_LAYER_ID);
+        if (miniMap.getSource(ADMIN0_SOURCE_ID)) miniMap.removeSource(ADMIN0_SOURCE_ID);
+
+        let admin0Features = [];
+        try {
+            admin0Features = await getAdmin0Features();
+        } catch (error) {
+            console.error('Failed to load admin0 boundaries:', error);
+        }
+
+        if (selectedMapScope === 'whca') {
+            admin0Features = admin0Features.filter((feature) =>
+                WHCA_ADMIN0_CODES.has((feature.properties?.gid_0 || '').toUpperCase())
+            );
+        }
+
+        const scopeBounds = computeFeatureCollectionBounds(admin0Features);
+
+        miniMap.addSource(ADMIN0_SOURCE_ID, {
+            type: 'geojson',
+            data: {
+                type: 'FeatureCollection',
+                features: admin0Features
+            }
+        });
+
+        miniMap.addLayer({
+            id: ADMIN0_FILL_LAYER_ID,
+            type: 'fill',
+            source: ADMIN0_SOURCE_ID,
+            paint: {
+                'fill-color': '#2a6f97',
+                'fill-opacity': 0.1
+            }
+        });
+
+        miniMap.addLayer({
+            id: ADMIN0_LINE_LAYER_ID,
+            type: 'line',
+            source: ADMIN0_SOURCE_ID,
+            paint: {
+                'line-color': '#0f3854',
+                'line-width': ['interpolate', ['linear'], ['zoom'], 3, 1.1, 6, 1.7, 9, 2.3],
+                'line-opacity': 0.95
+            }
+        });
+
+        if (scopeBounds) {
+            scopeBoundsByScope[selectedMapScope] = scopeBounds;
+        }
+        applyCountryFiltersToMapLayers();
+
+        if (!adminLayerEventsBound) {
+            miniMap.on('click', ADMIN0_FILL_LAYER_ID, (event) => {
+                const feature = event.features?.[0];
+                const iso3 = (feature?.properties?.gid_0 || '').toUpperCase();
+                const iso2 = ISO3_TO_ISO2[iso3];
+                if (!iso2) return;
+
+                const clickedBounds = computeFeatureCollectionBounds(feature ? [feature] : []);
+                selectCountry(iso2, clickedBounds);
+            });
+
+            miniMap.on('mouseenter', ADMIN0_FILL_LAYER_ID, () => {
+                miniMap.getCanvas().style.cursor = 'pointer';
+            });
+            miniMap.on('mouseleave', ADMIN0_FILL_LAYER_ID, () => {
+                miniMap.getCanvas().style.cursor = '';
+            });
+
+            adminLayerEventsBound = true;
+        }
+
+        return scopeBounds;
+    }
+
+    // ========================================
     // MINI-MAP INITIALIZATION
     // ========================================
     function initMiniMap() {
@@ -285,21 +917,37 @@
                 },
                 center: [mapConfig.centerLng, mapConfig.centerLat],
                 zoom: mapConfig.zoom,
-                attributionControl: false
+                attributionControl: false,
+                interactive: true,
+                dragPan: true,
+                scrollZoom: true,
+                boxZoom: true,
+                doubleClickZoom: true,
+                touchZoomRotate: true,
+                keyboard: true
             });
 
             // Simple zoom controls only
             miniMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+            miniMap.scrollZoom.enable();
+            miniMap.boxZoom.enable();
+            miniMap.dragPan.enable();
+            miniMap.doubleClickZoom.enable();
+            miniMap.keyboard.enable();
+            miniMap.touchZoomRotate.enable();
 
-            miniMap.on('load', function() {
+            miniMap.on('load', async function() {
                 document.getElementById('map-loading').style.display = 'none';
 
                 scheduleMiniMapResize();
                 // Fit to East Africa bounds
-                miniMap.fitBounds(mapConfig.bounds, { padding: 30, duration: 0 });
+                miniMap.fitBounds(mapConfig.bounds, { padding: 64, duration: 0, maxZoom: 4.4 });
+                setMapBoundsConstraint(mapConfig.bounds, false);
                 scheduleMiniMapResize(140);
 
-                loadMapPoints();
+                const scopeBounds = await loadAdmin0Boundaries();
+                await loadMapPoints();
+                fitMapToScopeBounds(scopeBounds, 'all');
             });
 
         } catch (error) {
@@ -315,11 +963,11 @@
         if (!miniMap) return;
 
         try {
-            // Add point filter from CMS config
-            const filterParam = mapConfig.pointFilter !== 'all'
-                ? `?filter=${encodeURIComponent(mapConfig.pointFilter)}`
-                : '';
-            const geojsonUrls = apiEndpoints.geojson.map(url => `${url}${filterParam}`);
+            const params = {};
+            if (mapConfig.pointFilter !== 'all') params.filter = mapConfig.pointFilter;
+            if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+
+            const geojsonUrls = buildUrlsWithParams(apiEndpoints.geojson, params);
             const geojson = await fetchJsonWithFallback(geojsonUrls);
             if (!geojson || !Array.isArray(geojson.features)) {
                 throw new Error('Invalid GeoJSON response');
@@ -345,10 +993,8 @@
             });
 
             // Remove existing
-            if (miniMap.getSource('forecast-points')) {
-                miniMap.removeLayer('forecast-points-layer');
-                miniMap.removeSource('forecast-points');
-            }
+            if (miniMap.getLayer('forecast-points-layer')) miniMap.removeLayer('forecast-points-layer');
+            if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
 
             miniMap.addSource('forecast-points', { type: 'geojson', data: geojson });
 
@@ -371,23 +1017,32 @@
                 }
             });
 
-            // Click popup
-            miniMap.on('click', 'forecast-points-layer', function(e) {
-                const props = e.features[0].properties;
-                const coords = e.features[0].geometry.coordinates.slice();
+            if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) {
+                miniMap.moveLayer('forecast-points-layer');
+            }
 
-                new maplibregl.Popup({ closeButton: true, maxWidth: '220px' })
-                    .setLngLat(coords)
-                    .setHTML(`
-                        <div class="popup-title">${props.admin_name || 'Forecast Point'}</div>
-                        <div class="popup-value">Alert: <span class="${props.alert_level}">${props.alert_level.toUpperCase()}</span></div>
-                        <div class="popup-value">Discharge: <span>${Math.round(props.daily_avg || 0)} m³/s</span></div>
-                    `)
-                    .addTo(miniMap);
-            });
+            applyCountryFiltersToMapLayers();
 
-            miniMap.on('mouseenter', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = 'pointer');
-            miniMap.on('mouseleave', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = '');
+            if (!pointLayerEventsBound) {
+                // Click popup
+                miniMap.on('click', 'forecast-points-layer', function(e) {
+                    const props = e.features[0].properties;
+                    const coords = e.features[0].geometry.coordinates.slice();
+
+                    new maplibregl.Popup({ closeButton: true, maxWidth: '220px' })
+                        .setLngLat(coords)
+                        .setHTML(`
+                            <div class="popup-title">${props.admin_name || 'Forecast Point'}</div>
+                            <div class="popup-value">Alert: <span class="${props.alert_level}">${props.alert_level.toUpperCase()}</span></div>
+                            <div class="popup-value">Discharge: <span>${Math.round(props.daily_avg || 0)} m³/s</span></div>
+                        `)
+                        .addTo(miniMap);
+                });
+
+                miniMap.on('mouseenter', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = 'pointer');
+                miniMap.on('mouseleave', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = '');
+                pointLayerEventsBound = true;
+            }
 
         } catch (error) {
             console.error('Error loading map points:', error);
@@ -399,14 +1054,20 @@
     // ========================================
     async function loadCountryData() {
         try {
-            const data = await fetchJsonWithFallback(apiEndpoints.countrySummary);
+            const params = {};
+            if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+            const urls = buildUrlsWithParams(apiEndpoints.countrySummary, params);
+            const data = await fetchJsonWithFallback(urls);
             countriesData = data.countries || [];
 
             renderCountryList(countriesData);
 
         } catch (error) {
             console.error('Error loading country data:', error);
-            document.getElementById('country-list').innerHTML = '<div class="country-loading"><span style="color:#c62828;">Failed to load data</span></div>';
+            const container = document.getElementById('country-list');
+            if (container) {
+                container.innerHTML = '<div class="country-loading"><span style="color:#c62828;">Failed to load data</span></div>';
+            }
         }
     }
 
@@ -414,15 +1075,16 @@
     // UPDATE RISK TICKER - From situation-summary API
     // ========================================
     function updateRiskTicker(riskCounts) {
-        const emergencyEl = document.getElementById('ticker-emergency');
-        const alarmEl = document.getElementById('ticker-alarm');
-        const warningEl = document.getElementById('ticker-warning');
-        const normalEl = document.getElementById('ticker-normal');
+        const updateAll = (id, value) => {
+            document.querySelectorAll(`[id="${id}"]`).forEach((el) => {
+                el.textContent = value;
+            });
+        };
 
-        if (emergencyEl) emergencyEl.textContent = riskCounts.emergency || 0;
-        if (alarmEl) alarmEl.textContent = riskCounts.alarm || 0;
-        if (warningEl) warningEl.textContent = riskCounts.warning || 0;
-        if (normalEl) normalEl.textContent = riskCounts.normal || 0;
+        updateAll('ticker-emergency', riskCounts.emergency || 0);
+        updateAll('ticker-alarm', riskCounts.alarm || 0);
+        updateAll('ticker-warning', riskCounts.warning || 0);
+        updateAll('ticker-normal', riskCounts.normal || 0);
     }
 
     // ========================================
@@ -447,8 +1109,10 @@
 
         let html = '';
         countries.slice(0, cardLimit).forEach(country => {
-            const name = country.name || country.code;
-            const flagUrl = flagUrls[country.code] || `https://flagcdn.com/w80/${country.code.toLowerCase()}.png`;
+            const code = (country.code || '').toUpperCase();
+            const name = country.name || code;
+            const flagUrl = flagUrls[code] || `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
+            const isSelected = selectedCountry === code;
 
             const total = country.emergency + country.alarm + country.warning;
             const emergencyPct = total > 0 ? (country.emergency / maxTotal * 100) : 0;
@@ -456,7 +1120,7 @@
             const warningPct = total > 0 ? (country.warning / maxTotal * 100) : 0;
 
             html += `
-                <div class="country-item" data-code="${country.code}" data-bounds='${JSON.stringify(country.bounds)}' onclick="selectCountry('${country.code}')">
+                <div class="country-item${isSelected ? ' selected' : ''}" data-code="${code}" data-bounds='${JSON.stringify(country.bounds)}' onclick="selectCountry('${code}')">
                     <div class="country-flag">
                         <img src="${flagUrl}" alt="${name}" onerror="this.style.display='none'">
                     </div>
@@ -473,34 +1137,59 @@
         });
 
         container.innerHTML = html;
+        updateScopeHeadings();
+        initRiskTickerLoop();
         scheduleMiniMapResize(40);
     }
 
     // ========================================
     // SELECT COUNTRY - ZOOM MAP
     // ========================================
-    function selectCountry(code) {
+    function selectCountry(code, preferredBounds = null) {
+        const normalizedCode = (code || '').toUpperCase();
+        if (!normalizedCode) return;
+
+        if (selectedCountry === normalizedCode) {
+            selectedCountry = null;
+            document.querySelectorAll('.country-item').forEach((el) => el.classList.remove('selected'));
+            applyCountryFiltersToMapLayers();
+            updateScopeHeadings();
+            initRiskTickerLoop();
+
+            const scopeBounds = scopeBoundsByScope[selectedMapScope] || mapConfig.bounds;
+            fitMapToScopeBounds(scopeBounds, selectedMapScope);
+            return;
+        }
+
         document.querySelectorAll('.country-item').forEach(el => el.classList.remove('selected'));
 
-        const item = document.querySelector(`[data-code="${code}"]`);
+        const item = document.querySelector(`.country-item[data-code="${normalizedCode}"]`);
+        let selectedBounds = toBoundsPair(preferredBounds);
+
         if (item) {
             item.classList.add('selected');
 
             const boundsStr = item.getAttribute('data-bounds');
             if (boundsStr && boundsStr !== 'null') {
                 try {
-                    const bounds = JSON.parse(boundsStr);
-                    if (bounds && miniMap) {
-                        miniMap.fitBounds([[bounds.west, bounds.south], [bounds.east, bounds.north]], {
-                            padding: 40,
-                            duration: 800
-                        });
-                    }
-                } catch (e) {}
+                    selectedBounds = selectedBounds || toBoundsPair(JSON.parse(boundsStr));
+                } catch (error) {}
             }
         }
 
-        selectedCountry = code;
+        if (!selectedBounds) {
+            const country = getCountryByCode(normalizedCode);
+            selectedBounds = toBoundsPair(country?.bounds);
+        }
+
+        selectedCountry = normalizedCode;
+        applyCountryFiltersToMapLayers();
+        updateScopeHeadings();
+        initRiskTickerLoop();
+
+        if (selectedBounds) {
+            fitMapToCountryBounds(selectedBounds);
+        }
     }
 
     // ========================================
@@ -508,7 +1197,10 @@
     // ========================================
     async function loadSituationSummary() {
         try {
-            const data = await fetchJsonWithFallback(apiEndpoints.situationSummary);
+            const params = {};
+            if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+            const urls = buildUrlsWithParams(apiEndpoints.situationSummary, params);
+            const data = await fetchJsonWithFallback(urls);
 
             // Update date in ticker
             if (data.data_date) {
@@ -518,9 +1210,13 @@
                     const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
                     const options = { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' };
                     const dateStr = date.toLocaleDateString('en-US', options);
-                    document.getElementById('title-date').textContent = `(${dateStr})`;
+                    document.querySelectorAll('[id="title-date"]').forEach((el) => {
+                        el.textContent = `(${dateStr})`;
+                    });
                 } else {
-                    document.getElementById('title-date').textContent = `(${data.data_date})`;
+                    document.querySelectorAll('[id="title-date"]').forEach((el) => {
+                        el.textContent = `(${data.data_date})`;
+                    });
                 }
             }
 
@@ -531,7 +1227,9 @@
 
         } catch (error) {
             console.error('Error:', error);
-            document.getElementById('title-date').textContent = '';
+            document.querySelectorAll('[id="title-date"]').forEach((el) => {
+                el.textContent = '';
+            });
         }
     }
 

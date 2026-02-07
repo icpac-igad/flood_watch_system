@@ -40,11 +40,19 @@ COUNTRY_NAMES = {
     'UN': 'Unknown',
 }
 
+WHCA_COUNTRY_CODES = ("SD", "SS", "UG", "ET", "RW")
+WHCA_COUNTRY_CODES_SQL = ",".join(f"'{code}'" for code in WHCA_COUNTRY_CODES)
+WHCA_SCOPE_SQL_CONDITION = (
+    "(COALESCE(cp.whca_selected, FALSE) IS TRUE OR "
+    f"UPPER(COALESCE(cp.country_code, '')) IN ({WHCA_COUNTRY_CODES_SQL}))"
+)
+
 
 @router.get("/geojson")
 async def get_multimodal_geojson(
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format (defaults to latest)"),
     filter: Optional[str] = Query("all", description="Filter: all, active, alarm, emergency"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca"),
 ):
     """
     Get multimodal ensemble forecast data as GeoJSON for map display.
@@ -58,6 +66,13 @@ async def get_multimodal_geojson(
         filter_sql = f"WHERE daily_avg >= {DEFAULT_ALARM_THRESHOLD}"
     elif filter == 'emergency':
         filter_sql = f"WHERE daily_avg >= {DEFAULT_EMERGENCY_THRESHOLD}"
+
+    if scope not in ("all", "whca"):
+        raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+
+    scope_sql = ""
+    if scope == "whca":
+        scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
 
     async with get_connection() as conn:
         # Determine query date
@@ -82,6 +97,8 @@ async def get_multimodal_geojson(
                     cp.zone,
                     cp.gridcode,
                     cp.admin_name,
+                    cp.country_code,
+                    cp.whca_selected,
                     cp.hybas_id,
                     cp.geom,
                     f.data_date,
@@ -117,6 +134,7 @@ async def get_multimodal_geojson(
                     ON f.point_id = cp.point_id
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
+                {scope_sql}
             )
             SELECT json_build_object(
                 'type', 'FeatureCollection',
@@ -129,6 +147,8 @@ async def get_multimodal_geojson(
                             'zone', zone,
                             'gridcode', gridcode,
                             'admin_name', admin_name,
+                            'country_code', country_code,
+                            'whca_selected', whca_selected,
                             'hybas_id', hybas_id,
                             'data_date', data_date::text,
                             'forecast_date', forecast_date::text,
@@ -166,12 +186,21 @@ async def get_multimodal_geojson(
 
 
 @router.get("/country-summary-with-bounds")
-async def get_country_summary_with_bounds():
+async def get_country_summary_with_bounds(
+    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+):
     """
     Get country summary with alert counts and bounds for homepage mini-map.
     Used by the "Regional Flood Situation" widget.
     """
     async with get_connection() as conn:
+        if scope not in ("all", "whca"):
+            raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+
+        scope_sql = ""
+        if scope == "whca":
+            scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
+
         # Get latest data date
         latest_date = await conn.fetchval(
             "SELECT MAX(data_date) FROM gha.multimodal_forecasts"
@@ -204,6 +233,7 @@ async def get_country_summary_with_bounds():
                     ON f.point_id = cp.point_id
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
+                {scope_sql}
             ),
             point_risk AS (
                 SELECT
@@ -301,6 +331,7 @@ async def get_country_summary_with_bounds():
 
         return {
             'data_date': latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') else str(latest_date),
+            'scope': scope,
             'countries': countries,
             'thresholds': {
                 'warning': DEFAULT_WARNING_THRESHOLD,
@@ -315,6 +346,7 @@ async def get_situation_summary(
     horizon: int = Query(7, description="Days ahead for forecast horizon"),
     date_str: Optional[str] = Query(None, alias="date", description="Data date in YYYY-MM-DD format"),
     forecast_date: Optional[str] = Query(None, description="Alias for date"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca"),
 ):
     """
     Get situation summary for homepage KPIs and ticker.
@@ -322,6 +354,12 @@ async def get_situation_summary(
     """
     async with get_connection() as conn:
         requested_date = date_str or forecast_date
+        if scope not in ("all", "whca"):
+            raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+
+        scope_where_sql = ""
+        if scope == "whca":
+            scope_where_sql = f" AND {WHCA_SCOPE_SQL_CONDITION}"
 
         # Resolve query date (requested or latest available)
         if requested_date:
@@ -372,6 +410,7 @@ async def get_situation_summary(
                     ON f.point_id = cp.point_id
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
+                WHERE 1=1 {scope_where_sql}
             ),
             risk_levels AS (
                 SELECT
@@ -395,8 +434,11 @@ async def get_situation_summary(
                         WHEN mf.daily_avg >= {DEFAULT_WARNING_THRESHOLD} THEN 'warning'
                         ELSE 'normal'
                     END as risk_level
-                FROM gha.multimodal_forecasts mf, query_params qp
+                FROM gha.multimodal_forecasts mf
+                JOIN gha.multimodal_control_points cp ON cp.point_id = mf.point_id
+                CROSS JOIN query_params qp
                 WHERE mf.data_date = qp.query_date
+                {scope_where_sql}
             )
             SELECT
                 (SELECT COUNT(*) FROM risk_levels WHERE risk_level = 'emergency') as emergency_count,
@@ -437,6 +479,7 @@ async def get_situation_summary(
                     ON f.point_id = cp.point_id
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
+                WHERE 1=1 {scope_where_sql}
             ),
             risk_levels AS (
                 SELECT
@@ -482,6 +525,7 @@ async def get_situation_summary(
         if row:
             summary = {
                 'data_date': query_date.strftime('%Y-%m-%d') if hasattr(query_date, 'strftime') else str(query_date),
+                'scope': scope,
                 'horizon_days': horizon,
                 'risk_counts': {
                     'emergency': row['emergency_count'] or 0,
@@ -501,6 +545,7 @@ async def get_situation_summary(
         else:
             summary = {
                 'data_date': query_date.strftime('%Y-%m-%d') if hasattr(query_date, 'strftime') else str(query_date),
+                'scope': scope,
                 'horizon_days': horizon,
                 'risk_counts': {
                     'emergency': 0,

@@ -1,7 +1,7 @@
 /**
- * Global Options Component for Flood Analysis
+ * Global Options Component for Flood Report
  * Based on mukau-viz-components params/global.jsx
- * Provides time and area selection for flood forecast analysis
+ * Provides time and area selection for flood forecast reports
  * Uses native HTML components for compatibility
  */
 import React, { useEffect, useState } from "react";
@@ -265,7 +265,7 @@ const GlobalOptions = ({
 
   return (
     <div className="c-global-options">
-      <div className="section-title">Time and Area of Analysis</div>
+      <div className="section-title">Time and Area for Report</div>
 
       <div className="options-row">
         {/* Date Selection - uses available dates from database */}
@@ -345,14 +345,14 @@ const GlobalOptions = ({
         </div>
       </div>
 
-      {/* Generate Analysis Button */}
+      {/* Generate Report Button */}
       <div className="generate-btn">
         <Button
           theme="theme-button-green"
           onClick={onGenerateAnalysis}
           disabled={loading}
         >
-          {loading ? "Loading..." : "Generate Analysis"}
+          {loading ? "Loading..." : "Generate Report"}
         </Button>
       </div>
     </div>

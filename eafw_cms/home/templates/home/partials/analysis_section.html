@@ -57,6 +57,11 @@
                 </div>
                 {% endif %}
 
+                <div class="map-scope-control" id="map-scope-control" role="group" aria-label="{% trans 'Mini map country filter' %}">
+                    <button type="button" class="map-scope-btn active" data-scope="all">{% trans "All Countries" %}</button>
+                    <button type="button" class="map-scope-btn" data-scope="whca">{% trans "WHCA Project" %}</button>
+                </div>
+
                 <div class="c-legend legend-{{ page.legend_position|default:'bottom-left' }}">
                     <div class="c-legend-title">{{ page.legend_title|default:"Flood Alert Level" }}</div>
                     <ul class="c-legend-basic">
@@ -104,7 +109,7 @@
         {% if page.show_country_cards %}
         <div class="country-section" style="--map-height: {{ page.mini_map_height|default:500 }}px;">
             <div class="country-section-header">
-                <h2 class="country-section-title">{{ page.country_cards_title|default:"Flood Alert Level per Country proportion" }}</h2>
+                <h2 class="country-section-title" id="country-section-title">{{ page.country_cards_title|default:"Flood Alert Level per Country proportion" }}</h2>
                 <div class="alert-legend-pills">
                     <span class="alert-pill emergency">{% trans "Emergency" %}</span>
                     <span class="alert-pill alarm">{% trans "Alarm" %}</span>

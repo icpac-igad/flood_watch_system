@@ -5,12 +5,35 @@ Serves level 6 HydroSHEDS basin list with bounds for the watershed filter UI.
 Author: Hillary Koros, ICPAC
 """
 import json
-from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 from eafw_api.db import get_connection
 
 router = APIRouter()
+
+
+async def _resolve_hydrobasins_table(conn) -> str:
+    """
+    Resolve the HydroBASINS level-06 table name for the active DB.
+    Supports both legacy and newer naming schemes.
+    """
+    rows = await conn.fetch("""
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'gha'
+          AND table_name IN ('hydrobasins_lev06', 'hydrobasins_level06')
+    """)
+    names = {row["table_name"] for row in rows}
+
+    if "hydrobasins_lev06" in names:
+        return "gha.hydrobasins_lev06"
+    if "hydrobasins_level06" in names:
+        return "gha.hydrobasins_level06"
+
+    raise HTTPException(
+        status_code=500,
+        detail="HydroBASINS level-06 table not found (expected gha.hydrobasins_lev06 or gha.hydrobasins_level06)",
+    )
 
 
 @router.get("/list")
@@ -23,6 +46,8 @@ async def get_basins(
     Used by the watershed filter dropdown.
     """
     async with get_connection() as conn:
+        basins_table = await _resolve_hydrobasins_table(conn)
+
         points_filter = ""
         if with_points:
             points_filter = """
@@ -44,7 +69,7 @@ async def get_basins(
                 ST_YMin(ST_Envelope(hb.geom)) as south,
                 ST_XMax(ST_Envelope(hb.geom)) as east,
                 ST_YMax(ST_Envelope(hb.geom)) as north
-            FROM gha.hydrobasins_level06 hb
+            FROM {basins_table} hb
             WHERE 1=1 {points_filter}
             ORDER BY hb.up_area DESC
         """)
@@ -77,7 +102,8 @@ async def get_basin_geometry(hybas_id: int):
     Used by BasinLayer to render basin boundary on the map.
     """
     async with get_connection() as conn:
-        row = await conn.fetchrow("""
+        basins_table = await _resolve_hydrobasins_table(conn)
+        row = await conn.fetchrow(f"""
             SELECT
                 hb.hybas_id,
                 ST_AsGeoJSON(hb.geom) as geometry,
@@ -85,7 +111,7 @@ async def get_basin_geometry(hybas_id: int):
                 ST_YMin(ST_Envelope(hb.geom)) as south,
                 ST_XMax(ST_Envelope(hb.geom)) as east,
                 ST_YMax(ST_Envelope(hb.geom)) as north
-            FROM gha.hydrobasins_level06 hb
+            FROM {basins_table} hb
             WHERE hb.hybas_id = $1
         """, hybas_id)
 

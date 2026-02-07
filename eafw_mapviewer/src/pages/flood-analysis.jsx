@@ -1,5 +1,5 @@
 /**
- * Flood Analysis Report Page
+ * Flood Forecast Report Page
  * Uses real API data only - no fallback/demo data
  */
 import React, { useEffect, useState, useCallback } from "react";
@@ -159,8 +159,8 @@ const FloodAnalysisPage = () => {
   if (loading && isEmpty(params)) {
     return (
       <FullscreenLayout
-        title="Flood Analysis Report"
-        description="Multi-model flood forecast analysis"
+        title="Flood Forecast Report"
+        description="Multi-model flood forecast report"
       >
         <div className="c-flood-analysis">
           <div className="loading-container">
@@ -173,8 +173,8 @@ const FloodAnalysisPage = () => {
 
   return (
     <FullscreenLayout
-      title="Flood Analysis Report"
-      description="Multi-model flood forecast analysis"
+      title="Flood Forecast Report"
+      description="Multi-model flood forecast report"
     >
       <div className="c-flood-analysis">
         {/* ICPAC Header - matching drought report */}
@@ -207,7 +207,7 @@ const FloodAnalysisPage = () => {
           {/* Report Title */}
           <div className="report-title-section">
             <h1 className="report-main-title">
-              Flood Analysis Report for {params.placename}
+              Flood Forecast Report for {params.placename}
             </h1>
             <p className="report-reference-date">
               Reference Date: {params.forecast_date}

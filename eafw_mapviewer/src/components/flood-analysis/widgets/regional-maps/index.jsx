@@ -419,9 +419,9 @@ const CountryDetailView = memo(({ country, forecastDate, alertFilter, onBack }) 
   return (
     <div className="country-detail-view">
       <div className="detail-header" style={{ borderLeftColor: country.color }}>
-        <button className="back-btn" onClick={onBack}>Back to Overview</button>
-        <h3>{country.name} - Flood Forecast Details</h3>
-        <p>Detailed analysis for {forecastDate}</p>
+        <button className="back-btn" onClick={onBack}>Back to Regional Report</button>
+        <h3>{country.name} - Flood Report Details</h3>
+        <p>Detailed report section for {forecastDate}</p>
       </div>
 
       <div className="detail-content">
@@ -547,8 +547,8 @@ const RegionalMapsWidget = ({ params, forecastDate, alertFilter, onCountrySelect
   return (
     <div className="c-regional-maps">
       <div className="widget-header">
-        <h3>Regional Overview</h3>
-        <p>Click on a country to view detailed analysis</p>
+        <h3>Regional Report Section</h3>
+        <p>Click on a country to open its detailed report section</p>
       </div>
 
       <RegionalOverview
