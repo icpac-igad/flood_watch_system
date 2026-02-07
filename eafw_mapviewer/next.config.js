@@ -29,6 +29,19 @@ const nextConfig = {
       ],
     });
 
+    // Regular SVG imports (without ?sprite) as asset URLs
+    config.module.rules.push({
+      test: /\.svg$/,
+      resourceQuery: { not: [/sprite/] },
+      type: "asset/resource",
+    });
+
+    // Image imports (PNG, JPG, GIF, WebP, etc.) as asset URLs
+    config.module.rules.push({
+      test: /\.(png|jpe?g|gif|webp|ico|bmp)$/i,
+      type: "asset/resource",
+    });
+
     config.resolve.alias = {
       ...config.resolve.alias,
       "mapbox-gl": "maplibre-gl",
