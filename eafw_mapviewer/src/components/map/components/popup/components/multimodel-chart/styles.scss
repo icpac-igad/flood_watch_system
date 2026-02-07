@@ -1,6 +1,8 @@
 .c-multimodel-chart {
   width: 100%;
-  min-width: 450px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 15px;
   padding-top: 10px;
   background: #fff;
@@ -8,6 +10,7 @@
   margin-top: 5px;
   position: relative;
   transition: all 0.2s ease;
+  overflow-x: hidden;
 
   &.dragging {
     cursor: grabbing;
@@ -47,6 +50,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 10px;
     }
 
@@ -62,6 +66,7 @@
       display: flex;
       gap: 6px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     .reset-zoom-btn {
@@ -103,6 +108,11 @@
     transition: height 0.2s ease;
     cursor: crosshair;
     user-select: none;
+    min-width: 0;
+
+    .recharts-responsive-container {
+      min-width: 0 !important;
+    }
   }
 
 
@@ -148,6 +158,44 @@
       font-size: 9px;
       color: #888;
       font-style: italic;
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .c-multimodel-chart {
+    padding: 10px 8px 8px;
+
+    .drag-handle {
+      height: 30px;
+    }
+
+    .chart-header {
+      padding-top: 22px;
+      margin-bottom: 8px;
+
+      h4 {
+        font-size: 12px;
+      }
+
+      .header-controls {
+        width: 100%;
+        justify-content: flex-end;
+      }
+    }
+
+    .model-selector {
+      padding: 6px 8px;
+      margin-bottom: 8px;
+    }
+
+    .chart-container {
+      height: 230px;
+    }
+
+    .custom-tooltip {
+      max-width: 180px;
+      padding: 8px 10px;
     }
   }
 }

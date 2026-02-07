@@ -1296,25 +1296,50 @@ class SituationSummaryView(View):
 
     def get(self, request):
         from django.db import connection
-        from datetime import datetime, timedelta
 
         # Get optional horizon parameter (days ahead, default 7)
         horizon = int(request.GET.get('horizon', 7))
+        requested_date = request.GET.get('date') or request.GET.get('forecast_date')
 
         with connection.cursor() as cursor:
             try:
-                # Get the latest available data date from normalized multimodal forecasts
-                cursor.execute("""
-                    SELECT MAX(data_date) FROM gha.multimodal_forecasts
-                """)
-                latest_date = cursor.fetchone()[0]
+                # Resolve query date: use requested date if provided, otherwise latest available
+                if requested_date:
+                    try:
+                        query_date = datetime.strptime(requested_date, "%Y-%m-%d").date()
+                    except ValueError:
+                        response = JsonResponse({
+                            'error': f'Invalid date format: {requested_date}. Expected YYYY-MM-DD.'
+                        }, status=400)
+                        response['Access-Control-Allow-Origin'] = '*'
+                        return response
+                else:
+                    cursor.execute("""
+                        SELECT MAX(data_date) FROM gha.multimodal_forecasts
+                    """)
+                    query_date = cursor.fetchone()[0]
 
-                if not latest_date:
+                if not query_date:
                     response = JsonResponse({
                         'error': 'No forecast data available'
                     }, status=404)
                     response['Access-Control-Allow-Origin'] = '*'
                     return response
+
+                # If a specific date is requested, validate that we actually have data for that data_date
+                if requested_date:
+                    cursor.execute("""
+                        SELECT 1
+                        FROM gha.multimodal_forecasts
+                        WHERE data_date = %s
+                        LIMIT 1
+                    """, [query_date])
+                    if not cursor.fetchone():
+                        response = JsonResponse({
+                            'error': f'No forecast data available for date {requested_date}'
+                        }, status=404)
+                        response['Access-Control-Allow-Origin'] = '*'
+                        return response
 
                 # Thresholds from CMS (same as map), fallback to defaults
                 try:
@@ -1391,7 +1416,7 @@ class SituationSummaryView(View):
                             ORDER BY COUNT(*) DESC
                             LIMIT 1
                         ) as peak_day
-                """, [latest_date,
+                """, [query_date,
                       emergency_threshold, alarm_threshold, warning_threshold,
                       emergency_threshold, alarm_threshold, warning_threshold])
 
@@ -1448,7 +1473,7 @@ class SituationSummaryView(View):
                         SUM(CASE WHEN risk_level = 'emergency' THEN 1 ELSE 0 END) DESC,
                         SUM(CASE WHEN risk_level = 'alarm' THEN 1 ELSE 0 END) DESC,
                         SUM(CASE WHEN risk_level = 'warning' THEN 1 ELSE 0 END) DESC
-                """, [latest_date, emergency_threshold, alarm_threshold, warning_threshold])
+                """, [query_date, emergency_threshold, alarm_threshold, warning_threshold])
 
                 country_breakdown = []
                 for c_row in cursor.fetchall():
@@ -1466,7 +1491,7 @@ class SituationSummaryView(View):
 
                 if row:
                     summary = {
-                        'data_date': latest_date.strftime('%Y-%m-%d'),
+                        'data_date': query_date.strftime('%Y-%m-%d'),
                         'horizon_days': horizon,
                         'risk_counts': {
                             'emergency': row[0] or 0,
@@ -1485,7 +1510,7 @@ class SituationSummaryView(View):
                     }
                 else:
                     summary = {
-                        'data_date': latest_date.strftime('%Y-%m-%d'),
+                        'data_date': query_date.strftime('%Y-%m-%d'),
                         'horizon_days': horizon,
                         'risk_counts': {
                             'emergency': 0,

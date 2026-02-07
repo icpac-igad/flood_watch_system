@@ -94,6 +94,51 @@ def run_gcs_inundation_sync():
         logger.exception(f"Error in GCS inundation sync: {e}")
 
 
+def run_db_backup():
+    """Run daily database backup via pg_dump"""
+    logger.info(f"[{datetime.now()}] Running database backup")
+
+    try:
+        import subprocess
+        from .settings import DB_CONFIG
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_dir = '/backups'
+        dump_file = f'{backup_dir}/eafw_db_{timestamp}.dump'
+        keep_days = 7
+
+        result = subprocess.run([
+            'pg_dump',
+            '-h', DB_CONFIG['host'],
+            '-p', str(DB_CONFIG['port']),
+            '-U', DB_CONFIG['user'],
+            '-d', DB_CONFIG['database'],
+            '-Fc', '--no-owner', '--no-privileges',
+            '-f', dump_file,
+        ], capture_output=True, text=True, env={
+            **__import__('os').environ,
+            'PGPASSWORD': DB_CONFIG['password'],
+        })
+
+        if result.returncode == 0:
+            import os
+            size_mb = os.path.getsize(dump_file) / (1024 * 1024)
+            logger.info(f"Database backup completed: {dump_file} ({size_mb:.0f} MB)")
+
+            # Prune old backups
+            import glob
+            cutoff = datetime.now().timestamp() - (keep_days * 86400)
+            for old_file in glob.glob(f'{backup_dir}/eafw_db_*.dump'):
+                if os.path.getmtime(old_file) < cutoff:
+                    os.remove(old_file)
+                    logger.info(f"Pruned old backup: {old_file}")
+        else:
+            logger.error(f"pg_dump failed: {result.stderr}")
+
+    except Exception as e:
+        logger.exception(f"Database backup failed: {e}")
+
+
 def signal_handler(signum, frame):
     """Handle shutdown signals"""
     logger.info("Received shutdown signal, stopping scheduler...")
@@ -154,6 +199,16 @@ def start_scheduler():
         replace_existing=True
     )
 
+    # Schedule DB backup - daily at 5:30 PM (17:30) EAT
+    # Runs after multimodal sync to capture fresh data
+    scheduler.add_job(
+        run_db_backup,
+        CronTrigger(hour=17, minute=30),
+        id='db_backup',
+        name='Database Backup',
+        replace_existing=True
+    )
+
     # Run immediately on startup
     logger.info("Running initial sync on startup...")
     run_multimodal_sync()
@@ -166,6 +221,7 @@ def start_scheduler():
     logger.info("FloodProofs sync: 01:00, 07:00, 13:00, 19:00 UTC")
     logger.info("GCS Inundation sync: Weekly on Sunday at 02:00 UTC")
     logger.info("WRF Rainfall sync: Daily at 06:00 UTC")
+    logger.info("Database backup: Daily at 17:30 (5:30 PM), keep 7 days")
 
     try:
         scheduler.start()

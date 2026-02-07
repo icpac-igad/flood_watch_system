@@ -5,6 +5,7 @@ Replaces DRF MultimodalForecastGeoJSONView, CountrySummaryWithBoundsView, Situat
 Author: Hillary Koros, ICPAC
 """
 import json
+from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from eafw_api.db import get_connection
@@ -179,25 +180,8 @@ async def get_country_summary_with_bounds():
         if not latest_date:
             raise HTTPException(status_code=404, detail="No forecast data available")
 
-        country_code_from_admin0_sql = """
-            CASE
-                WHEN LOWER(TRIM(a0.country)) = 'ethiopia' THEN 'ET'
-                WHEN LOWER(TRIM(a0.country)) = 'kenya' THEN 'KE'
-                WHEN LOWER(TRIM(a0.country)) = 'uganda' THEN 'UG'
-                WHEN LOWER(TRIM(a0.country)) = 'sudan' THEN 'SD'
-                WHEN LOWER(TRIM(a0.country)) = 'south sudan' THEN 'SS'
-                WHEN LOWER(TRIM(a0.country)) IN ('tanzania', 'zanzibar') THEN 'TZ'
-                WHEN LOWER(TRIM(a0.country)) = 'rwanda' THEN 'RW'
-                WHEN LOWER(TRIM(a0.country)) = 'burundi' THEN 'BI'
-                WHEN LOWER(TRIM(a0.country)) = 'somalia' THEN 'SO'
-                WHEN LOWER(TRIM(a0.country)) = 'djibouti' THEN 'DJ'
-                WHEN LOWER(TRIM(a0.country)) = 'eritrea' THEN 'ER'
-                ELSE 'UN'
-            END
-        """
-
         # Query country summary with bounds.
-        # Fast path derives country from admin_name prefix (e.g. ET*, SD*), with spatial fallback only when missing.
+        # Uses cp.country_code (populated via ST_Within spatial join) for accurate country assignment.
         rows = await conn.fetch(f"""
             WITH query_params AS (
                 SELECT '{latest_date}'::date as query_date
@@ -211,8 +195,7 @@ async def get_country_summary_with_bounds():
             point_data AS (
                 SELECT
                     cp.point_id,
-                    cp.geom,
-                    cp.admin_name,
+                    cp.country_code,
                     COALESCE(f.daily_avg, 0) as daily_avg
                 FROM gha.multimodal_control_points cp
                 CROSS JOIN query_params qp
@@ -221,28 +204,6 @@ async def get_country_summary_with_bounds():
                     ON f.point_id = cp.point_id
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
-            ),
-            point_country AS (
-                SELECT
-                    pd.point_id,
-                    pd.daily_avg,
-                    COALESCE(
-                        CASE
-                            WHEN UPPER(SUBSTRING(COALESCE(pd.admin_name, '') FROM 1 FOR 2)) IN (
-                                'ET', 'KE', 'UG', 'SD', 'SS', 'TZ', 'RW', 'BI', 'SO', 'DJ', 'ER'
-                            ) THEN UPPER(SUBSTRING(pd.admin_name FROM 1 FOR 2))
-                            ELSE NULL
-                        END,
-                        (
-                            SELECT {country_code_from_admin0_sql}
-                            FROM gha.admin0 a0
-                            WHERE a0.geom && pd.geom
-                              AND ST_Covers(a0.geom, pd.geom)
-                            LIMIT 1
-                        ),
-                        'UN'
-                    ) as country_code
-                FROM point_data pd
             ),
             point_risk AS (
                 SELECT
@@ -255,7 +216,7 @@ async def get_country_summary_with_bounds():
                         WHEN daily_avg >= {DEFAULT_WARNING_THRESHOLD} THEN 'warning'
                         ELSE 'normal'
                     END as risk_level
-                FROM point_country
+                FROM point_data
             ),
             country_agg AS (
                 SELECT
@@ -272,20 +233,28 @@ async def get_country_summary_with_bounds():
             ),
             country_bounds AS (
                 SELECT
-                    country_code,
-                    MIN(ST_XMin(ST_Envelope(geom))) as west,
-                    MIN(ST_YMin(ST_Envelope(geom))) as south,
-                    MAX(ST_XMax(ST_Envelope(geom))) as east,
-                    MAX(ST_YMax(ST_Envelope(geom))) as north
-                FROM (
-                    SELECT
-                        {country_code_from_admin0_sql} as country_code,
-                        a0.geom
-                    FROM gha.admin0 a0
-                    WHERE a0.country IS NOT NULL AND a0.country != ''
-                ) country_polygons
-                WHERE country_code != 'UN'
-                GROUP BY country_code
+                    cp.country_code,
+                    MIN(ST_XMin(ST_Envelope(a0.geom))) as west,
+                    MIN(ST_YMin(ST_Envelope(a0.geom))) as south,
+                    MAX(ST_XMax(ST_Envelope(a0.geom))) as east,
+                    MAX(ST_YMax(ST_Envelope(a0.geom))) as north
+                FROM gha.admin0 a0
+                JOIN (SELECT DISTINCT country_code FROM gha.multimodal_control_points) cp
+                    ON cp.country_code = CASE
+                        WHEN LOWER(a0.country) = 'ethiopia' THEN 'ET'
+                        WHEN LOWER(a0.country) = 'kenya' THEN 'KE'
+                        WHEN LOWER(a0.country) = 'uganda' THEN 'UG'
+                        WHEN LOWER(a0.country) = 'sudan' THEN 'SD'
+                        WHEN LOWER(a0.country) = 'south sudan' THEN 'SS'
+                        WHEN LOWER(a0.country) IN ('tanzania', 'zanzibar') THEN 'TZ'
+                        WHEN LOWER(a0.country) = 'rwanda' THEN 'RW'
+                        WHEN LOWER(a0.country) = 'burundi' THEN 'BI'
+                        WHEN LOWER(a0.country) = 'somalia' THEN 'SO'
+                        WHEN LOWER(a0.country) = 'djibouti' THEN 'DJ'
+                        WHEN LOWER(a0.country) = 'eritrea' THEN 'ER'
+                        ELSE 'UN'
+                    END
+                GROUP BY cp.country_code
             )
             SELECT
                 ca.country_code,
@@ -344,24 +313,46 @@ async def get_country_summary_with_bounds():
 @router.get("/situation-summary")
 async def get_situation_summary(
     horizon: int = Query(7, description="Days ahead for forecast horizon"),
+    date_str: Optional[str] = Query(None, alias="date", description="Data date in YYYY-MM-DD format"),
+    forecast_date: Optional[str] = Query(None, description="Alias for date"),
 ):
     """
     Get situation summary for homepage KPIs and ticker.
     Returns risk counts, peak forecast info, and country breakdown.
     """
     async with get_connection() as conn:
-        # Get latest data date
-        latest_date = await conn.fetchval(
-            "SELECT MAX(data_date) FROM gha.multimodal_forecasts"
-        )
+        requested_date = date_str or forecast_date
 
-        if not latest_date:
-            raise HTTPException(status_code=404, detail="No forecast data available")
+        # Resolve query date (requested or latest available)
+        if requested_date:
+            try:
+                query_date = datetime.strptime(requested_date, "%Y-%m-%d").date()
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid date format: {requested_date}. Expected YYYY-MM-DD.",
+                ) from exc
+
+            has_data = await conn.fetchval(
+                "SELECT 1 FROM gha.multimodal_forecasts WHERE data_date = $1::date LIMIT 1",
+                query_date,
+            )
+            if not has_data:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No forecast data available for date {requested_date}",
+                )
+        else:
+            query_date = await conn.fetchval(
+                "SELECT MAX(data_date) FROM gha.multimodal_forecasts"
+            )
+            if not query_date:
+                raise HTTPException(status_code=404, detail="No forecast data available")
 
         # Get summary statistics
         row = await conn.fetchrow(f"""
             WITH query_params AS (
-                SELECT '{latest_date}'::date as query_date
+                SELECT '{query_date}'::date as query_date
             ),
             first_forecast AS (
                 SELECT MIN(forecast_date) as forecast_date
@@ -372,7 +363,7 @@ async def get_situation_summary(
             point_data AS (
                 SELECT
                     cp.point_id,
-                    cp.admin_name,
+                    cp.country_code,
                     COALESCE(f.daily_avg, 0) as daily_avg
                 FROM gha.multimodal_control_points cp
                 CROSS JOIN query_params qp
@@ -385,7 +376,7 @@ async def get_situation_summary(
             risk_levels AS (
                 SELECT
                     point_id,
-                    admin_name,
+                    country_code,
                     daily_avg,
                     CASE
                         WHEN daily_avg >= {DEFAULT_EMERGENCY_THRESHOLD} THEN 'emergency'
@@ -423,10 +414,10 @@ async def get_situation_summary(
                 ) as peak_day
         """)
 
-        # Get country breakdown
+        # Get country breakdown using spatial country_code
         country_rows = await conn.fetch(f"""
             WITH query_params AS (
-                SELECT '{latest_date}'::date as query_date
+                SELECT '{query_date}'::date as query_date
             ),
             first_forecast AS (
                 SELECT MIN(forecast_date) as forecast_date
@@ -434,12 +425,11 @@ async def get_situation_summary(
                 WHERE mf.data_date = qp.query_date
                   AND mf.forecast_date >= qp.query_date
             ),
-            point_country AS (
+            point_data AS (
                 SELECT
                     cp.point_id,
-                    cp.admin_name,
-                    COALESCE(f.daily_avg, 0) as daily_avg,
-                    UPPER(LEFT(cp.admin_name, 2)) as country_code
+                    cp.country_code,
+                    COALESCE(f.daily_avg, 0) as daily_avg
                 FROM gha.multimodal_control_points cp
                 CROSS JOIN query_params qp
                 CROSS JOIN first_forecast ff
@@ -458,7 +448,7 @@ async def get_situation_summary(
                         WHEN daily_avg >= {DEFAULT_WARNING_THRESHOLD} THEN 'warning'
                         ELSE 'normal'
                     END as risk_level
-                FROM point_country
+                FROM point_data
             )
             SELECT
                 country_code,
@@ -491,7 +481,7 @@ async def get_situation_summary(
 
         if row:
             summary = {
-                'data_date': latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') else str(latest_date),
+                'data_date': query_date.strftime('%Y-%m-%d') if hasattr(query_date, 'strftime') else str(query_date),
                 'horizon_days': horizon,
                 'risk_counts': {
                     'emergency': row['emergency_count'] or 0,
@@ -510,7 +500,7 @@ async def get_situation_summary(
             }
         else:
             summary = {
-                'data_date': latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') else str(latest_date),
+                'data_date': query_date.strftime('%Y-%m-%d') if hasattr(query_date, 'strftime') else str(query_date),
                 'horizon_days': horizon,
                 'risk_counts': {
                     'emergency': 0,
@@ -529,3 +519,34 @@ async def get_situation_summary(
             }
 
         return summary
+
+
+@router.get("/dates")
+async def get_multimodal_available_dates(
+    limit: int = Query(365, ge=1, le=2000, description="Maximum number of data dates to return"),
+):
+    """
+    Get available multimodal data dates for date selectors.
+    """
+    async with get_connection() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT data_date
+            FROM gha.multimodal_forecasts
+            ORDER BY data_date DESC
+            LIMIT $1
+            """,
+            limit,
+        )
+
+        timestamps = [
+            row["data_date"].isoformat()
+            for row in rows
+            if row["data_date"] is not None
+        ]
+
+        return {
+            "timestamps": timestamps,
+            "dates": timestamps,  # backward compatibility
+            "count": len(timestamps),
+        }

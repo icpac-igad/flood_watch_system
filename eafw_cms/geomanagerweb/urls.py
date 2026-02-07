@@ -15,6 +15,7 @@ from home.views import map_view, partners_view, flood_analysis_view
 from home.mapviewer_config import get_mapviewer_config
 from geomanagerweb.api import (
     MultimodalForecastGeoJSONView,
+    MultimodalAvailableDatesView,
     CountrySummaryWithBoundsView,
     SituationSummaryView,
 )
@@ -27,6 +28,8 @@ urlpatterns = [
     # Homepage widget API routes (Django).
     path("api/multimodal/geojson/", MultimodalForecastGeoJSONView.as_view(), name="multimodal_geojson"),
     path("api/multimodal/geojson", MultimodalForecastGeoJSONView.as_view(), name="multimodal_geojson_noslash"),
+    path("api/multimodal/dates/", MultimodalAvailableDatesView.as_view(), name="multimodal_dates"),
+    path("api/multimodal/dates", MultimodalAvailableDatesView.as_view(), name="multimodal_dates_noslash"),
     path(
         "api/country-summary-with-bounds/",
         CountrySummaryWithBoundsView.as_view(),

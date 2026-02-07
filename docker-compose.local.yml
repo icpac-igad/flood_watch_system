@@ -7,6 +7,26 @@ networks:
     name: eafw_network
     driver: bridge
 
+volumes:
+  eafw_pgdata:
+    name: eafw_pgdata
+  eafw_static:
+    name: eafw_static
+  eafw_media:
+    name: eafw_media
+  eafw_mapviewer_static:
+    name: eafw_mapviewer_static
+  eafw_geomanager_data:
+    name: eafw_geomanager_data
+  eafw_mapcache_tiles:
+    name: eafw_mapcache_tiles
+  eafw_jobs_data:
+    name: eafw_jobs_data
+  eafw_jobs_logs:
+    name: eafw_jobs_logs
+  eafw_backups:
+    name: eafw_backups
+
 services:
   eafw_db:
     container_name: ${DB_CNTR_NAME:-eafw-pgdb}
@@ -21,8 +41,14 @@ services:
     ports:
       - ${HOST_IP:-127.0.0.1}:${DB_HOST_PORT:-9060}:5432
     volumes:
-      - ${CMS_DB_VOLUME}:/var/lib/postgresql/data/:z
+      - eafw_pgdata:/var/lib/postgresql/data/
+      - eafw_backups:/backups
       - ./eafw_docker/db-init:/docker-entrypoint-initdb.d/:z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CMS_DB_USER:-eafw_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   eafw_pgbouncer:
     image: edoburu/pgbouncer:${PGB_VERSION:-v1.23.1-p3}
@@ -30,7 +56,8 @@ services:
     restart: ${RESTART_POLICY:-unless-stopped}
     shm_size: "4gb"
     depends_on:
-      - eafw_db
+      eafw_db:
+        condition: service_healthy
     ports:
       - ${PGB_HOST_IP:-${HOST_IP:-127.0.0.1}}:${PGB_HOST_PORT:-9061}:${PGB_LISTEN_PORT:-6432}
     environment:
@@ -102,13 +129,14 @@ services:
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-geomanagerweb.settings.production}
       - DJANGO_ALLOW_ASYNC_UNSAFE=${ALLOW_ASYNC_UNSAFE:-true}
     depends_on:
-      - eafw_db
+      eafw_db:
+        condition: service_healthy
     ports:
       - ${HOST_IP:-127.0.0.1}:${WEB_HOST_PORT:-9063}:8000
     volumes:
-      - ${CMS_STATIC_VOLUME}:/opt/eafw_cms/static:z
-      - ${CMS_MEDIA_VOLUME}:/opt/eafw_cms/media:z
-      - ${GEOMANAGER_AUTO_INGEST_DATA_VOLUME}:/geomanager/data:z
+      - eafw_static:/opt/eafw_cms/static
+      - eafw_media:/opt/eafw_cms/media
+      - eafw_geomanager_data:/geomanager/data
       - ./eafw_docker/volumes/cms/.cache:/root/.cache:z
       - ${CMS_LOG_FILE:-./logs/cms-web.log}:/opt/eafw_cms/cms-web.log:z
       - ./eafw_cms/home/templates:/opt/eafw_cms/home/templates:z
@@ -134,7 +162,7 @@ services:
         - ADMIN_BOUNDARY_API=${ADMIN_BOUNDARY_API}
         - NEXT_TELEMETRY_DISABLED=1
     volumes:
-      - ${MAPVIEWER_NEXT_STATIC_VOLUME}:/app/nginx/.next/static:z
+      - eafw_mapviewer_static:/app/nginx/.next/static
       - ./eafw_docker/volumes/mapviewer/.cache:/root/.cache:z
     ports:
       - ${HOST_IP:-127.0.0.1}:${UI_HOST_PORT:-9064}:3000
@@ -191,7 +219,7 @@ services:
     ports:
       - ${HOST_IP:-127.0.0.1}:${MC_HOST_PORT:-9066}:${MC_APP_PORT:-80}
     volumes:
-      - ${MC_TILES_DIR:-./data/mapcache/tiles}:${APP_TILES_DIR:-/opt/tiles}:z
+      - eafw_mapcache_tiles:/opt/tiles
     environment:
       - SERVICE_URL=${MC_SERVICE_URL:-http://localhost:9066/mapcache/}
       - SOURCE_URL=${MC_SOURCE_URL:-http://eafw_mapserver/mapserver/?}
@@ -226,9 +254,9 @@ services:
     image: nginx:${NGINX_VERSION:-1.27-alpine}
     restart: ${RESTART_POLICY:-unless-stopped}
     volumes:
-      - ${CMS_STATIC_VOLUME}:/wagtail_static:z
-      - ${CMS_MEDIA_VOLUME}:/wagtail_media:z
-      - ${MAPVIEWER_NEXT_STATIC_VOLUME}:/mapviewer/static:z
+      - eafw_static:/wagtail_static:ro
+      - eafw_media:/wagtail_media:ro
+      - eafw_mapviewer_static:/mapviewer/static:ro
       - ./eafw_docker/nginx/nginx.local.conf:/etc/nginx/nginx.conf:z
     ports:
       - ${HOST_IP:-127.0.0.1}:${CMS_HOST_PORT:-9068}:80
@@ -294,6 +322,7 @@ services:
       - SYNC_DAYS=${SYNC_DAYS:-7}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     volumes:
-      - ${JOBS_DATA_VOLUME:-./eafw_jobs/data}:/opt/data:z
-      - ${JOBS_LOGS_VOLUME:-./eafw_jobs/logs}:/opt/logs:z
+      - eafw_jobs_data:/opt/data
+      - eafw_jobs_logs:/opt/logs
+      - eafw_backups:/backups
       - ./eafw_jobs/credentials:/opt/credentials:z

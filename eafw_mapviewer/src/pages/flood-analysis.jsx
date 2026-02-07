@@ -84,6 +84,7 @@ const FloodAnalysisPage = () => {
     try {
       const queryParams = new URLSearchParams({
         date: params.forecast_date,
+        forecast_date: params.forecast_date, // backward compatibility with endpoints expecting forecast_date
         ...(params.unit_id && { unit_id: params.unit_id }),
         ...(params.admin_level && { admin_level: params.admin_level }),
       });

@@ -541,6 +541,7 @@ body.homepage .footer-professional {
   z-index: 100;
   max-width: 220px;
   min-width: 160px;
+  width: fit-content;
   background-color: #fff;
   padding: 10px 12px;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
@@ -1068,6 +1069,58 @@ body.homepage.homepage-tight .member-flag img {
     min-height: 290px;
   }
 
+  .c-legend {
+    max-width: min(44vw, 170px);
+    min-width: 120px;
+    padding: 8px 9px;
+    right: 10px;
+    bottom: 46px;
+  }
+
+  .c-legend.legend-bottom-left {
+    left: 10px;
+  }
+
+  .c-legend.legend-bottom-right {
+    right: 10px;
+  }
+
+  .c-legend.legend-top-left {
+    left: 10px;
+    top: 10px;
+  }
+
+  .c-legend.legend-top-right {
+    right: 10px;
+    top: 10px;
+  }
+
+  .c-legend .c-legend-title {
+    font-size: 11px;
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+  }
+
+  .c-legend-basic .c-legend-item {
+    margin: 4px 0;
+  }
+
+  .c-legend-basic .c-legend-item .c-legend-item-icon {
+    width: 12px;
+    height: 10px;
+    margin-right: 6px;
+  }
+
+  .c-legend-basic .c-legend-item img.c-legend-item-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .c-legend-basic .c-legend-item .c-legend-item-label {
+    font-size: 0.66rem;
+    line-height: 1.2;
+  }
+
   .partners-container {
     padding: 8px 10px;
     gap: 8px;
@@ -1089,5 +1142,24 @@ body.homepage.homepage-tight .member-flag img {
     width: 100%;
     justify-content: flex-start;
     overflow-x: auto;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .c-legend {
+    max-width: min(43vw, 145px);
+    min-width: 104px;
+    padding: 6px 8px;
+    border-radius: 7px;
+  }
+
+  .c-legend .c-legend-title {
+    font-size: 10px;
+    margin-bottom: 4px;
+    padding-bottom: 5px;
+  }
+
+  .c-legend-basic .c-legend-item .c-legend-item-label {
+    font-size: 0.62rem;
   }
 }
