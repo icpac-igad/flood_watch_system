@@ -16,6 +16,11 @@ from home.mapviewer_config import get_mapviewer_config
 from geomanagerweb.api import (
     MultimodalForecastGeoJSONView,
     MultimodalAvailableDatesView,
+    GeoSFMGeoJSONView,
+    MikeHydroGeoJSONView,
+    FloodproofGeoJSONView,
+    GoogleFloodGeoJSONView,
+    GoogleFloodAvailableDatesView,
     CountrySummaryWithBoundsView,
     SituationSummaryView,
 )
@@ -30,6 +35,16 @@ urlpatterns = [
     path("api/multimodal/geojson", MultimodalForecastGeoJSONView.as_view(), name="multimodal_geojson_noslash"),
     path("api/multimodal/dates/", MultimodalAvailableDatesView.as_view(), name="multimodal_dates"),
     path("api/multimodal/dates", MultimodalAvailableDatesView.as_view(), name="multimodal_dates_noslash"),
+    path("api/geosfm/geojson/", GeoSFMGeoJSONView.as_view(), name="geosfm_geojson"),
+    path("api/geosfm/geojson", GeoSFMGeoJSONView.as_view(), name="geosfm_geojson_noslash"),
+    path("api/mike-hydro/geojson/", MikeHydroGeoJSONView.as_view(), name="mike_hydro_geojson"),
+    path("api/mike-hydro/geojson", MikeHydroGeoJSONView.as_view(), name="mike_hydro_geojson_noslash"),
+    path("api/floodproof/geojson/", FloodproofGeoJSONView.as_view(), name="floodproof_geojson"),
+    path("api/floodproof/geojson", FloodproofGeoJSONView.as_view(), name="floodproof_geojson_noslash"),
+    path("api/google-flood/geojson/", GoogleFloodGeoJSONView.as_view(), name="google_flood_geojson"),
+    path("api/google-flood/geojson", GoogleFloodGeoJSONView.as_view(), name="google_flood_geojson_noslash"),
+    path("api/google-flood/dates/", GoogleFloodAvailableDatesView.as_view(), name="google_flood_dates"),
+    path("api/google-flood/dates", GoogleFloodAvailableDatesView.as_view(), name="google_flood_dates_noslash"),
     path(
         "api/country-summary-with-bounds/",
         CountrySummaryWithBoundsView.as_view(),

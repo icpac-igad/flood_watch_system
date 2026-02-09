@@ -1174,7 +1174,7 @@ wheels = [
 [[package]]
 name = "geomanager"
 version = "0.7.2"
-source = { directory = "../geomanager" }
+source = { directory = "./geomanager" }
 dependencies = [
     { name = "adm-boundary-manager" },
     { name = "cairosvg" },
@@ -1291,7 +1291,7 @@ requires-dist = [
     { name = "django-countries", specifier = ">=7.6" },
     { name = "django-deep-translator", specifier = "==1.5.1" },
     { name = "django-environ", specifier = "==0.12.0" },
-    { name = "geomanager", directory = "../geomanager" },
+    { name = "geomanager", directory = "./geomanager" },
     { name = "google-api-python-client", specifier = ">=2.100.0" },
     { name = "google-auth", specifier = ">=2.25.0" },
     { name = "paramiko", specifier = ">=3.0.0" },

@@ -26,6 +26,114 @@ def get_full_url(request, path):
     return wagtail_get_full_url(request, path)
 
 
+def _build_modular_model_layer_config(request, endpoint_path):
+    return {
+        "type": "geojson",
+        "source": {
+            "type": "geojson",
+            "data": get_full_url(request, endpoint_path),
+        },
+        "render": {
+            "layers": [
+                {
+                    "type": "circle",
+                    "paint": {
+                        "circle-color": [
+                            "match",
+                            ["get", "alert_level"],
+                            "emergency", "#d32f2f",
+                            "alarm", "#ff9800",
+                            "warning", "#ffc107",
+                            "normal", "#4caf50",
+                            "#4caf50",
+                        ],
+                        "circle-radius": 5,
+                        "circle-opacity": 0.85,
+                        "circle-stroke-color": "#ffffff",
+                        "circle-stroke-width": 1.2,
+                    },
+                    "metadata": {"position": "top"},
+                }
+            ]
+        },
+    }
+
+
+def _patch_modular_model_datasets(request, datasets_data):
+    """Patch placeholder model layers to true GeoJSON sources with popup fields."""
+    overrides = {
+        "GeoSFM Flood Forecast": {
+            "endpoint": "/api/geosfm/geojson/",
+            "interaction_output": [
+                {"column": "admin_name", "property": "Location", "type": "string"},
+                {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
+                {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
+                {"column": "alert_level", "property": "Alert Level", "type": "string"},
+                {"column": "daily_avg", "property": "GeoSFM (m³/s)", "type": "number"},
+                {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
+                {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
+                {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
+                {"column": "data_date", "property": "Data Date", "type": "string"},
+                {"column": "forecasts", "property": "Forecasts", "type": "string", "hidden": True},
+                {"column": "data_endpoint", "property": "Data Endpoint", "type": "string", "hidden": True},
+            ],
+        },
+        "Mike Hydro": {
+            "endpoint": "/api/mike-hydro/geojson/",
+            "interaction_output": [
+                {"column": "admin_name", "property": "Location", "type": "string"},
+                {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
+                {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
+                {"column": "alert_level", "property": "Alert Level", "type": "string"},
+                {"column": "daily_avg", "property": "Mike Hydro (m³/s)", "type": "number"},
+                {"column": "mike_hydro_rfe", "property": "Mike Hydro RFE (m³/s)", "type": "number"},
+                {"column": "mike_hydro_chirp", "property": "Mike Hydro CHIRP (m³/s)", "type": "number"},
+                {"column": "mike_hydro_imerg", "property": "Mike Hydro IMERG (m³/s)", "type": "number"},
+                {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
+                {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
+                {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
+                {"column": "data_date", "property": "Data Date", "type": "string"},
+                {"column": "forecasts", "property": "Forecasts", "type": "string", "hidden": True},
+                {"column": "data_endpoint", "property": "Data Endpoint", "type": "string", "hidden": True},
+            ],
+        },
+        "Google Flood Forecast": {
+            "endpoint": "/api/google-flood/geojson/",
+            "interaction_output": [
+                {"column": "admin_name", "property": "Location", "type": "string"},
+                {"column": "gauge_id", "property": "Gauge ID", "type": "string"},
+                {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
+                {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
+                {"column": "alert_level", "property": "Alert Level", "type": "string"},
+                {"column": "google_flood_severity", "property": "Google Severity", "type": "string"},
+                {"column": "daily_avg", "property": "Forecast Flow (m³/s)", "type": "number"},
+                {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
+                {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
+                {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
+                {"column": "data_date", "property": "Data Date", "type": "string"},
+                {"column": "forecasts", "property": "Forecasts", "type": "string", "hidden": True},
+                {"column": "data_endpoint", "property": "Data Endpoint", "type": "string", "hidden": True},
+            ],
+        },
+    }
+
+    for dataset in datasets_data:
+        dataset_name = dataset.get("name") or dataset.get("title")
+        override = overrides.get(dataset_name)
+        if not override:
+            continue
+
+        endpoint_path = override["endpoint"]
+        for layer in dataset.get("layers", []):
+            layer["layerConfig"] = _build_modular_model_layer_config(request, endpoint_path)
+            layer["interactionConfig"] = {
+                "type": "intersection",
+                "output": override["interaction_output"],
+            }
+            # Keep these model layers unparameterized; API serves latest or requested date.
+            layer["params"] = {}
+
+
 @api_view(['GET'])
 @renderer_classes([JSONRenderer])
 def get_mapviewer_config(request):
@@ -39,6 +147,7 @@ def get_mapviewer_config(request):
     # Add datasets with layers
     datasets = Dataset.objects.filter(published=True)
     datasets_data = DatasetSerializer(datasets, many=True, context={"request": request}).data
+    _patch_modular_model_datasets(request, datasets_data)
 
     response = {
         "categories": categories_data,

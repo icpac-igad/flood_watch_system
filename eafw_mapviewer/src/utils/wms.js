@@ -1,4 +1,4 @@
-import { get } from "axios";
+import axios from "axios";
 import WMSCapabilities from "wms-capabilities";
 import { subMonths, subDays } from "date-fns";
 
@@ -48,7 +48,7 @@ export const getTimeValuesFromWMS = async (wmsUrl, layerName, params = {}) => {
 
   try {
     // Fetch the GetCapabilities document from the WMS server
-    const response = await get(wmsUrl, {
+    const response = await axios.get(wmsUrl, {
       params: { ...defaultParams, ...params },
     });
 

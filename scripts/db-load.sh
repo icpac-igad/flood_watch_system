@@ -67,6 +67,64 @@ docker exec "${CONTAINER}" pg_restore \
 # Cleanup
 docker exec "${CONTAINER}" rm -f /tmp/restore.dump
 
+# Restore can leave country_code empty in control points, which breaks homepage country summaries.
+# Recompute missing values from admin0 polygons so APIs stay stable after any DB refresh.
+echo ""
+echo "Backfilling multimodal country_code from admin0 geometry..."
+docker exec "${CONTAINER}" psql -U "${DB_USER}" -d "${DB_NAME}" -c "
+    WITH resolved AS (
+        SELECT
+            cp.point_id,
+            CASE
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'ETH' THEN 'ET'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'KEN' THEN 'KE'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'UGA' THEN 'UG'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'SDN' THEN 'SD'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'SSD' THEN 'SS'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'TZA' THEN 'TZ'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'RWA' THEN 'RW'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'BDI' THEN 'BI'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'SOM' THEN 'SO'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'DJI' THEN 'DJ'
+                WHEN UPPER(TRIM(COALESCE(a0.gid_0, ''))) = 'ERI' THEN 'ER'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'ethiopia' THEN 'ET'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'kenya' THEN 'KE'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'uganda' THEN 'UG'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'sudan' THEN 'SD'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'south sudan' THEN 'SS'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) IN ('tanzania', 'zanzibar') THEN 'TZ'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'rwanda' THEN 'RW'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'burundi' THEN 'BI'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'somalia' THEN 'SO'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'djibouti' THEN 'DJ'
+                WHEN LOWER(TRIM(COALESCE(a0.country, ''))) = 'eritrea' THEN 'ER'
+                ELSE NULL
+            END AS country_code
+        FROM gha.multimodal_control_points cp
+        LEFT JOIN LATERAL (
+            SELECT a0.gid_0, a0.country
+            FROM gha.admin0 a0
+            WHERE ST_Within(cp.geom, a0.geom)
+            LIMIT 1
+        ) a0 ON TRUE
+    )
+    UPDATE gha.multimodal_control_points cp
+    SET country_code = resolved.country_code
+    FROM resolved
+    WHERE cp.point_id = resolved.point_id
+      AND resolved.country_code IS NOT NULL
+      AND COALESCE(NULLIF(UPPER(TRIM(cp.country_code)), ''), 'UN') = 'UN';
+"
+
+echo "Country-code coverage:"
+docker exec "${CONTAINER}" psql -U "${DB_USER}" -d "${DB_NAME}" -c "
+    SELECT
+        COUNT(*) AS total_points,
+        COUNT(*) FILTER (WHERE NULLIF(TRIM(country_code), '') IS NOT NULL) AS with_country_code,
+        COUNT(*) FILTER (WHERE NULLIF(TRIM(country_code), '') IS NULL) AS missing_country_code
+    FROM gha.multimodal_control_points;
+"
+
 # Verify
 echo ""
 echo "Verifying restore..."
@@ -78,4 +136,4 @@ docker exec "${CONTAINER}" psql -U "${DB_USER}" -d "${DB_NAME}" -c "
 "
 
 echo ""
-echo "Done. Restart services: docker compose -f docker-compose.local.yml restart eafw_api eafw_tileserv eafw_cms"
+echo "Done. Restart services: docker compose restart eafw_api eafw_tileserv eafw_cms"

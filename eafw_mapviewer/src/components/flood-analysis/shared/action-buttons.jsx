@@ -1,15 +1,69 @@
 /**
  * Action Buttons Component
- * Professional PDF export using jsPDF and html2canvas
+ * Server-side PDF export via WeasyPrint, share, print, subscribe
  */
 import React, { useState, useCallback } from "react";
 import { isEmpty } from "lodash";
-import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
 
+import { REPORTS_API } from "@/utils/constants";
 import Button from "@/components/ui/button";
 
 import "./action-buttons.scss";
+
+/**
+ * Capture a MapLibre GL canvas as a base64 PNG string (without the data URI prefix).
+ */
+const captureMapCanvas = () => {
+  const canvas = document.querySelector(".maplibregl-canvas");
+  if (!canvas) return null;
+
+  try {
+    const dataUrl = canvas.toDataURL("image/png");
+    // Strip the "data:image/png;base64," prefix
+    return dataUrl.replace(/^data:image\/png;base64,/, "");
+  } catch (e) {
+    console.warn("Could not capture map canvas:", e);
+    return null;
+  }
+};
+
+/**
+ * Capture a Recharts SVG chart as base64 PNG.
+ */
+const captureChartSvg = () => {
+  const svgEl = document.querySelector(".c-timeseries-chart .recharts-wrapper svg");
+  if (!svgEl) return null;
+
+  try {
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgEl);
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width * 2;
+        canvas.height = img.height * 2;
+        const ctx = canvas.getContext("2d");
+        ctx.scale(2, 2);
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        const dataUrl = canvas.toDataURL("image/png");
+        resolve(dataUrl.replace(/^data:image\/png;base64,/, ""));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+      img.src = url;
+    });
+  } catch (e) {
+    console.warn("Could not capture chart:", e);
+    return null;
+  }
+};
 
 const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -24,176 +78,55 @@ const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
     setTimeout(() => setSnackbar({ show: false, message: "", type: "info" }), 4000);
   };
 
-  // Convert WebGL map canvases to static images for PDF capture
-  const convertMapsToImages = async () => {
-    const mapContainers = document.querySelectorAll(".maplibregl-canvas");
-    const replacements = [];
-
-    for (const canvas of mapContainers) {
-      try {
-        // Get the WebGL canvas data
-        const dataUrl = canvas.toDataURL("image/png");
-
-        // Create a static image
-        const img = document.createElement("img");
-        img.src = dataUrl;
-        img.style.width = canvas.style.width || `${canvas.width}px`;
-        img.style.height = canvas.style.height || `${canvas.height}px`;
-        img.style.position = "absolute";
-        img.style.top = "0";
-        img.style.left = "0";
-        img.className = "map-snapshot";
-
-        // Store original canvas and insert image
-        const parent = canvas.parentNode;
-        replacements.push({ canvas, parent, img });
-
-        // Hide the WebGL canvas and add the static image
-        canvas.style.visibility = "hidden";
-        parent.appendChild(img);
-      } catch (e) {
-        console.warn("Could not convert map canvas:", e);
-      }
-    }
-
-    return replacements;
-  };
-
-  // Restore original map canvases
-  const restoreMaps = (replacements) => {
-    for (const { canvas, parent, img } of replacements) {
-      canvas.style.visibility = "visible";
-      if (img.parentNode) {
-        img.parentNode.removeChild(img);
-      }
-    }
-  };
-
-  // Generate professional PDF report using jsPDF and html2canvas
+  // Generate PDF via server-side WeasyPrint
   const handleGeneratePdf = useCallback(async () => {
     setPdfLoading(true);
     showSnackbar("Generating PDF report...", "info");
 
-    let mapReplacements = [];
-
     try {
-      // Get the report content
-      const reportContent = document.querySelector(".c-flood-analysis");
-      if (!reportContent) {
-        showSnackbar("Report content not found", "error");
-        return;
+      // Capture map and chart images from the DOM
+      const mapImage = captureMapCanvas();
+      const chartImage = await captureChartSvg();
+
+      // Build request payload
+      const payload = {
+        forecast_date: params?.forecast_date || new Date().toISOString().split("T")[0],
+        placename: params?.placename || "East Africa Region",
+        unit_id: params?.unit_id || null,
+        admin_level: params?.admin_level || null,
+        map_image: mapImage,
+        chart_image: chartImage,
+      };
+
+      // POST to server-side PDF endpoint
+      const response = await fetch(`${REPORTS_API}/flood-analysis/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server returned ${response.status}`);
       }
 
-      // Hide elements we don't want in PDF
-      const elementsToHide = document.querySelectorAll(
-        ".c-action-buttons, .c-global-options, .generate-btn"
-      );
-      elementsToHide.forEach((el) => el.style.display = "none");
-
-      // Convert WebGL maps to static images for capture
-      mapReplacements = await convertMapsToImages();
-
-      // Small delay to ensure images are rendered
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Create canvas from the report content
-      const canvas = await html2canvas(reportContent, {
-        scale: 2, // Higher resolution
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        windowWidth: 1200,
-      });
-
-      // Restore hidden elements and maps
-      elementsToHide.forEach((el) => el.style.display = "");
-      restoreMaps(mapReplacements);
-
-      // Calculate PDF dimensions (A4 size)
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      // Create PDF
-      const pdf = new jsPDF({
-        orientation: imgHeight > pageHeight ? "portrait" : "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-
-      // Add metadata
-      pdf.setProperties({
-        title: `Flood Analysis Report - ${params?.placename || "East Africa Region"}`,
-        subject: "Flood Forecast Analysis",
-        author: "IGAD ICPAC - East Africa Flood Watch",
-        creator: "East Africa Flood Watch System",
-      });
-
-      const imgData = canvas.toDataURL("image/png");
-
-      // Handle multi-page PDF if content is too long
-      let heightLeft = imgHeight;
-      let position = 0;
-      const margin = 5; // 5mm margin
-
-      // First page
-      pdf.addImage(imgData, "PNG", margin, position, imgWidth - (2 * margin), imgHeight);
-      heightLeft -= pageHeight;
-
-      // Add more pages if needed
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", margin, position, imgWidth - (2 * margin), imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      // Add footer to each page
-      const pageCount = pdf.internal.getNumberOfPages();
-      const currentDate = new Date().toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-
-      for (let i = 1; i <= pageCount; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(8);
-        pdf.setTextColor(128, 128, 128);
-
-        // Footer text
-        pdf.text(
-          `East Africa Flood Watch - Generated ${currentDate}`,
-          margin,
-          pageHeight - 5
-        );
-        pdf.text(
-          `Page ${i} of ${pageCount}`,
-          imgWidth - margin - 20,
-          pageHeight - 5
-        );
-        pdf.text(
-          "https://floodwatch.icpac.net",
-          imgWidth / 2 - 20,
-          pageHeight - 5
-        );
-      }
-
-      // Generate filename
+      // Download the PDF blob
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
       const dateStr = params?.forecast_date || new Date().toISOString().split("T")[0];
       const regionStr = (params?.placename || "East_Africa").replace(/\s+/g, "_");
-      const filename = `FloodAnalysis_${regionStr}_${dateStr}.pdf`;
+      a.href = url;
+      a.download = `FloodAnalysis_${regionStr}_${dateStr}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-      // Save the PDF
-      pdf.save(filename);
-
-      showSnackbar(`PDF saved as ${filename}`, "success");
+      showSnackbar("PDF downloaded successfully!", "success");
     } catch (error) {
       console.error("PDF generation error:", error);
-      showSnackbar("Failed to generate PDF. Please try again.", "error");
-      // Restore maps on error
-      restoreMaps(mapReplacements);
+      showSnackbar(error.message || "Failed to generate PDF. Please try again.", "error");
     } finally {
       setPdfLoading(false);
     }
@@ -248,23 +181,23 @@ const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
             Generating...
           </>
         ) : (
-          <>📄 Export PDF</>
+          <>Export PDF</>
         )}
       </button>
 
       {/* Share Button */}
       <button className="action-btn share-btn" onClick={handleShare}>
-        🔗 Share
+        Share
       </button>
 
       {/* Print Button */}
       <button className="action-btn print-btn" onClick={handlePrint}>
-        🖨️ Print
+        Print
       </button>
 
       {/* Subscribe Button */}
       <button className="action-btn subscribe-btn" onClick={handleSubscribe}>
-        🔔 Subscribe
+        Subscribe
       </button>
 
       {/* Share Dialog */}
@@ -277,7 +210,7 @@ const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
                 className="dialog-close"
                 onClick={() => setShareDialogOpen(false)}
               >
-                ×
+                &times;
               </button>
             </div>
             <div className="dialog-content">
@@ -289,7 +222,7 @@ const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
                   className="share-url-input"
                 />
                 <button className="copy-btn" onClick={handleCopyUrl}>
-                  📋 Copy
+                  Copy
                 </button>
               </div>
               <p className="share-note">
@@ -311,7 +244,7 @@ const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
                 className="dialog-close"
                 onClick={() => setSubscribeDialogOpen(false)}
               >
-                ×
+                &times;
               </button>
             </div>
             <div className="dialog-content">

@@ -12,7 +12,6 @@ const ALERT_LEVELS = [
   { key: "emergency", label: "Emergency", color: "#F44336" },
   { key: "alarm", label: "Alarm", color: "#FF9800" },
   { key: "warning", label: "Warning", color: "#FFC107" },
-  { key: "watch", label: "Watch", color: "#2196F3" },
   { key: "normal", label: "Normal", color: "#4CAF50" },
 ];
 
@@ -36,27 +35,29 @@ const AlertSummaryWidget = ({ params, alertData, loading }) => {
 
   // Calculate percentages
   const getPercentage = (count) => {
-    if (!totalPoints) return "0.00";
-    return ((count / totalPoints) * 100).toFixed(2);
+    if (!totalPoints) return "0.0";
+    return ((count / totalPoints) * 100).toFixed(1);
   };
+
+  // Total at-risk points (non-normal)
+  const totalAtRisk =
+    (byLevel.emergency || 0) + (byLevel.alarm || 0) + (byLevel.warning || 0);
 
   return (
     <div className="c-alert-summary">
-      {/* Section Header - matching drought report style */}
+      {/* Section Header */}
       <div className="section-header">
         <h3 className="section-title">Flood Risk Exposure Statistics</h3>
       </div>
 
-      {/* Statistics Table - matching drought report */}
+      {/* Statistics Table */}
       <div className="c-stats-table">
         <table>
           <thead>
             <tr>
               <th>ALERT LEVEL</th>
               <th>FORECAST POINTS</th>
-              <th>POPULATION EXPOSED</th>
-              <th>AREA EXTENT (KM²)</th>
-              <th>CROPLAND EXTENT (KM²)</th>
+              <th>% OF TOTAL</th>
             </tr>
           </thead>
           <tbody>
@@ -75,36 +76,36 @@ const AlertSummaryWidget = ({ params, alertData, loading }) => {
                       <span>{level.label}</span>
                     </div>
                   </td>
-                  <td>{count} ({percentage}%)</td>
-                  <td>
-                    {count > 0
-                      ? `${(count * 12500).toLocaleString()} (${percentage}%)`
-                      : "0 (0.00%)"
-                    }
-                  </td>
-                  <td>
-                    {count > 0
-                      ? `${(count * 850).toLocaleString()} (${percentage}%)`
-                      : "0 (0.00%)"
-                    }
-                  </td>
-                  <td>
-                    {count > 0
-                      ? `${(count * 125).toLocaleString()} (${percentage}%)`
-                      : "0 (0.00%)"
-                    }
-                  </td>
+                  <td>{count.toLocaleString()}</td>
+                  <td>{percentage}%</td>
                 </tr>
               );
             })}
+            <tr className="total-row">
+              <td><strong>Total</strong></td>
+              <td><strong>{totalPoints.toLocaleString()}</strong></td>
+              <td><strong>100%</strong></td>
+            </tr>
           </tbody>
         </table>
       </div>
 
+      {/* Summary bar */}
+      {totalPoints > 0 && (
+        <div className="risk-summary-bar">
+          <span className="risk-summary-label">
+            <strong>{totalAtRisk.toLocaleString()}</strong> of{" "}
+            {totalPoints.toLocaleString()} forecast points at risk (
+            {getPercentage(totalAtRisk)}%)
+          </span>
+        </div>
+      )}
+
       {/* Note about data */}
       <div className="data-note">
-        Note: Population and area estimates are based on flood extent modeling.
-        Actual impacts may vary. Data for {params?.placename || "selected region"}.
+        Based on multi-model ensemble forecast for{" "}
+        {params?.placename || "selected region"}. Thresholds: Warning &ge; 150,
+        Alarm &ge; 300, Emergency &ge; 450 m&sup3;/s.
       </div>
     </div>
   );

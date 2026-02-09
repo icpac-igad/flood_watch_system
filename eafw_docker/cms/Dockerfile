@@ -46,11 +46,11 @@ WORKDIR $APP_HOME
 RUN mkdir -p /root/.ssh && \
     ssh-keyscan github.com >> /root/.ssh/known_hosts
 
-# Copy the geomanager package (local dependency)
-COPY ./eafw_cms/geomanager /opt/geomanager
-
 # Copy dependency files to leverage Docker cache
 COPY ./eafw_cms/pyproject.toml ./eafw_cms/uv.lock ./eafw_cms/build-constraints.txt ./
+
+# Copy the geomanager package (local dependency referenced as path = "./geomanager" in pyproject.toml)
+COPY ./eafw_cms/geomanager ./geomanager
 
 # Install dependencies (not the project itself yet)
 RUN --mount=type=ssh \

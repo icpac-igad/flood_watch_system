@@ -15,6 +15,7 @@ from .bulletins import router as bulletins_router
 from .cms import router as cms_router
 from .multimodal import router as multimodal_router
 from .basins import router as basins_router
+from .reports import router as reports_router
 
 router = APIRouter(tags=["v1"])
 
@@ -27,3 +28,4 @@ router.include_router(forecasts_router, prefix="/forecasts", tags=["Forecasts"])
 router.include_router(bulletins_router, prefix="/bulletins", tags=["Flood Bulletins"])
 router.include_router(multimodal_router, prefix="/multimodal", tags=["Multimodal Forecasts"])
 router.include_router(basins_router, prefix="/basins", tags=["HydroBasins"])
+router.include_router(reports_router, prefix="/reports", tags=["Reports"])

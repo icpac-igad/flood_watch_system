@@ -3,7 +3,6 @@ from wagtail.api.v2.views import BaseAPIViewSet
 from django.http import JsonResponse
 from django.views import View
 from datetime import datetime
-from django.utils.html import strip_tags
 
 # WHCA project countries (ISO2) for scope fallback when whca_selected is unset
 WHCA_COUNTRY_CODES = ("SD", "SS", "UG", "ET", "RW")
@@ -12,6 +11,39 @@ WHCA_SCOPE_SQL_CONDITION = (
     "(COALESCE(cp.whca_selected, FALSE) IS TRUE OR "
     f"UPPER(COALESCE(cp.country_code, '')) IN ({WHCA_COUNTRY_CODES_SQL}))"
 )
+
+
+def _add_cors_headers(response):
+    """Attach permissive CORS headers used by mapviewer data endpoints."""
+    response['Access-Control-Allow-Origin'] = '*'
+    response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
+
+def _get_multimodal_thresholds(request):
+    """Read cluster thresholds from CMS settings with safe defaults."""
+    try:
+        from home.models import MultimodalClusterSettings
+        cluster_settings = MultimodalClusterSettings.load(request_or_site=request)
+        return (
+            float(cluster_settings.warning_threshold),
+            float(cluster_settings.alarm_threshold),
+            float(cluster_settings.emergency_threshold),
+        )
+    except Exception:
+        return (150.0, 300.0, 450.0)
+
+
+def _parse_query_date(date_str):
+    """Parse YYYY-MM-DD date or return (None, error_response)."""
+    if not date_str:
+        return None, None
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d').date(), None
+    except ValueError:
+        response = JsonResponse({'error': 'Invalid date format. Use YYYY-MM-DD'}, status=400)
+        return None, _add_cors_headers(response)
 
 # Create API router
 api_router = WagtailAPIRouter("webapi")
@@ -79,76 +111,6 @@ class FloodProofsAvailableDatesView(View):
         response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
         response['Access-Control-Allow-Headers'] = 'Content-Type'
 
-        return response
-
-
-class ReportsListView(View):
-    """API to list the latest CMS report index entries."""
-
-    def get(self, request):
-        from home.models import (
-            ReportIndexPage,
-            FloodBulletinPage,
-            SituationReportPage,
-        )
-
-        index = ReportIndexPage.objects.live().first()
-        if not index:
-            return self._empty_response()
-
-        reports = []
-        for child in index.get_children().live().order_by("-first_published_at"):
-            specific = child.specific
-            report_type = "other"
-            summary = ""
-            badge = None
-
-            if isinstance(specific, FloodBulletinPage):
-                report_type = "bulletin"
-                summary = strip_tags(specific.executive_summary or "")
-                badge = specific.overall_alert_level
-            elif isinstance(specific, SituationReportPage):
-                report_type = "sitrep"
-                summary = strip_tags(specific.situation_overview or "")
-                badge = specific.event_type
-            else:
-                summary = strip_tags(getattr(specific, "summary", "") or "")
-
-            report_date = getattr(specific, "report_date", None)
-            report_date_str = report_date.isoformat() if report_date else None
-
-            url = child.url
-            full_url = request.build_absolute_uri(url) if url else None
-
-            reports.append(
-                {
-                    "id": child.id,
-                    "title": child.title,
-                    "report_type": report_type,
-                    "report_number": getattr(specific, "report_number", ""),
-                    "report_date": report_date_str,
-                    "summary": summary,
-                    "badge": badge,
-                    "url": full_url,
-                }
-            )
-
-        payload = {
-            "introduction": strip_tags(index.introduction or ""),
-            "reports": reports,
-        }
-
-        response = JsonResponse(payload)
-        response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type"
-        return response
-
-    def _empty_response(self):
-        response = JsonResponse({"introduction": "", "reports": []})
-        response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response["Access-Control-Allow-Headers"] = "Content-Type"
         return response
 
 
@@ -733,6 +695,370 @@ class MultimodalAvailableDatesView(View):
         response['Access-Control-Allow-Headers'] = 'Content-Type'
 
         return response
+
+
+class BaseModularModelGeoJSONView(View):
+    """Base GeoJSON API for model-specific views sourced from multimodal forecasts."""
+
+    endpoint_path = "/api/multimodal/geojson/"
+
+    def _current_value_sql(self, alias):
+        raise NotImplementedError
+
+    def _forecast_object_sql(self):
+        raise NotImplementedError
+
+    def get(self, request):
+        from django.db import connection
+        import json as json_module
+
+        date_str = request.GET.get('date')
+        filter_mode = request.GET.get('filter', 'all')
+        scope_mode = request.GET.get('scope', 'all').strip().lower()
+
+        if scope_mode not in ('all', 'whca'):
+            return _add_cors_headers(JsonResponse({'error': 'Invalid scope. Use all or whca'}, status=400))
+
+        warning_threshold, alarm_threshold, emergency_threshold = _get_multimodal_thresholds(request)
+
+        filter_sql = ""
+        if filter_mode == 'active':
+            filter_sql = f"WHERE daily_avg >= {warning_threshold}"
+        elif filter_mode == 'alarm':
+            filter_sql = f"WHERE daily_avg >= {alarm_threshold}"
+        elif filter_mode == 'emergency':
+            filter_sql = f"WHERE daily_avg >= {emergency_threshold}"
+
+        scope_sql = ""
+        if scope_mode == 'whca':
+            scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
+
+        query_date, date_error = _parse_query_date(date_str)
+        if date_error:
+            return date_error
+
+        if query_date:
+            query_date_sql = "%s"
+            params = [query_date]
+        else:
+            query_date_sql = "(SELECT MAX(data_date) FROM gha.multimodal_forecasts)"
+            params = []
+
+        current_value_mf = self._current_value_sql("mf")
+        current_value_f = self._current_value_sql("f")
+        current_value_fc = self._current_value_sql("fc")
+        forecast_object_sql = self._forecast_object_sql()
+
+        with connection.cursor() as cursor:
+            try:
+                cursor.execute(
+                    f"""
+                    WITH query_params AS (
+                        SELECT {query_date_sql}::date AS query_date
+                    ),
+                    first_forecast AS (
+                        SELECT
+                            mf.point_id,
+                            MIN(mf.forecast_date) AS forecast_date
+                        FROM gha.multimodal_forecasts mf, query_params qp
+                        WHERE mf.data_date = qp.query_date
+                          AND mf.forecast_date >= qp.query_date
+                          AND {current_value_mf} IS NOT NULL
+                        GROUP BY mf.point_id
+                    ),
+                    point_data AS (
+                        SELECT
+                            cp.point_id,
+                            cp.zone,
+                            cp.gridcode,
+                            cp.admin_name,
+                            cp.country_code,
+                            cp.whca_selected,
+                            cp.hybas_id,
+                            cp.geom,
+                            f.data_date,
+                            f.forecast_date,
+                            {current_value_f} AS daily_avg,
+                            f.geosfm,
+                            f.floodproof,
+                            f.mike_hydro_rfe,
+                            f.mike_hydro_chirp,
+                            f.mike_hydro_imerg,
+                            COALESCE((
+                                SELECT json_agg({forecast_object_sql} ORDER BY fc.forecast_date)
+                                FROM gha.multimodal_forecasts fc, query_params qp
+                                WHERE fc.point_id = cp.point_id
+                                  AND fc.data_date = qp.query_date
+                                  AND {current_value_fc} IS NOT NULL
+                            ), '[]'::json) AS forecasts
+                        FROM gha.multimodal_control_points cp
+                        JOIN first_forecast ff ON ff.point_id = cp.point_id
+                        CROSS JOIN query_params qp
+                        LEFT JOIN gha.multimodal_forecasts f
+                            ON f.point_id = cp.point_id
+                            AND f.data_date = qp.query_date
+                            AND f.forecast_date = ff.forecast_date
+                        {scope_sql}
+                    )
+                    SELECT json_build_object(
+                        'type', 'FeatureCollection',
+                        'features', COALESCE(json_agg(
+                            json_build_object(
+                                'type', 'Feature',
+                                'geometry', ST_AsGeoJSON(geom)::json,
+                                'properties', json_build_object(
+                                    'point_id', point_id,
+                                    'zone', zone,
+                                    'gridcode', gridcode,
+                                    'admin_name', admin_name,
+                                    'country_code', country_code,
+                                    'whca_selected', whca_selected,
+                                    'hybas_id', hybas_id,
+                                    'data_date', data_date::text,
+                                    'forecast_date', forecast_date::text,
+                                    'daily_avg', daily_avg,
+                                    'geosfm', geosfm,
+                                    'floodproof', floodproof,
+                                    'mike_hydro_rfe', mike_hydro_rfe,
+                                    'mike_hydro_chirp', mike_hydro_chirp,
+                                    'mike_hydro_imerg', mike_hydro_imerg,
+                                    'threshold_alert', {warning_threshold},
+                                    'threshold_alarm', {alarm_threshold},
+                                    'threshold_emergency', {emergency_threshold},
+                                    'alert_level', CASE
+                                        WHEN daily_avg >= {emergency_threshold} THEN 'emergency'
+                                        WHEN daily_avg >= {alarm_threshold} THEN 'alarm'
+                                        WHEN daily_avg >= {warning_threshold} THEN 'warning'
+                                        ELSE 'normal'
+                                    END,
+                                    'data_endpoint', '{self.endpoint_path}',
+                                    'forecasts', forecasts
+                                )
+                            )
+                        ), '[]'::json)
+                    ) AS geojson
+                    FROM point_data
+                    {filter_sql}
+                    """,
+                    params,
+                )
+                result = cursor.fetchone()
+                geojson = result[0] if result and result[0] else {'type': 'FeatureCollection', 'features': []}
+                if isinstance(geojson, str):
+                    geojson = json_module.loads(geojson)
+            except Exception as e:
+                return _add_cors_headers(JsonResponse({'error': f'Query failed: {str(e)}'}, status=500))
+
+        return _add_cors_headers(JsonResponse(geojson, safe=False))
+
+
+class GeoSFMGeoJSONView(BaseModularModelGeoJSONView):
+    endpoint_path = "/api/geosfm/geojson/"
+
+    def _current_value_sql(self, alias):
+        return f"{alias}.geosfm"
+
+    def _forecast_object_sql(self):
+        return """json_build_object(
+            'date', fc.forecast_date,
+            'daily_avg', fc.geosfm,
+            'GeoSFM', fc.geosfm
+        )"""
+
+
+class MikeHydroGeoJSONView(BaseModularModelGeoJSONView):
+    endpoint_path = "/api/mike-hydro/geojson/"
+
+    def _current_value_sql(self, alias):
+        return (
+            f"(SELECT MAX(v) FROM (VALUES ({alias}.mike_hydro_rfe), "
+            f"({alias}.mike_hydro_chirp), ({alias}.mike_hydro_imerg)) AS vals(v))"
+        )
+
+    def _forecast_object_sql(self):
+        return """json_build_object(
+            'date', fc.forecast_date,
+            'daily_avg', (
+                SELECT MAX(v) FROM (VALUES (fc.mike_hydro_rfe), (fc.mike_hydro_chirp), (fc.mike_hydro_imerg)) AS vals(v)
+            ),
+            'Mike_Hydro_RFE', fc.mike_hydro_rfe,
+            'Mike_Hydro_CHIRP', fc.mike_hydro_chirp,
+            'Mike_Hydro_IMERG', fc.mike_hydro_imerg
+        )"""
+
+
+class FloodproofGeoJSONView(BaseModularModelGeoJSONView):
+    """Floodproof model-only view sourced from gha.multimodal_forecasts.floodproof."""
+
+    endpoint_path = "/api/floodproof/geojson/"
+
+    def _current_value_sql(self, alias):
+        return f"{alias}.floodproof"
+
+    def _forecast_object_sql(self):
+        return """json_build_object(
+            'date', fc.forecast_date,
+            'daily_avg', fc.floodproof,
+            'Floodproof', fc.floodproof
+        )"""
+
+
+class GoogleFloodGeoJSONView(View):
+    """GeoJSON endpoint backed by synced Google Flood API rows in gha.google_flood_points_latest."""
+
+    endpoint_path = "/api/google-flood/geojson/"
+
+    def get(self, request):
+        from django.db import connection
+        import json as json_module
+
+        date_str = request.GET.get('date')
+        filter_mode = request.GET.get('filter', 'all')
+        scope_mode = request.GET.get('scope', 'all').strip().lower()
+
+        if scope_mode not in ('all', 'whca'):
+            return _add_cors_headers(JsonResponse({'error': 'Invalid scope. Use all or whca'}, status=400))
+
+        query_date, date_error = _parse_query_date(date_str)
+        if date_error:
+            return date_error
+
+        with connection.cursor() as cursor:
+            try:
+                cursor.execute("SELECT to_regclass('gha.google_flood_points_latest')")
+                table_exists = cursor.fetchone()[0] is not None
+                if not table_exists:
+                    return _add_cors_headers(JsonResponse({'type': 'FeatureCollection', 'features': []}, safe=False))
+
+                if query_date:
+                    query_date_sql = "%s"
+                    params = [query_date]
+                else:
+                    query_date_sql = "(SELECT MAX(data_date) FROM gha.google_flood_points_latest)"
+                    params = []
+
+                scope_sql = ""
+                if scope_mode == 'whca':
+                    scope_sql = (
+                        "AND UPPER(COALESCE(NULLIF(g.country_code, ''), NULLIF(g.region_code, ''), '')) "
+                        "IN ('SD','SS','UG','ET','RW')"
+                    )
+
+                filter_sql = ""
+                if filter_mode == 'active':
+                    filter_sql = "WHERE alert_level != 'normal'"
+                elif filter_mode == 'alarm':
+                    filter_sql = "WHERE alert_level IN ('alarm', 'emergency')"
+                elif filter_mode == 'emergency':
+                    filter_sql = "WHERE alert_level = 'emergency'"
+
+                cursor.execute(
+                    f"""
+                    WITH query_params AS (
+                        SELECT {query_date_sql}::date AS query_date
+                    ),
+                    point_data AS (
+                        SELECT
+                            g.gauge_id,
+                            COALESCE(NULLIF(g.point_id, ''), g.gauge_id) AS point_id,
+                            COALESCE(NULLIF(g.admin_name, ''), NULLIF(g.site_name, ''), g.gauge_id) AS admin_name,
+                            g.hybas_id,
+                            COALESCE(NULLIF(g.country_code, ''), NULLIF(g.region_code, '')) AS country_code,
+                            g.region_code,
+                            g.data_date,
+                            g.latest_issued_time AS forecast_date,
+                            g.daily_avg,
+                            g.daily_max,
+                            g.daily_min,
+                            g.threshold_alert,
+                            g.threshold_alarm,
+                            g.threshold_emergency,
+                            g.latest_severity,
+                            g.latest_forecast_trend,
+                            COALESCE(g.forecasts_json, '[]'::jsonb) AS forecasts,
+                            CASE
+                                WHEN g.latest_severity = 'MAJOR_FLOODING' THEN 'emergency'
+                                WHEN g.latest_severity = 'MODERATE_FLOODING' THEN 'alarm'
+                                WHEN g.latest_severity = 'MINOR_FLOODING' THEN 'warning'
+                                ELSE 'normal'
+                            END AS alert_level,
+                            g.geom
+                        FROM gha.google_flood_points_latest g
+                        CROSS JOIN query_params qp
+                        WHERE (qp.query_date IS NULL OR g.data_date = qp.query_date)
+                          AND g.geom IS NOT NULL
+                          {scope_sql}
+                    )
+                    SELECT json_build_object(
+                        'type', 'FeatureCollection',
+                        'features', COALESCE(json_agg(
+                            json_build_object(
+                                'type', 'Feature',
+                                'geometry', ST_AsGeoJSON(geom)::json,
+                                'properties', json_build_object(
+                                    'gauge_id', gauge_id,
+                                    'point_id', point_id,
+                                    'admin_name', admin_name,
+                                    'hybas_id', hybas_id,
+                                    'country_code', country_code,
+                                    'region_code', region_code,
+                                    'data_date', data_date::text,
+                                    'forecast_date', forecast_date::text,
+                                    'daily_avg', daily_avg,
+                                    'daily_max', daily_max,
+                                    'daily_min', daily_min,
+                                    'threshold_alert', threshold_alert,
+                                    'threshold_alarm', threshold_alarm,
+                                    'threshold_emergency', threshold_emergency,
+                                    'google_flood_severity', latest_severity,
+                                    'forecast_trend', latest_forecast_trend,
+                                    'alert_level', alert_level,
+                                    'data_endpoint', '{self.endpoint_path}',
+                                    'forecasts', forecasts
+                                )
+                            )
+                        ), '[]'::json)
+                    ) AS geojson
+                    FROM point_data
+                    {filter_sql}
+                    """,
+                    params,
+                )
+                result = cursor.fetchone()
+                geojson = result[0] if result and result[0] else {'type': 'FeatureCollection', 'features': []}
+                if isinstance(geojson, str):
+                    geojson = json_module.loads(geojson)
+            except Exception as e:
+                return _add_cors_headers(JsonResponse({'error': f'Query failed: {str(e)}'}, status=500))
+
+        return _add_cors_headers(JsonResponse(geojson, safe=False))
+
+
+class GoogleFloodAvailableDatesView(View):
+    """Available synced dates for Google Flood API rows."""
+
+    def get(self, request):
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            try:
+                cursor.execute("SELECT to_regclass('gha.google_flood_points_latest')")
+                table_exists = cursor.fetchone()[0] is not None
+                if not table_exists:
+                    return _add_cors_headers(JsonResponse({'timestamps': []}))
+
+                cursor.execute("""
+                    SELECT DISTINCT data_date
+                    FROM gha.google_flood_points_latest
+                    WHERE data_date IS NOT NULL
+                    ORDER BY data_date DESC
+                """)
+                rows = cursor.fetchall()
+                timestamps = [row[0].strftime('%Y-%m-%d') for row in rows]
+            except Exception as e:
+                return _add_cors_headers(JsonResponse({'error': f'Query failed: {str(e)}'}, status=500))
+
+        return _add_cors_headers(JsonResponse({'timestamps': timestamps}))
 
 
 # =============================================================================

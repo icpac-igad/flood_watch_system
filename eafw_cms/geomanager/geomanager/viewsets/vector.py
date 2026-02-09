@@ -1,6 +1,7 @@
 import json
 
 from adminboundarymanager.models import AdminBoundary, AdminBoundarySettings
+from django.db import connection
 from django.contrib.gis.geos import GEOSGeometry
 from django.contrib.gis.geos import MultiPolygon
 from django.utils.decorators import method_decorator
@@ -32,29 +33,129 @@ class VectorTableFileDetailViewSet(mixins.ListModelMixin, viewsets.GenericViewSe
 class AdminBoundaryViewSet(viewsets.ViewSet):
     renderer_classes = [JSONRenderer]
 
+    @staticmethod
+    def _rows_to_payload(cursor):
+        columns = [col[0] for col in cursor.description]
+        items = []
+        for row in cursor.fetchall():
+            item = dict(zip(columns, row))
+            bbox = item.get("bbox")
+            if bbox is None:
+                item["bbox"] = []
+            else:
+                item["bbox"] = [float(v) for v in bbox]
+            items.append(item)
+        return items
+
     @action(detail=True, methods=["get"])
     @method_decorator(revalidate_cache)
     @method_decorator(cache_page)
     def get(self, request):
-        countries = AdminBoundary.objects.filter(level=0)
-        data = AdminBoundarySerializer(countries, many=True).data
-        return Response(data)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    0 AS level,
+                    COALESCE(NULLIF(country, ''), UPPER(TRIM(gid_0))) AS name_0,
+                    NULL::text AS name_1,
+                    NULL::text AS name_2,
+                    UPPER(TRIM(gid_0)) AS gid_0,
+                    NULL::text AS gid_1,
+                    NULL::text AS gid_2,
+                    ARRAY[
+                        MIN(ST_XMin(ST_Envelope(geom))),
+                        MIN(ST_YMin(ST_Envelope(geom))),
+                        MAX(ST_XMax(ST_Envelope(geom))),
+                        MAX(ST_YMax(ST_Envelope(geom)))
+                    ]::double precision[] AS bbox
+                FROM gha.admin0
+                WHERE geom IS NOT NULL
+                  AND COALESCE(NULLIF(country, ''), NULLIF(gid_0, '')) IS NOT NULL
+                GROUP BY
+                    COALESCE(NULLIF(country, ''), UPPER(TRIM(gid_0))),
+                    UPPER(TRIM(gid_0))
+                ORDER BY name_0
+                """
+            )
+            return Response(self._rows_to_payload(cursor))
 
     @action(detail=True, methods=["get"])
     @method_decorator(revalidate_cache)
     @method_decorator(cache_page)
     def get_regions(self, request, gid_0):
-        countries = AdminBoundary.objects.filter(level=1, gid_0=gid_0)
-        data = AdminBoundarySerializer(countries, many=True).data
-        return Response(data)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    1 AS level,
+                    COALESCE(NULLIF(country, ''), UPPER(TRIM(gid_0))) AS name_0,
+                    name_1,
+                    NULL::text AS name_2,
+                    UPPER(TRIM(gid_0)) AS gid_0,
+                    COALESCE(NULLIF(gid_1, ''), name_1) AS gid_1,
+                    NULL::text AS gid_2,
+                    ARRAY[
+                        MIN(ST_XMin(ST_Envelope(geom))),
+                        MIN(ST_YMin(ST_Envelope(geom))),
+                        MAX(ST_XMax(ST_Envelope(geom))),
+                        MAX(ST_YMax(ST_Envelope(geom)))
+                    ]::double precision[] AS bbox
+                FROM gha.admin1
+                WHERE geom IS NOT NULL
+                  AND UPPER(TRIM(gid_0)) = UPPER(%s)
+                  AND name_1 IS NOT NULL
+                GROUP BY
+                    COALESCE(NULLIF(country, ''), UPPER(TRIM(gid_0))),
+                    name_1,
+                    UPPER(TRIM(gid_0)),
+                    COALESCE(NULLIF(gid_1, ''), name_1)
+                ORDER BY name_1
+                """,
+                [gid_0],
+            )
+            return Response(self._rows_to_payload(cursor))
 
     @action(detail=True, methods=["get"])
     @method_decorator(revalidate_cache)
     @method_decorator(cache_page)
     def get_sub_regions(self, request, gid_0, gid_1):
-        countries = AdminBoundary.objects.filter(level=2, gid_0=gid_0, gid_1=gid_1)
-        data = AdminBoundarySerializer(countries, many=True).data
-        return Response(data)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    2 AS level,
+                    COALESCE(NULLIF(country, ''), UPPER(TRIM(gid_0))) AS name_0,
+                    name_1,
+                    name_2,
+                    UPPER(TRIM(gid_0)) AS gid_0,
+                    COALESCE(NULLIF(gid_1, ''), name_1) AS gid_1,
+                    COALESCE(NULLIF(gid_2, ''), name_2) AS gid_2,
+                    ARRAY[
+                        MIN(ST_XMin(ST_Envelope(geom))),
+                        MIN(ST_YMin(ST_Envelope(geom))),
+                        MAX(ST_XMax(ST_Envelope(geom))),
+                        MAX(ST_YMax(ST_Envelope(geom)))
+                    ]::double precision[] AS bbox
+                FROM gha.admin2
+                WHERE geom IS NOT NULL
+                  AND UPPER(TRIM(gid_0)) = UPPER(%s)
+                  AND (
+                    COALESCE(NULLIF(gid_1, ''), name_1) = %s
+                    OR name_1 = %s
+                  )
+                  AND name_2 IS NOT NULL
+                GROUP BY
+                    COALESCE(NULLIF(country, ''), UPPER(TRIM(gid_0))),
+                    name_1,
+                    name_2,
+                    UPPER(TRIM(gid_0)),
+                    COALESCE(NULLIF(gid_1, ''), name_1),
+                    COALESCE(NULLIF(gid_2, ''), name_2)
+                ORDER BY name_2
+                """,
+                [gid_0, gid_1, gid_1],
+            )
+            return Response(self._rows_to_payload(cursor))
 
 
 class GeostoreViewSet(viewsets.ViewSet):

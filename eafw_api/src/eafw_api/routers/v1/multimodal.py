@@ -42,9 +42,29 @@ COUNTRY_NAMES = {
 
 WHCA_COUNTRY_CODES = ("SD", "SS", "UG", "ET", "RW")
 WHCA_COUNTRY_CODES_SQL = ",".join(f"'{code}'" for code in WHCA_COUNTRY_CODES)
+
+# ISO3→ISO2 mapping for ST_Within fallback (admin0.gid_0 is ISO3)
+ADMIN0_COUNTRY_CODE_SQL = (
+    "CASE UPPER(TRIM(COALESCE(a0.gid_0, ''))) "
+    "WHEN 'ETH' THEN 'ET' WHEN 'KEN' THEN 'KE' WHEN 'UGA' THEN 'UG' "
+    "WHEN 'SDN' THEN 'SD' WHEN 'SSD' THEN 'SS' WHEN 'TZA' THEN 'TZ' "
+    "WHEN 'RWA' THEN 'RW' WHEN 'BDI' THEN 'BI' WHEN 'SOM' THEN 'SO' "
+    "WHEN 'DJI' THEN 'DJ' WHEN 'ERI' THEN 'ER' "
+    "ELSE 'UN' END"
+)
+
+# Country code: use pre-populated cp.country_code (set via ST_Within),
+# with spatial fallback for any new points not yet tagged.
+POINT_COUNTRY_CODE_SQL = (
+    "COALESCE("
+    "NULLIF(UPPER(TRIM(cp.country_code)), ''), "
+    f"(SELECT {ADMIN0_COUNTRY_CODE_SQL} FROM gha.admin0 a0 "
+    "WHERE ST_Within(cp.geom, a0.geom) LIMIT 1), "
+    "'UN')"
+)
 WHCA_SCOPE_SQL_CONDITION = (
     "(COALESCE(cp.whca_selected, FALSE) IS TRUE OR "
-    f"UPPER(COALESCE(cp.country_code, '')) IN ({WHCA_COUNTRY_CODES_SQL}))"
+    f"{POINT_COUNTRY_CODE_SQL} IN ({WHCA_COUNTRY_CODES_SQL}))"
 )
 
 
@@ -97,7 +117,7 @@ async def get_multimodal_geojson(
                     cp.zone,
                     cp.gridcode,
                     cp.admin_name,
-                    cp.country_code,
+                    ({POINT_COUNTRY_CODE_SQL}) as country_code,
                     cp.whca_selected,
                     cp.hybas_id,
                     cp.geom,
@@ -224,7 +244,7 @@ async def get_country_summary_with_bounds(
             point_data AS (
                 SELECT
                     cp.point_id,
-                    cp.country_code,
+                    ({POINT_COUNTRY_CODE_SQL}) as country_code,
                     COALESCE(f.daily_avg, 0) as daily_avg
                 FROM gha.multimodal_control_points cp
                 CROSS JOIN query_params qp
@@ -263,28 +283,20 @@ async def get_country_summary_with_bounds(
             ),
             country_bounds AS (
                 SELECT
-                    cp.country_code,
-                    MIN(ST_XMin(ST_Envelope(a0.geom))) as west,
-                    MIN(ST_YMin(ST_Envelope(a0.geom))) as south,
-                    MAX(ST_XMax(ST_Envelope(a0.geom))) as east,
-                    MAX(ST_YMax(ST_Envelope(a0.geom))) as north
-                FROM gha.admin0 a0
-                JOIN (SELECT DISTINCT country_code FROM gha.multimodal_control_points) cp
-                    ON cp.country_code = CASE
-                        WHEN LOWER(a0.country) = 'ethiopia' THEN 'ET'
-                        WHEN LOWER(a0.country) = 'kenya' THEN 'KE'
-                        WHEN LOWER(a0.country) = 'uganda' THEN 'UG'
-                        WHEN LOWER(a0.country) = 'sudan' THEN 'SD'
-                        WHEN LOWER(a0.country) = 'south sudan' THEN 'SS'
-                        WHEN LOWER(a0.country) IN ('tanzania', 'zanzibar') THEN 'TZ'
-                        WHEN LOWER(a0.country) = 'rwanda' THEN 'RW'
-                        WHEN LOWER(a0.country) = 'burundi' THEN 'BI'
-                        WHEN LOWER(a0.country) = 'somalia' THEN 'SO'
-                        WHEN LOWER(a0.country) = 'djibouti' THEN 'DJ'
-                        WHEN LOWER(a0.country) = 'eritrea' THEN 'ER'
-                        ELSE 'UN'
-                    END
-                GROUP BY cp.country_code
+                    country_code,
+                    MIN(ST_XMin(ST_Envelope(geom))) as west,
+                    MIN(ST_YMin(ST_Envelope(geom))) as south,
+                    MAX(ST_XMax(ST_Envelope(geom))) as east,
+                    MAX(ST_YMax(ST_Envelope(geom))) as north
+                FROM (
+                    SELECT
+                        {ADMIN0_COUNTRY_CODE_SQL} as country_code,
+                        a0.geom
+                    FROM gha.admin0 a0
+                    WHERE a0.geom IS NOT NULL
+                ) country_polygons
+                WHERE country_code != 'UN'
+                GROUP BY country_code
             )
             SELECT
                 ca.country_code,
@@ -401,7 +413,7 @@ async def get_situation_summary(
             point_data AS (
                 SELECT
                     cp.point_id,
-                    cp.country_code,
+                    ({POINT_COUNTRY_CODE_SQL}) as country_code,
                     COALESCE(f.daily_avg, 0) as daily_avg
                 FROM gha.multimodal_control_points cp
                 CROSS JOIN query_params qp
@@ -470,7 +482,7 @@ async def get_situation_summary(
             point_data AS (
                 SELECT
                     cp.point_id,
-                    cp.country_code,
+                    ({POINT_COUNTRY_CODE_SQL}) as country_code,
                     COALESCE(f.daily_avg, 0) as daily_avg
                 FROM gha.multimodal_control_points cp
                 CROSS JOIN query_params qp

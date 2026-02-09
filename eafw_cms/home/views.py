@@ -6,7 +6,7 @@ from wagtailiconchooser.utils import get_svg_sprite_for_icons
 
 from geomanager.models import Category
 from geomanager.models.vector_file import get_legend_icons
-from home.models import Navbar, Footer, LanguageSettings, FloodBulletinPage
+from home.models import Navbar, Footer, LanguageSettings
 from home.context_processors import theme_context
 
 

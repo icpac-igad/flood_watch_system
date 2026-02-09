@@ -21,6 +21,7 @@ import {
 import { isEmpty } from "lodash";
 
 import { CMS_API } from "@/utils/constants";
+import { DEFAULT_THRESHOLDS } from "@/utils/multimodal-config";
 import Loader from "@/components/ui/loader";
 
 import "./styles.scss";
@@ -34,12 +35,8 @@ const FLOOD_MODELS = [
   { id: "mike_hydro_imerg", name: "MIKE IMERG", color: "#c62828", description: "MIKE Hydro with IMERG" },
 ];
 
-// Alert thresholds
-const THRESHOLDS = {
-  warning: 500,
-  alarm: 750,
-  emergency: 1500,
-};
+// Alert thresholds - use shared config (warning: 150, alarm: 300, emergency: 450 m³/s)
+const THRESHOLDS = DEFAULT_THRESHOLDS;
 
 // Custom tooltip
 const CustomTooltip = ({ active, payload, label }) => {

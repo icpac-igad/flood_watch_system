@@ -11,9 +11,9 @@ This script tests the complete workflow:
 6. Clean up temp files
 
 Usage:
-    python test_ensemble_ftp_sync.py                    # Use today's date
-    python test_ensemble_ftp_sync.py --date 2025-11-19  # Specific date
-    python test_ensemble_ftp_sync.py --dry-run          # Don't save to DB
+    python scripts/test_ensemble_ftp_sync.py                    # Use today's date
+    python scripts/test_ensemble_ftp_sync.py --date 2025-11-19  # Specific date
+    python scripts/test_ensemble_ftp_sync.py --dry-run          # Don't save to DB
 """
 
 import os

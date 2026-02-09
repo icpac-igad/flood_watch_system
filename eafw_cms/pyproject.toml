@@ -67,4 +67,4 @@ build-backend = "setuptools.build_meta"
 py-modules = []
 
 [tool.uv.sources]
-geomanager = { path = "../geomanager" }
+geomanager = { path = "./geomanager" }

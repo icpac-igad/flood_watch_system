@@ -94,6 +94,21 @@ def run_gcs_inundation_sync():
         logger.exception(f"Error in GCS inundation sync: {e}")
 
 
+def run_google_flood_sync_job():
+    """Run Google Flood Forecasting API sync."""
+    logger.info(f"[{datetime.now()}] Running Google Flood Forecast sync")
+
+    try:
+        from .google_flood_sync import run_google_flood_sync
+        success = run_google_flood_sync()
+        if success:
+            logger.info("Google Flood sync completed successfully")
+        else:
+            logger.warning("Google Flood sync skipped or failed")
+    except Exception as e:
+        logger.exception(f"Error in Google Flood sync: {e}")
+
+
 def run_db_backup():
     """Run daily database backup via pg_dump"""
     logger.info(f"[{datetime.now()}] Running database backup")
@@ -199,6 +214,15 @@ def start_scheduler():
         replace_existing=True
     )
 
+    # Schedule Google Flood Forecast API sync - every 6 hours
+    scheduler.add_job(
+        run_google_flood_sync_job,
+        CronTrigger(hour='0,6,12,18', minute=20),
+        id='google_flood_sync',
+        name='Google Flood Forecast Sync',
+        replace_existing=True
+    )
+
     # Schedule DB backup - daily at 5:30 PM (17:30) EAT
     # Runs after multimodal sync to capture fresh data
     scheduler.add_job(
@@ -215,12 +239,14 @@ def start_scheduler():
     run_floodproofs_sync()
     run_gcs_inundation_sync()
     run_wrf_rainfall_sync()
+    run_google_flood_sync_job()
 
     logger.info("Scheduler started. Jobs will run on schedule.")
     logger.info("Multimodal sync: Daily at 17:20 (5:20 PM)")
     logger.info("FloodProofs sync: 01:00, 07:00, 13:00, 19:00 UTC")
     logger.info("GCS Inundation sync: Weekly on Sunday at 02:00 UTC")
     logger.info("WRF Rainfall sync: Daily at 06:00 UTC")
+    logger.info("Google Flood sync: 00:20, 06:20, 12:20, 18:20 UTC")
     logger.info("Database backup: Daily at 17:30 (5:30 PM), keep 7 days")
 
     try:

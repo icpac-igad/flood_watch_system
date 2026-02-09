@@ -8,7 +8,7 @@ import queryString from "query-string";
 
 import FullscreenLayout from "@/wrappers/fullscreen";
 import Loader from "@/components/ui/loader";
-import { CMS_API } from "@/utils/constants";
+import { CMS_API, REPORTS_API } from "@/utils/constants";
 
 import GlobalOptions from "@/components/flood-analysis/params/global-options";
 import FloodWidgets from "@/components/flood-analysis/widgets";
@@ -89,8 +89,8 @@ const FloodAnalysisPage = () => {
         ...(params.admin_level && { admin_level: params.admin_level }),
       });
 
-      // Fetch from situation-summary API for alert data
-      const summaryResponse = await fetch(`${CMS_API}/situation-summary/?${queryParams}`);
+      // Fetch from eafw_api situation-summary endpoint
+      const summaryResponse = await fetch(`/api/situation-summary/?${queryParams}`);
 
       if (!summaryResponse.ok) {
         throw new Error(`API returned ${summaryResponse.status}: Failed to fetch forecast data`);

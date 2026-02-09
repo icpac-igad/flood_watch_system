@@ -92,7 +92,7 @@ FloodWatch runs 8 containerized services:
 Use the build script to build and push all custom images:
 
 ```bash
-./build_and_push.sh
+./scripts/build_and_push.sh
 ```
 
 This will:

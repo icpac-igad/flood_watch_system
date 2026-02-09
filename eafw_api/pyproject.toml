@@ -27,6 +27,8 @@ dependencies = [
     "httpx>=0.26.0",
     "orjson>=3.9.0",
     "geojson-pydantic>=1.0.0",
+    "weasyprint>=62.0",
+    "jinja2>=3.1.0",
 ]
 
 [project.optional-dependencies]

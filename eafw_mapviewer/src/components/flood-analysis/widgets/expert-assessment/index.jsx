@@ -163,17 +163,44 @@ const ExpertSection = ({
       }
     });
 
-    // Hover effects
+    // Hover tooltip popup
+    const hoverPopup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      className: "admin-hover-popup",
+      offset: 10,
+    });
+
+    // Hover effects - show admin name tooltip
     map.current.on("mousemove", "admin2-fill", (e) => {
       if (e.features.length > 0) {
+        const props = e.features[0].properties;
         map.current.getCanvas().style.cursor = "pointer";
-        map.current.setFilter("admin2-hover", ["==", "name_2", e.features[0].properties.name_2]);
+        map.current.setFilter("admin2-hover", ["==", "name_2", props.name_2]);
+
+        // Show tooltip with admin hierarchy
+        const key = `${props.country}-${props.name_1}-${props.name_2}`;
+        const existing = assessments[key];
+        const riskLabel = existing
+          ? `<br><span style="font-size:11px;color:${RISK_LEVELS.find(r => r.value === existing.risk_level)?.color || '#666'}">${existing.risk_level.toUpperCase()}</span>`
+          : "";
+
+        hoverPopup
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="font-size:12px;line-height:1.4">
+              <strong>${props.name_2}</strong><br>
+              <span style="color:#666">${props.name_1}, ${props.country}</span>${riskLabel}
+            </div>`
+          )
+          .addTo(map.current);
       }
     });
 
     map.current.on("mouseleave", "admin2-fill", () => {
       map.current.getCanvas().style.cursor = "";
       map.current.setFilter("admin2-hover", ["==", "name_2", ""]);
+      hoverPopup.remove();
     });
 
     return () => {

@@ -58,6 +58,29 @@ SYNC_INTERVAL = int(os.getenv('SYNC_INTERVAL', 21600))  # 6 hours
 SYNC_DAYS = int(os.getenv('SYNC_DAYS', 7))
 SYNC_SOURCE = os.getenv('SYNC_SOURCE', 'drive')  # ftp, drive, local
 
+# Google Flood Forecasting API sync configuration
+GOOGLE_FLOOD_CONFIG = {
+    'api_key': os.getenv('FLOODS_API_KEY'),
+    'region_codes': [
+        code.strip().upper()
+        for code in os.getenv(
+            'GOOGLE_FLOOD_REGION_CODES',
+            'ET,KE,UG,SD,SS,RW,SO,DJ,ER,TZ,BI'
+        ).split(',')
+        if code.strip()
+    ],
+    'page_size': int(os.getenv('GOOGLE_FLOOD_PAGE_SIZE', 20000)),
+    'status_chunk_size': int(os.getenv('GOOGLE_FLOOD_STATUS_CHUNK_SIZE', 500)),
+    'model_chunk_size': int(os.getenv('GOOGLE_FLOOD_MODEL_CHUNK_SIZE', 200)),
+    'forecast_chunk_size': int(os.getenv('GOOGLE_FLOOD_FORECAST_CHUNK_SIZE', 200)),
+    'issued_lookback_days': int(os.getenv('GOOGLE_FLOOD_ISSUED_LOOKBACK_DAYS', 7)),
+    'include_non_quality_verified': os.getenv('GOOGLE_FLOOD_INCLUDE_NON_QUALITY_VERIFIED', 'true').lower() == 'true',
+    'include_gauges_without_hydro_model': os.getenv('GOOGLE_FLOOD_INCLUDE_GAUGES_WITHOUT_HYDRO_MODEL', 'true').lower() == 'true',
+    'request_timeout_seconds': int(os.getenv('GOOGLE_FLOOD_REQUEST_TIMEOUT_SECONDS', 120)),
+    'max_retries': int(os.getenv('GOOGLE_FLOOD_MAX_RETRIES', 4)),
+    'base_backoff_seconds': float(os.getenv('GOOGLE_FLOOD_BASE_BACKOFF_SECONDS', 1.0)),
+}
+
 # Create directories
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)

@@ -4,7 +4,8 @@
 {% block body_class %}homepage{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260207-2">
+<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260209-6">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" />
 {% endblock %}
 
 {% block content %}
@@ -26,12 +27,16 @@
 
 {% block extra_js %}
 {# MapLibre GL JS from CDN #}
-<link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
 
 <script>
     // Global variables
     let miniMap = null;
+    let miniMapReady = false;
+    let miniMapResizePending = false;
+    let miniMapResizePendingForce = false;
+    let miniMapLastHeight = 0;
+    let miniMapResizeTimeout = null;
     let countriesData = [];
     let selectedCountry = null;
     let resizeTimer = null;
@@ -98,6 +103,13 @@
         bounds: [[20.0, -14.0], [53.5, 24.0]],
         pointFilter: '{{ page.point_filter_mode|default:"all" }}'
     };
+    const mapUiConfig = Object.freeze({
+        resizeDebounceMs: 120,
+        listResizeDelayMs: 40,
+        initialFitPadding: 64,
+        initialFitMaxZoom: 4.4,
+        scopeFitDurationMs: 700
+    });
 
     // Alert colors
     const alertColors = {
@@ -153,7 +165,7 @@
         loadSituationSummary();
         initHeroSlideshow();
         window.addEventListener('resize', handleHomepageResize);
-        window.addEventListener('load', handleHomepageResize);
+        window.addEventListener('load', handleHomepageLoad);
 
         // Refresh every 5 minutes
         setInterval(() => {
@@ -171,28 +183,70 @@
         document.body.classList.toggle('homepage-tight', compact);
     }
 
-    function scheduleMiniMapResize(delay = 0) {
+    function getMiniMapContainerHeight() {
+        const miniMapContainer = document.getElementById('mini-map');
+        if (!miniMapContainer) return 0;
+        const mapWrapper = miniMapContainer.closest('.map-wrapper');
+        const measuredHeight = mapWrapper?.clientHeight || miniMapContainer.clientHeight || 0;
+        return Number.isFinite(measuredHeight) ? measuredHeight : 0;
+    }
+
+    function scheduleMiniMapResize(delay = 0, force = false) {
         if (!miniMap) return;
 
         const runResize = () => {
             if (!miniMap) return;
+            if (!miniMapReady) {
+                miniMapResizePending = true;
+                miniMapResizePendingForce = miniMapResizePendingForce || force;
+                return;
+            }
+
+            const currentHeight = getMiniMapContainerHeight();
+            const shouldForce = force || miniMapResizePendingForce;
+            if (!shouldForce && currentHeight > 0 && currentHeight === miniMapLastHeight) {
+                miniMapResizePending = false;
+                miniMapResizePendingForce = false;
+                return;
+            }
+
             miniMap.resize();
+            miniMapResizePending = false;
+            miniMapResizePendingForce = false;
+            if (currentHeight > 0) {
+                miniMapLastHeight = currentHeight;
+            }
         };
 
+        const queueResize = () => {
+            if (mapResizeFrame) {
+                cancelAnimationFrame(mapResizeFrame);
+            }
+            mapResizeFrame = requestAnimationFrame(() => {
+                runResize();
+                mapResizeFrame = null;
+            });
+        };
+
+        if (miniMapResizeTimeout) {
+            clearTimeout(miniMapResizeTimeout);
+            miniMapResizeTimeout = null;
+        }
+
         if (delay > 0) {
-            window.setTimeout(() => {
-                requestAnimationFrame(runResize);
+            miniMapResizeTimeout = window.setTimeout(() => {
+                miniMapResizeTimeout = null;
+                queueResize();
             }, delay);
             return;
         }
 
-        if (mapResizeFrame) {
-            cancelAnimationFrame(mapResizeFrame);
-        }
-        mapResizeFrame = requestAnimationFrame(() => {
-            runResize();
-            mapResizeFrame = null;
-        });
+        queueResize();
+    }
+
+    function handleHomepageLoad() {
+        setHomepageLayoutHeights();
+        initRiskTickerLoop();
     }
 
     function getAutoFitCardLimit(totalCountries) {
@@ -220,9 +274,12 @@
         resizeTimer = setTimeout(() => {
             setHomepageLayoutHeights();
             initRiskTickerLoop();
-            scheduleMiniMapResize();
-            if (countriesData.length) renderCountryList(countriesData);
-        }, 120);
+            if (countriesData.length) {
+                renderCountryList(countriesData);
+            } else {
+                scheduleMiniMapResize();
+            }
+        }, mapUiConfig.resizeDebounceMs);
     }
 
     function initRiskTickerLoop() {
@@ -364,7 +421,7 @@
         if (miniMap && miniMap.isStyleLoaded()) {
             const scopeBounds = await loadAdmin0Boundaries();
             await loadMapPoints();
-            fitMapToScopeBounds(scopeBounds, nextScope);
+            fitMapToScopeBounds(scopeBounds, nextScope, false);
         }
 
         await loadCountryData();
@@ -740,7 +797,7 @@
         ];
     }
 
-    function fitMapToScopeBounds(bounds, scope) {
+    function fitMapToScopeBounds(bounds, scope, animate) {
         if (!miniMap) return;
 
         const isWhcaScope = scope === 'whca';
@@ -760,7 +817,7 @@
 
         miniMap.fitBounds(expandedBounds, {
             padding,
-            duration: 700,
+            duration: animate === true ? mapUiConfig.scopeFitDurationMs : 0,
             maxZoom
         });
     }
@@ -894,6 +951,13 @@
     function initMiniMap() {
         const mapContainer = document.getElementById('mini-map');
         if (!mapContainer) return;
+        miniMapReady = false;
+        miniMapResizePending = false;
+        miniMapResizePendingForce = false;
+        miniMapLastHeight = getMiniMapContainerHeight();
+
+        // Pre-compute bounds so first paint already matches the intended regional view.
+        const initialBounds = expandBounds(mapConfig.bounds, 0.24, 1.0) || mapConfig.bounds;
 
         try {
             miniMap = new maplibregl.Map({
@@ -929,25 +993,27 @@
 
             // Simple zoom controls only
             miniMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-            miniMap.scrollZoom.enable();
-            miniMap.boxZoom.enable();
-            miniMap.dragPan.enable();
-            miniMap.doubleClickZoom.enable();
-            miniMap.keyboard.enable();
-            miniMap.touchZoomRotate.enable();
 
             miniMap.on('load', async function() {
-                document.getElementById('map-loading').style.display = 'none';
+                miniMapReady = true;
 
-                scheduleMiniMapResize();
-                // Fit to East Africa bounds
-                miniMap.fitBounds(mapConfig.bounds, { padding: 64, duration: 0, maxZoom: 4.4 });
-                setMapBoundsConstraint(mapConfig.bounds, false);
-                scheduleMiniMapResize(140);
-
-                const scopeBounds = await loadAdmin0Boundaries();
+                // Load all data while spinner covers the map
+                await loadAdmin0Boundaries();
                 await loadMapPoints();
-                fitMapToScopeBounds(scopeBounds, 'all');
+
+                // Apply the final default camera once (before revealing the map)
+                // so users don't see an intermediate camera state.
+                miniMap.resize();
+                miniMap.fitBounds(initialBounds, {
+                    padding: mapUiConfig.initialFitPadding,
+                    duration: 0,
+                    maxZoom: mapUiConfig.initialFitMaxZoom
+                });
+                setMapBoundsConstraint(initialBounds, false);
+                scopeBoundsByScope.all = mapConfig.bounds;
+                miniMapLastHeight = getMiniMapContainerHeight();
+
+                document.getElementById('map-loading').style.display = 'none';
             });
 
         } catch (error) {
@@ -1094,12 +1160,29 @@
         const container = document.getElementById('country-list');
         if (!container) return;
 
-        // Filter out "Unknown" country
-        countries = countries.filter(c => c.code !== 'UN' && c.name !== 'Unknown');
+        const allCountries = Array.isArray(countries) ? countries : [];
+        const mappedCountries = allCountries.filter((c) => {
+            const code = (c?.code || '').toUpperCase();
+            const name = (c?.name || '').toLowerCase();
+            return code !== 'UN' && name !== 'unknown';
+        });
+
+        const unknownAtRisk = allCountries.reduce((acc, c) => {
+            const code = (c?.code || '').toUpperCase();
+            const name = (c?.name || '').toLowerCase();
+            if (code !== 'UN' && name !== 'unknown') return acc;
+            return acc + (Number(c?.emergency || 0) + Number(c?.alarm || 0) + Number(c?.warning || 0));
+        }, 0);
+
+        countries = mappedCountries;
 
         if (!countries || countries.length === 0) {
-            container.innerHTML = '<div class="country-loading"><span style="color:#4caf50;">No flood alerts</span></div>';
-            scheduleMiniMapResize(40);
+            if (unknownAtRisk > 0) {
+                container.innerHTML = '<div class="country-loading"><span style="color:#f57c00;">Alerts detected, country mapping pending</span></div>';
+            } else {
+                container.innerHTML = '<div class="country-loading"><span style="color:#4caf50;">No flood alerts</span></div>';
+            }
+            scheduleMiniMapResize(mapUiConfig.listResizeDelayMs);
             return;
         }
 
@@ -1139,7 +1222,7 @@
         container.innerHTML = html;
         updateScopeHeadings();
         initRiskTickerLoop();
-        scheduleMiniMapResize(40);
+        scheduleMiniMapResize(mapUiConfig.listResizeDelayMs);
     }
 
     // ========================================
@@ -1157,7 +1240,7 @@
             initRiskTickerLoop();
 
             const scopeBounds = scopeBoundsByScope[selectedMapScope] || mapConfig.bounds;
-            fitMapToScopeBounds(scopeBounds, selectedMapScope);
+            fitMapToScopeBounds(scopeBounds, selectedMapScope, false);
             return;
         }
 

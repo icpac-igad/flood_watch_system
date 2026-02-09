@@ -1,7 +1,7 @@
 import * as Comlink from "comlink";
 import * as xmldom from "@xmldom/xmldom";
 import WMSCapabilities from "wms-capabilities";
-import { get } from "axios";
+import axios from "axios";
 import { subMonths, subDays } from "date-fns";
 
 import { parse, toSeconds } from "iso8601-duration";
@@ -35,7 +35,7 @@ const wmsGetLayerTimeFromCapabilities = async (
 ) => {
   try {
     // Fetch the GetCapabilities document from the WMS server
-    const response = await get(wmsUrl, {
+    const response = await axios.get(wmsUrl, {
       params: { ...params },
     });
 

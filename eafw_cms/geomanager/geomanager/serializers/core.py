@@ -1,4 +1,6 @@
 import pytz
+from urllib.parse import urljoin
+from django.conf import settings
 from django.conf.global_settings import TIME_ZONE
 from geomanager.utils.constants import JS_TO_PYTHONIC_DATE_FORMAT_CHOICES
 from rest_framework import serializers
@@ -9,6 +11,60 @@ from geomanager.serializers.raster_tile import RasterTileLayerSerializer
 from geomanager.serializers.vector_file import VectorFileLayerSerializer
 from geomanager.serializers.vector_tile import VectorTileLayerSerializer
 from geomanager.serializers.wms import WmsLayerSerializer
+
+
+def _get_full_url(request, path: str) -> str:
+    """
+    Build absolute URLs for API endpoints.
+
+    Prefer CMS_BASE_URL when set (useful behind nginx/reverse proxies),
+    otherwise fall back to request.build_absolute_uri.
+    """
+    cms_base_url = getattr(settings, "CMS_BASE_URL", None)
+    if cms_base_url:
+        if path and not path.startswith("/"):
+            path = "/" + path
+        return urljoin(cms_base_url, path)
+    if request:
+        return request.build_absolute_uri(path)
+    return path
+
+
+def _build_modular_model_layer_config(request, endpoint_path: str) -> dict:
+    return {
+        "type": "geojson",
+        "source": {
+            "type": "geojson",
+            "data": _get_full_url(request, endpoint_path),
+        },
+        "render": {
+            "layers": [
+                {
+                    "type": "circle",
+                    "paint": {
+                        "circle-color": [
+                            "match",
+                            ["get", "alert_level"],
+                            "emergency",
+                            "#d32f2f",
+                            "alarm",
+                            "#ff9800",
+                            "warning",
+                            "#ffc107",
+                            "normal",
+                            "#4caf50",
+                            "#4caf50",
+                        ],
+                        "circle-radius": 5,
+                        "circle-opacity": 0.85,
+                        "circle-stroke-color": "#ffffff",
+                        "circle-stroke-width": 1.2,
+                    },
+                    "metadata": {"position": "top"},
+                }
+            ]
+        },
+    }
 
 
 class DatasetSerializer(serializers.ModelSerializer):
@@ -53,22 +109,128 @@ class DatasetSerializer(serializers.ModelSerializer):
     def get_layers(self, obj):
         request = self.context.get("request")
 
+        modular_overrides = {
+            # These are placeholder CMS datasets that should render from the
+            # modular API endpoints (DB-backed or derived from multimodal tables).
+            "GeoSFM Flood Forecast": {
+                "endpoint": "/api/geosfm/geojson/",
+                "interaction_output": [
+                    {"column": "admin_name", "property": "Location", "type": "string"},
+                    {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
+                    {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
+                    {"column": "alert_level", "property": "Alert Level", "type": "string"},
+                    {"column": "daily_avg", "property": "GeoSFM (m³/s)", "type": "number"},
+                    {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
+                    {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
+                    {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
+                    {"column": "data_date", "property": "Data Date", "type": "string"},
+                    {"column": "forecasts", "property": "Forecasts", "type": "string", "hidden": True},
+                    {"column": "data_endpoint", "property": "Data Endpoint", "type": "string", "hidden": True},
+                ],
+            },
+            "Mike Hydro": {
+                "endpoint": "/api/mike-hydro/geojson/",
+                "interaction_output": [
+                    {"column": "admin_name", "property": "Location", "type": "string"},
+                    {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
+                    {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
+                    {"column": "alert_level", "property": "Alert Level", "type": "string"},
+                    {"column": "daily_avg", "property": "Mike Hydro (m³/s)", "type": "number"},
+                    {"column": "mike_hydro_rfe", "property": "Mike Hydro RFE (m³/s)", "type": "number"},
+                    {"column": "mike_hydro_chirp", "property": "Mike Hydro CHIRP (m³/s)", "type": "number"},
+                    {"column": "mike_hydro_imerg", "property": "Mike Hydro IMERG (m³/s)", "type": "number"},
+                    {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
+                    {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
+                    {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
+                    {"column": "data_date", "property": "Data Date", "type": "string"},
+                    {"column": "forecasts", "property": "Forecasts", "type": "string", "hidden": True},
+                    {"column": "data_endpoint", "property": "Data Endpoint", "type": "string", "hidden": True},
+                ],
+            },
+            "Google Flood Forecast": {
+                "endpoint": "/api/google-flood/geojson/",
+                "interaction_output": [
+                    {"column": "admin_name", "property": "Location", "type": "string"},
+                    {"column": "gauge_id", "property": "Gauge ID", "type": "string"},
+                    {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
+                    {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
+                    {"column": "alert_level", "property": "Alert Level", "type": "string"},
+                    {"column": "google_flood_severity", "property": "Google Severity", "type": "string"},
+                    {"column": "daily_avg", "property": "Forecast Flow (m³/s)", "type": "number"},
+                    {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
+                    {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
+                    {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
+                    {"column": "data_date", "property": "Data Date", "type": "string"},
+                    {"column": "forecasts", "property": "Forecasts", "type": "string", "hidden": True},
+                    {"column": "data_endpoint", "property": "Data Endpoint", "type": "string", "hidden": True},
+                ],
+            },
+            # Floodproofs model-only view (from multimodal forecasts).
+            # Note: This intentionally overrides the placeholder dataset config so the Floodproofs
+            # subcategory can display the same control points as Multimodal, but showing only the
+            # Floodproof model series in the popup chart.
+            "Floodproofs Discharge Forecast": {
+                "endpoint": "/api/floodproof/geojson/",
+                "interaction_output": [
+                    {"column": "admin_name", "property": "Location", "type": "string"},
+                    {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
+                    {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
+                    {"column": "alert_level", "property": "Alert Level", "type": "string"},
+                    {"column": "daily_avg", "property": "Floodproofs (m³/s)", "type": "number"},
+                    {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
+                    {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
+                    {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
+                    {"column": "data_date", "property": "Data Date", "type": "string"},
+                    {"column": "forecasts", "property": "Forecasts", "type": "string", "hidden": True},
+                    {"column": "data_endpoint", "property": "Data Endpoint", "type": "string", "hidden": True},
+                ],
+            },
+        }
+
+        override = modular_overrides.get(obj.title)
+
         if obj.layer_type == "raster_file":
-            return RasterFileLayerSerializer(obj.raster_file_layers, many=True, context={"request": request}).data
+            layers_data = RasterFileLayerSerializer(
+                obj.raster_file_layers, many=True, context={"request": request}
+            ).data
 
-        if obj.layer_type == "vector_file":
-            return VectorFileLayerSerializer(obj.vector_file_layers, many=True, context={"request": request}).data
+        elif obj.layer_type == "vector_file":
+            layers_data = VectorFileLayerSerializer(
+                obj.vector_file_layers, many=True, context={"request": request}
+            ).data
 
-        if obj.layer_type == "wms":
-            return WmsLayerSerializer(obj.wms_layers, many=True, context={"request": request}).data
+        elif obj.layer_type == "wms":
+            layers_data = WmsLayerSerializer(obj.wms_layers, many=True, context={"request": request}).data
 
-        if obj.layer_type == "raster_tile":
-            return RasterTileLayerSerializer(obj.raster_tile_layers, many=True, context={"request": request}).data
+        elif obj.layer_type == "raster_tile":
+            layers_data = RasterTileLayerSerializer(
+                obj.raster_tile_layers, many=True, context={"request": request}
+            ).data
 
-        if obj.layer_type == "vector_tile":
-            return VectorTileLayerSerializer(obj.vector_tile_layers, many=True, context={"request": request}).data
+        elif obj.layer_type == "vector_tile":
+            layers_data = VectorTileLayerSerializer(
+                obj.vector_tile_layers, many=True, context={"request": request}
+            ).data
 
-        return None
+        else:
+            layers_data = None
+
+        if not override or not layers_data:
+            return layers_data
+
+        endpoint_path = override["endpoint"]
+        for layer in layers_data:
+            layer["layerConfig"] = _build_modular_model_layer_config(request, endpoint_path)
+            layer["interactionConfig"] = {
+                "type": "intersection",
+                "output": override["interaction_output"],
+            }
+            layer["params"] = {}
+            layer["paramsSelectorConfig"] = []
+            layer["multiTemporal"] = False
+            layer["layerType"] = "geojson"
+
+        return layers_data
 
     def get_layer(self, obj):
         return obj.get_default_layer()

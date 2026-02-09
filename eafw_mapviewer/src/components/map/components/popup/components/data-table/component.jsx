@@ -116,6 +116,9 @@ const DataTable = ({
       const pointIdField = data.find(
         (d) => d && d.column === "point_id"
       );
+      const dataEndpointField = data.find(
+        (d) => d && d.column === "data_endpoint"
+      );
       const hybasIdField = data.find(
         (d) => d && d.column === "hybas_id"
       );
@@ -158,6 +161,20 @@ const DataTable = ({
       const thresholdAlertField = data.find((d) => d && d.column === "threshold_alert");
       const thresholdAlarmField = data.find((d) => d && d.column === "threshold_alarm");
       const thresholdEmergencyField = data.find((d) => d && d.column === "threshold_emergency");
+
+      const toThreshold = (value) => {
+        const parsed = parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      const modelThresholds = {
+        warning: toThreshold(warningField?.value) ?? toThreshold(thresholdAlertField?.value),
+        alarm: toThreshold(alarmField?.value) ?? toThreshold(thresholdAlarmField?.value),
+        emergency: toThreshold(emergencyField?.value) ?? toThreshold(thresholdEmergencyField?.value),
+      };
+      const hasModelThresholds = Object.values(modelThresholds).some(
+        (value) => value !== null && value > 0
+      );
 
       const hasTimeSeries = !!(gfsField || iconField);
 
@@ -205,10 +222,12 @@ const DataTable = ({
           forecastsJson: forecastsJsonField?.value,
           adminName: adminNameField?.value,
           pointId: pointIdField?.value,
+          dataEndpoint: dataEndpointField?.value,
           hybasId: hybasIdField?.value || rawHybasId,  // Fallback to raw selected data
           lon: lonField?.value,
           lat: latField?.value,
           alertLevel: alertLevelField?.value,
+          thresholds: hasModelThresholds ? modelThresholds : null,
           // Note: popupLon/popupLat will be used as fallback in component
         },
       };
@@ -235,12 +254,13 @@ const DataTable = ({
           forecastsJson={multiModelData.forecastsJson}
           adminName={multiModelData.adminName}
           pointId={multiModelData.pointId}
+          dataEndpoint={multiModelData.dataEndpoint}
           hybasId={multiModelData.hybasId}
           lon={multiModelData.lon || popupLon}
           lat={multiModelData.lat || popupLat}
           alertLevel={multiModelData.alertLevel}
           selectedDate={selectedDate}
-          thresholds={clusterConfig?.thresholds}
+          thresholds={multiModelData.thresholds || clusterConfig?.thresholds}
           onDragStart={onPopupDragStart}
         />
       )}

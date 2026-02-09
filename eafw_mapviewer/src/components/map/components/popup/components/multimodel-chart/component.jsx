@@ -488,8 +488,10 @@ const MultiModelChart = ({
   forecastsJson,
   adminName,
   pointId,
+  dataEndpoint,
   hybasId,
   selectedDate,
+  thresholds,
   onDragStart,
 }) => {
   const chartRef = useRef(null);
@@ -508,6 +510,19 @@ const MultiModelChart = ({
   const [zoomRange, setZoomRange] = useState(null);
   const [refAreaLeft, setRefAreaLeft] = useState(null);
   const [refAreaRight, setRefAreaRight] = useState(null);
+
+  const thresholdLines = useMemo(() => {
+    const toValue = (value) => {
+      const parsed = parseFloat(value);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    };
+
+    return {
+      warning: toValue(thresholds?.warning ?? thresholds?.threshold_alert),
+      alarm: toValue(thresholds?.alarm ?? thresholds?.threshold_alarm),
+      emergency: toValue(thresholds?.emergency ?? thresholds?.threshold_emergency),
+    };
+  }, [thresholds]);
 
   const handleDragStart = useCallback((e) => {
     if (typeof onDragStart === "function") {
@@ -545,13 +560,17 @@ const MultiModelChart = ({
       setError(null);
 
       try {
-        let url = `${API_BASE_URL}/api/multimodal/geojson/`;
+        let url = dataEndpoint || `${API_BASE_URL}/api/multimodal/geojson/`;
+        if (!/^https?:\/\//i.test(url) && !url.startsWith("/")) {
+          url = `/${url}`;
+        }
         if (selectedDate) {
-          url += `?date=${selectedDate}`;
+          const separator = url.includes("?") ? "&" : "?";
+          url += `${separator}date=${encodeURIComponent(selectedDate)}`;
         }
 
         console.log(
-          `[MultiModelChart] Fetching for date: ${selectedDate || "latest"}, pointId: ${pointId}, adminName: ${adminName}`
+          `[MultiModelChart] Fetching ${url} for date: ${selectedDate || "latest"}, pointId: ${pointId}, adminName: ${adminName}`
         );
         const response = await fetch(url);
         if (!response.ok) {
@@ -582,13 +601,14 @@ const MultiModelChart = ({
         }
       } catch (err) {
         console.error("Error fetching forecast data:", err);
+        setError(err.message || "Failed to fetch forecast data");
       } finally {
         setLoading(false);
       }
     };
 
     fetchForecastData();
-  }, [pointId, adminName, selectedDate]);
+  }, [pointId, adminName, selectedDate, dataEndpoint]);
 
   // Process data using memoization
   const {
@@ -599,6 +619,7 @@ const MultiModelChart = ({
     todayDailyAvg,
     actualDate,
     maxDataValue,
+    hasDailyAvgSeries,
   } = useMemo(() => {
     const forecastData = fetchedData || forecastsJson;
     const forecasts = parseForecastData(forecastData);
@@ -612,11 +633,16 @@ const MultiModelChart = ({
         todayDailyAvg: 0,
         actualDate: null,
         maxDataValue: 0,
+        hasDailyAvgSeries: false,
       };
     }
 
     const models = detectAvailableModels(forecasts);
     const data = transformForChart(forecasts);
+    const hasDailyAvg = data.some((entry) => {
+      const value = entry.daily_avg;
+      return value !== undefined && value !== null && Number.isFinite(value);
+    });
 
     // Calculate max data value for Y-axis scaling
     let maxVal = 0;
@@ -643,6 +669,7 @@ const MultiModelChart = ({
       todayDailyAvg: dailyAvg,
       actualDate: usedDate,
       maxDataValue: maxVal,
+      hasDailyAvgSeries: hasDailyAvg,
     };
   }, [forecastsJson, fetchedData, selectedDate]);
 
@@ -758,11 +785,13 @@ const MultiModelChart = ({
         </div>
 
         {/* Model Selection */}
-        <ModelSelector
-          availableModels={availableModels}
-          selectedModels={selectedModels}
-          onToggle={toggleModel}
-        />
+        {availableModels.length > 0 && (
+          <ModelSelector
+            availableModels={availableModels}
+            selectedModels={selectedModels}
+            onToggle={toggleModel}
+          />
+        )}
 
         {/* Chart */}
         <div className="chart-container">
@@ -852,6 +881,52 @@ const MultiModelChart = ({
             />
           )}
 
+          {/* Alert thresholds */}
+          {thresholdLines.warning !== null && (
+            <ReferenceLine
+              y={thresholdLines.warning}
+              ifOverflow="extendDomain"
+              stroke="#ffc107"
+              strokeDasharray="4 4"
+              strokeWidth={1}
+              label={{ value: "Warning", position: "right", fontSize: 9, fill: "#b38400" }}
+            />
+          )}
+          {thresholdLines.alarm !== null && (
+            <ReferenceLine
+              y={thresholdLines.alarm}
+              ifOverflow="extendDomain"
+              stroke="#ff9800"
+              strokeDasharray="4 4"
+              strokeWidth={1}
+              label={{ value: "Alarm", position: "right", fontSize: 9, fill: "#c66a00" }}
+            />
+          )}
+          {thresholdLines.emergency !== null && (
+            <ReferenceLine
+              y={thresholdLines.emergency}
+              ifOverflow="extendDomain"
+              stroke="#d32f2f"
+              strokeDasharray="4 4"
+              strokeWidth={1}
+              label={{ value: "Emergency", position: "right", fontSize: 9, fill: "#9b1c1c" }}
+            />
+          )}
+
+          {/* Fallback single-series line for model feeds that expose daily_avg only (e.g., Google) */}
+          {availableModels.length === 0 && hasDailyAvgSeries && (
+            <Line
+              type="monotone"
+              dataKey="daily_avg"
+              name="Forecast"
+              stroke="#1f77b4"
+              strokeWidth={2.5}
+              dot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+          )}
+
           {/* Individual model lines - only show selected models */}
           {selectedModels.includes("GeoSFM") && availableModels.includes("GeoSFM") && (
             <Line
@@ -925,8 +1000,10 @@ MultiModelChart.propTypes = {
   forecastsJson: PropTypes.oneOfType([PropTypes.string, PropTypes.array]),
   adminName: PropTypes.string,
   pointId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  dataEndpoint: PropTypes.string,
   hybasId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   selectedDate: PropTypes.string,
+  thresholds: PropTypes.object,
   onDragStart: PropTypes.func,
 };
 

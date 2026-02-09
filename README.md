@@ -1,116 +1,160 @@
-# 🌊 FloodWatch - Early Warning System
+# GHoA Flood Watcher (EAFW)
 
-> Real-time flood forecasting and monitoring for Eastern Africa
+Operational codebase for the Greater Horn of Africa FloodWatch platform.
 
-FloodWatch helps communities in Eastern Africa prepare for and respond to flood events by providing accurate, timely forecasts and actionable early warning information.
+This repository runs a containerized geospatial early warning stack made of:
+- CMS (`eafw_cms`) for content and geodata management (GeoManager/Wagtail)
+- API (`eafw_api`) for public and internal flood data endpoints
+- Jobs (`eafw_jobs`) for scheduled ingestion/sync from FTP, SFTP, Drive, and WRF sources
+- Map services (`eafw_mapserver`, `eafw_mapcache`, `pg_tileserv`) and UI (`eafw_mapviewer`)
 
-## 🚀 Get Started in 5 Minutes
+## Current stack and compose files
 
-### What You Need
-- Docker installed on your computer
-- At least 8GB RAM
-- 20GB free disk space
+Use these compose files:
+- `docker-compose.yml`: local development and integration testing
+- `docker-compose.staging.yml`: staging deployment
 
-### Install and Run
+## Quick start (local)
+
+### 1. Prerequisites
+
+- Docker Engine + Docker Compose plugin (`docker compose`)
+- At least 8 GB RAM (16 GB recommended)
+- 20+ GB free disk
+
+### 2. Configure environment
 
 ```bash
-# 1. Get the code
-git clone https://github.com/icpac-igad/flood_watch_system.git
-cd flood_watch_system
-
-# 2. Set up your environment
 cp .env.example .env
-
-# 3. Start the system
-docker-compose up -d
-
-# 4. Set up the database
-docker-compose exec backend python manage.py migrate
-docker-compose exec backend python manage.py init_db
 ```
 
-### 🎯 Access the System
+Edit `.env` and set at minimum:
+- `CMS_DB_PASSWORD`
+- `SECRET_KEY`
+- `FLOODPROOFS_SFTP_*` credentials
+- `ENSEMBLE_FTP_*` credentials
+- `WRF_FTP_*` credentials
 
-Open these in your browser:
+If using Drive sync:
+- put Google service account credentials at `eafw_jobs/credentials/google-credentials.json`
+- set `DRIVE_FOLDER_ID`
 
-- **📊 FloodWatch Dashboard**: http://localhost:8094
-- **⚙️ Admin Panel**: http://localhost:8090/admin (admin / admin123)
-- **📡 API Documentation**: http://localhost:9050/docs
+### 3. Start services
 
-> ⚠️ **Important**: Change the default password before deploying to production!
-
-## 💡 What Does It Do?
-
-FloodWatch combines multiple data sources to create accurate flood forecasts:
-
-- **Deterministic Forecasts** - Day-to-day flood predictions
-- **Ensemble Forecasts** - Probability-based long-term forecasts
-- **Satellite Observations** - Real-time ground conditions
-- **Interactive Maps** - Visualize risks and impacts
-
-## 📚 Learn More
-
-Need more details? Check out the documentation:
-
-- [📖 Full API Reference](docs/API_DOCUMENTATION.md)
-- [🚢 Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
-- [🏗️ System Architecture](docs/SIMPLIFIED_FRONTEND_ARCHITECTURE.md)
-
-## 🔧 Common Tasks
-
-### Load Forecast Data
 ```bash
-docker-compose exec backend python manage.py sync_floodproofs_to_db
+docker compose up --build -d
 ```
 
-### Load Ensemble Data
+### 4. Verify
+
 ```bash
-docker-compose exec backend python manage.py sync_ensemble_from_ftp
+docker compose ps
+curl -f http://127.0.0.1:9068/health
+curl -f http://127.0.0.1:9069/health
 ```
 
-### View Logs
+## Service endpoints (local defaults)
+
+| Service | URL | Notes |
+|---|---|---|
+| Nginx entrypoint | `http://127.0.0.1:9068` | Main public gateway |
+| CMS admin | `http://127.0.0.1:9068/cms-admin` | Path controlled by `ADMIN_URL_PATH` |
+| FastAPI docs (via nginx) | `http://127.0.0.1:9068/api/docs` | Preferred public docs route |
+| FastAPI direct | `http://127.0.0.1:9069/api/docs` | Container direct exposure |
+| MapServer | `http://127.0.0.1:9065/mapserver/` | Direct mapserver endpoint |
+| MapCache | `http://127.0.0.1:9066/mapcache/` | Direct mapcache endpoint |
+| pg_tileserv | `http://127.0.0.1:9067/pg/tileserv/` | Direct tiles endpoint |
+
+## Common operations
+
+### Logs
+
 ```bash
-docker-compose logs -f
+docker compose logs -f
+docker compose logs -f eafw_cms
+docker compose logs -f eafw_api
+docker compose logs -f eafw_jobs
 ```
 
-### Restart a Service
+### Stop / restart
+
 ```bash
-docker-compose restart backend
+docker compose down
+docker compose restart eafw_cms eafw_api eafw_jobs
 ```
 
-## 🆘 Need Help?
+### Django admin and migrations
 
-**Something not working?**
+```bash
+docker compose exec eafw_cms python manage.py migrate
+docker compose exec eafw_cms python manage.py createsuperuser
+```
 
-1. Check if all containers are running: `docker-compose ps`
-2. View the logs: `docker-compose logs -f [service_name]`
-3. Make sure your `.env` file is configured correctly
-4. See the [troubleshooting guide](docs/DEPLOYMENT_GUIDE.md#troubleshooting)
+### Run jobs manually (inside jobs container)
 
-**Still stuck?** Open an issue on GitHub!
+```bash
+docker compose exec eafw_jobs python -m pyfloodwatch.floodproofs_sync
+docker compose exec eafw_jobs python -m pyfloodwatch.ensemble_sync
+docker compose exec eafw_jobs python -m pyfloodwatch.wrf_rainfall_job
+```
 
-## 🏗️ Technical Stack
+### Database backup / restore helpers
 
-The system runs 8 services in Docker containers:
+```bash
+# Backup (writes into ./backups and container /backups volume)
+./scripts/db-dump.sh local
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| Frontend | React + Leaflet | Interactive map interface |
-| Backend | Django + PostGIS | API and data management |
-| Database | PostgreSQL + PostGIS | Spatial data storage |
-| Cache | Redis | Fast data access |
-| Workers | Celery | Background tasks |
-| API | FastAPI | High-speed forecast data |
-| Tiles | TiPg | Vector map tiles |
+# Restore
+./scripts/db-load.sh backups/<dump-file>.dump
+```
 
-## 🤝 Contributing
+## Repository layout
 
-We welcome contributions! This system is developed by ICPAC to serve communities across Eastern Africa.
+- `eafw_cms/`: CMS application and GeoManager package
+- `eafw_api/`: FastAPI service
+- `eafw_jobs/`: scheduled ingestion/sync jobs
+- `eafw_docker/`: Dockerfiles, init SQL, nginx config
+- `eafw_mapserver/`: MapServer resources
+- `eafw_mapviewer/`: frontend map viewer
+- `scripts/`: operational scripts (backup/restore, fixes, utilities)
+- `docs/`: architecture and reference documentation
 
-## 📄 License
+Note on naming:
+- `eafw_jobs/` = jobs source code
+- `eafw-jobs/` = runtime data/log directory kept for uniform naming
 
-[Add your license here]
+## Troubleshooting
 
----
+### CMS login loop on staging
 
-**Built with ❤️ by ICPAC** - IGAD Climate Prediction and Applications Centre
+Run:
+
+```bash
+bash scripts/fix-staging-cms-login.sh
+```
+
+### Jobs failing due credentials
+
+- confirm `.env` has valid `FLOODPROOFS_SFTP_*`, `ENSEMBLE_FTP_*`, and `WRF_FTP_*`
+- if `SYNC_SOURCE=drive`, verify `DRIVE_FOLDER_ID` and credential file path
+
+### API reachable directly but not through nginx
+
+Check nginx routing and API container health:
+
+```bash
+docker compose logs -f eafw_nginx eafw_api
+```
+
+## Documentation
+
+- `docs/API_DOCUMENTATION.md`
+- `docs/FLOODWATCH_API_DOCUMENTATION.md`
+- `docs/SIMPLIFIED_FRONTEND_ARCHITECTURE.md`
+- `docs/STAGING_DEPLOYMENT.md` (legacy notes may exist; validate against current compose files)
+
+## Security notes
+
+- Never commit `.env` with real credentials.
+- Rotate any secret if it was previously exposed.
+- Use strong unique values for `SECRET_KEY` and external credential fields.
