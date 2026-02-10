@@ -287,12 +287,19 @@ jobs:
             # Login to GitHub Container Registry
             echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
 
-            # Safe repo update (never rm -rf)
+            # Safe repo update
             if [ -d "eafw/.git" ]; then
               echo "Updating existing repo..."
               cd eafw
               git fetch origin
               git reset --hard origin/eafw
+            elif [ -d "eafw" ]; then
+              echo "Directory eafw/ exists but is not a git repo. Initializing..."
+              cd eafw
+              git init
+              git remote add origin https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git
+              git fetch origin
+              git checkout -f -B eafw origin/eafw
             else
               echo "Cloning repo..."
               git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
