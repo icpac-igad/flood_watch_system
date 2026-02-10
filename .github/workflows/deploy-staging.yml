@@ -294,12 +294,10 @@ jobs:
               git fetch origin
               git reset --hard origin/eafw
             elif [ -d "eafw" ]; then
-              echo "Directory eafw/ exists but is not a git repo. Initializing..."
+              echo "Directory eafw/ exists but is not a git repo. Renaming and cloning fresh..."
+              mv eafw eafw_old_$(date +%Y%m%d%H%M%S)
+              git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
-              git init
-              git remote add origin https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git
-              git fetch origin
-              git checkout -f -B eafw origin/eafw
             else
               echo "Cloning repo..."
               git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
