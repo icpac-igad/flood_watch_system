@@ -14,39 +14,35 @@
                 {% if page.show_category_menu %}
                 <div class="c-menu-control {% if page.category_menu_style == 'card_list' %}card-style{% endif %}">
                     <div class="c-map-menu" style="--menu-bg: {{ page.category_menu_bg_color|default:'rgba(68, 65, 65, 0.84)' }}; --menu-active: {{ page.category_menu_active_color|default:'#f7a600' }};">
-                        {% if page.map_categories.all %}
-                        {% for category in page.map_categories.all %}
-                        {% if category.is_active %}
-                        <div class="menu-category{% if category.is_default %} active{% endif %}" data-category-id="{{ category.geomanager_category_id|default:'' }}">
+                        {% for category in mini_map_categories %}
+                        <div
+                            class="menu-category{% if category.is_default %} active{% endif %}"
+                            data-category-id="{{ category.category_id|default:'' }}"
+                            data-layer-name="{{ category.title }}"
+                            data-layer-key="{{ category.key }}"
+                        >
                             <div class="category-icon">
-                                {% if category.icon %}
-                                {% image category.icon width-40 as cat_icon %}
-                                <img src="{{ cat_icon.url }}" alt="{{ category.name }}">
-                                {% endif %}
-                            </div>
-                            <div class="layer-title">
-                                <div>{{ category.name }}</div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        {% endfor %}
-                        {% elif dataset_categories %}
-                        {% for category in dataset_categories %}
-                        {% if category.title == "Multimodal" or category.title == "Impact" or category.title == "Weather Information" or category.title == "Weather" %}
-                        <div class="menu-category{% if category.title == 'Multimodal' %} active{% endif %}" data-category-id="{{ category.id }}">
-                            <div class="category-icon" title="{{ category.title }}">
+                                {% if category.icon_name %}
+                                <svg class="category-svg-icon" aria-hidden="true">
+                                    <use href="#icon-{{ category.icon_name }}"></use>
+                                </svg>
+                                {% elif category.icon_image %}
+                                {% image category.icon_image width-40 as cat_icon %}
+                                <img src="{{ cat_icon.url }}" alt="{{ category.title }}">
+                                {% else %}
                                 <span class="category-initial">{{ category.title|slice:":1" }}</span>
+                                {% endif %}
                             </div>
                             <div class="layer-title">
                                 <div>{{ category.title }}</div>
                             </div>
                         </div>
-                        {% endif %}
                         {% endfor %}
-                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
+
+                <div class="map-status-toast" id="map-status-toast" role="status" aria-live="polite" hidden></div>
 
                 {% if page.show_map_logo and page.map_logo %}
                 <div class="c-map-logo">
@@ -63,7 +59,7 @@
                 </div>
 
                 <div class="c-legend legend-{{ page.legend_position|default:'bottom-left' }}">
-                    <div class="c-legend-title">{{ page.legend_title|default:"Flood Alert Level" }}</div>
+                    <div class="c-legend-title">{{ page.legend_title|default:"Current Flood Alerts" }}</div>
                     <ul class="c-legend-basic">
                         {% for item in page.map_legend_items.all %}
                         <li class="c-legend-item">

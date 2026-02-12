@@ -24,6 +24,7 @@ import Attributions from "./components/attributions";
 import LayerManagerWrapper from "./components/layer-manager";
 import MultimodalClusterLayer from "./components/multimodal-cluster";
 import AlertPulse from "./components/emergency-pulse";
+import EmergencyClusterPulse from "./components/emergency-cluster-pulse";
 import BasinLayer from "./components/basin-layer";
 // import { pulsingDot } from "./mapImages";
 
@@ -83,8 +84,11 @@ class RenderMap extends PureComponent {
             {/* MULTIMODAL CLUSTERED LAYER - disabled: pg_tileserv handles clustering via vector tiles */}
             {/* <MultimodalClusterLayer map={map} mapSide={mapSide} /> */}
 
-            {/* Alert Pulse Animation - Pulsing effect for warning/alarm/emergency points */}
-            <AlertPulse map={map} />
+            {/* Alert Pulse (icon fade in/out) — disabled, keeping only the red expanding ring */}
+            {/* <AlertPulse map={map} /> */}
+
+            {/* Emergency Cluster Pulse - halo animation for clustered emergency points */}
+            <EmergencyClusterPulse map={map} />
 
             {/* Basin Layer - Auto-loads basin boundary when clicking forecast points */}
             <BasinLayer map={map} />
@@ -487,6 +491,106 @@ class MapComponent extends Component {
     if (!drawing && e.features && e.features.length) {
       const { features, lngLat } = e;
       const { setMapInteractions } = this.props;
+
+      // Generic cluster handling for GeoJSON clustered sources.
+      // Applies to modular model layers (GeoSFM/Floodproofs/Mike Hydro/Google/Hype).
+      const geoJsonClusterFeature = features.find((feature) => {
+        const sourceId = feature?.layer?.source;
+        const source = sourceId && this.map ? this.map.getSource(sourceId) : null;
+        const hasClusterFlag =
+          feature?.properties?.cluster === true ||
+          feature?.properties?.cluster === 1 ||
+          feature?.properties?.cluster === "1";
+        const hasClusterId = feature?.properties?.cluster_id !== undefined;
+        return (
+          hasClusterFlag &&
+          hasClusterId &&
+          source &&
+          typeof source.getClusterExpansionZoom === "function"
+        );
+      });
+
+      if (geoJsonClusterFeature && this.map) {
+        clearMapInteractions();
+
+        const sourceId = geoJsonClusterFeature?.layer?.source;
+        const source = sourceId ? this.map.getSource(sourceId) : null;
+        const clusterId = geoJsonClusterFeature?.properties?.cluster_id;
+        const coordinates = geoJsonClusterFeature?.geometry?.coordinates;
+        const hasLngLat = Array.isArray(coordinates) && coordinates.length >= 2;
+        const [lng, lat] = hasLngLat ? coordinates : [lngLat[0], lngLat[1]];
+
+        source.getClusterExpansionZoom(clusterId, (err, newZoom) => {
+          if (err) return;
+          const currentZoom = this.map.getZoom();
+          const zoom = Number.isFinite(newZoom) ? newZoom : currentZoom + 1;
+          const difference = Math.abs(currentZoom - zoom);
+          this.map.easeTo({
+            center: { lng, lat },
+            zoom,
+            duration: 500 + difference * 120,
+            essential: true,
+          });
+        });
+        return;
+      }
+
+      // FloodWatch Custom: Multi-model clusters are server-side (pg_tileserv) and shouldn't open the popup.
+      // Clicking a cluster should zoom in until it breaks into points.
+      const multimodalClusterFeature = features.find((feature) => {
+        const sourceLayer =
+          feature?.sourceLayer || feature?.layer?.["source-layer"];
+        const hasPointId =
+          feature?.properties?.point_id !== undefined &&
+          feature?.properties?.point_id !== null &&
+          feature?.properties?.point_id !== "";
+
+        return (
+          sourceLayer &&
+          String(sourceLayer).includes("multimodal_points") &&
+          // In clustered mode, tiles don't include point_id (chart should be point-only).
+          !hasPointId
+        );
+      });
+
+      if (multimodalClusterFeature && this.map) {
+        // Close any open popup and zoom in to "open" the cluster.
+        clearMapInteractions();
+
+        const coordinates = multimodalClusterFeature?.geometry?.coordinates;
+        const hasLngLat =
+          Array.isArray(coordinates) && coordinates.length >= 2;
+        const [lng, lat] = hasLngLat ? coordinates : [lngLat[0], lngLat[1]];
+
+        // Infer the unclustered zoom threshold from the tile URL (cluster_zoom=...).
+        const sourceId = multimodalClusterFeature?.layer?.source;
+        const styleSource = sourceId
+          ? this.map.getStyle()?.sources?.[sourceId]
+          : null;
+        const tileUrl = styleSource?.tiles?.[0] || "";
+        let clusterZoom = 7;
+        try {
+          const query = tileUrl.split("?")[1] || "";
+          const params = new URLSearchParams(query);
+          const parsed = Number(params.get("cluster_zoom"));
+          if (Number.isFinite(parsed) && parsed > 0) clusterZoom = parsed;
+        } catch (err) {
+          // ignore parsing errors
+        }
+
+        const currentZoom = this.map.getZoom();
+        const maxZoom = typeof this.map.getMaxZoom === "function" ? this.map.getMaxZoom() : 19;
+        // Make sure we cross into the "unclustered" tile zoom level.
+        const targetZoom = Math.min(maxZoom, Math.max(currentZoom + 1, clusterZoom + 0.5));
+
+        this.map.easeTo({
+          center: { lng, lat },
+          zoom: targetZoom,
+          duration: 650,
+          essential: true,
+        });
+        return;
+      }
 
       setMapInteractions({
         features: features.map((f) => ({

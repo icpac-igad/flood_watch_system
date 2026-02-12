@@ -41,6 +41,23 @@ const selectBoundaryBounds = (state) => state.config?.bounds || [];
 const getVectorLayerIcons = (state) => state.config?.vectorLayerIcons || [];
 const getSvgById = (state) => state.config?.svgById || {};
 
+const normalizeLayerVisibility = (value) => {
+  if (value === false || value === "false" || value === 0 || value === "0") {
+    return false;
+  }
+  if (value === true || value === "true" || value === 1 || value === "1") {
+    return true;
+  }
+  return true;
+};
+
+const normalizeLayerOpacity = (value) => {
+  if (value === undefined || value === null || value === "") return 1;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(0, Math.min(1, parsed));
+};
+
 // CONSTS
 export const getMapSettings = (state) => state.map?.settings || {};
 
@@ -285,6 +302,21 @@ export const getDatasetsWithConfig = createSelector(
         settings = {},
       } = layerConfig || {};
 
+      const hasVisibilityOverride = Object.prototype.hasOwnProperty.call(
+        layerConfig || {},
+        "visibility"
+      );
+      const hasOpacityOverride = Object.prototype.hasOwnProperty.call(
+        layerConfig || {},
+        "opacity"
+      );
+      const normalizedVisibility = hasVisibilityOverride
+        ? normalizeLayerVisibility(visibility)
+        : true;
+      const normalizedOpacity = hasOpacityOverride
+        ? normalizeLayerOpacity(opacity)
+        : 1;
+
       return {
         ...d,
         ...layerConfig,
@@ -303,8 +335,8 @@ export const getDatasetsWithConfig = createSelector(
 
           return {
             ...l,
-            visibility,
-            opacity,
+            visibility: normalizedVisibility,
+            opacity: normalizedOpacity,
             bbox,
             summary,
             mapSide,
@@ -361,6 +393,19 @@ export const getLayerGroups = createSelector(
       "id"
     );
 
+    // Sort: data layers (with position:"top" metadata) first,
+    // boundary/reference layers last — regardless of toggle order
+    const isDataLayer = (group) => {
+      const renderLayers = group?.layers?.[0]?.layerConfig?.render?.layers;
+      return renderLayers?.some((rl) => rl?.metadata?.position === "top");
+    };
+
+    layerGroups.sort((a, b) => {
+      const aIsData = isDataLayer(a) ? 0 : 1;
+      const bIsData = isDataLayer(b) ? 0 : 1;
+      return aIsData - bIsData;
+    });
+
     return layerGroups;
   }
 );
@@ -377,7 +422,7 @@ export const getLayersFlattened = createSelector(
         .map((l, i) => {
           let zIndex = 1000 - i;
           if (l.isRecentImagery) zIndex = 500;
-          if (l.isBoundary) zIndex = 1050 - i;
+          if (l.isBoundary) zIndex = 900 - i;
           return {
             ...l,
             zIndex,

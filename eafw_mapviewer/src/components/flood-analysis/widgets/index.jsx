@@ -14,7 +14,7 @@ import ExpertAssessmentWidget from "./expert-assessment";
 
 import "./widgets.scss";
 
-const FloodWidgets = ({ params, settings, forecastData, loading }) => {
+const FloodWidgets = ({ params, settings, forecastData, loading, updateParams }) => {
   const [selectedCountry, setSelectedCountry] = useState(null);
 
   // Loading state
@@ -34,7 +34,7 @@ const FloodWidgets = ({ params, settings, forecastData, loading }) => {
       <div className="c-flood-widgets">
         <div className="empty-state">
           <p>
-            Select parameters above and click "Generate Analysis" to view flood
+            Select parameters above and click &quot;Generate Analysis&quot; to view flood
             forecast data.
           </p>
         </div>
@@ -57,7 +57,17 @@ const FloodWidgets = ({ params, settings, forecastData, loading }) => {
           params={params}
           forecastDate={params?.forecast_date}
           alertFilter={params?.alert_filter}
-          onCountrySelect={(country) => setSelectedCountry(country)}
+          onCountrySelect={(country) => {
+            setSelectedCountry(country);
+            if (updateParams && country?.code) {
+              updateParams({
+                admin0_code: country.code,
+                placename: country.name || country.code,
+              });
+            }
+          }}
+          updateParams={updateParams}
+          scope={params?.scope}
         />
 
         {/* Timeseries Chart with Model Comparison */}

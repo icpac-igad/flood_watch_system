@@ -140,8 +140,8 @@ class Command(BaseCommand):
                                 "warning",
                                 "#ffc107",
                                 "normal",
-                                "#4caf50",
-                                "#4caf50"
+                                "#b0b0b0",
+                                "#b0b0b0"
                             ],
                             "circle-stroke-width": 1.5,
                             "circle-stroke-color": "#ffffff",

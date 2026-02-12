@@ -12,6 +12,41 @@ from geomanager.serializers import CategorySerializer, DatasetSerializer
 from home.models import MultimodalClusterSettings
 
 
+def _build_shared_multimodal_legend_config(multimodal_settings=None):
+    normal_color = getattr(multimodal_settings, "normal_color", "#b0b0b0")
+    warning_color = getattr(multimodal_settings, "warning_color", "#ffc107")
+    alarm_color = getattr(multimodal_settings, "alarm_color", "#ff9800")
+    emergency_color = getattr(multimodal_settings, "emergency_color", "#d32f2f")
+
+    return {
+        "type": "basic",
+        "items": [
+            {"name": "Emergency", "color": emergency_color},
+            {"name": "Alarm", "color": alarm_color},
+            {"name": "Warning", "color": warning_color},
+            {"name": "Normal", "color": normal_color},
+        ],
+    }
+
+
+def _is_multimodal_provider_dataset(dataset_name):
+    normalized = (dataset_name or "").strip().lower()
+    if not normalized:
+        return False
+    return any(
+        token in normalized
+        for token in (
+            "multi-model",
+            "multi model",
+            "floodproof",
+            "geosfm",
+            "mike hydro",
+            "google flood",
+            "hype",
+        )
+    )
+
+
 def get_full_url(request, path):
     """
     Custom get_full_url that uses CMS_BASE_URL environment variable when available.
@@ -26,7 +61,12 @@ def get_full_url(request, path):
     return wagtail_get_full_url(request, path)
 
 
-def _build_modular_model_layer_config(request, endpoint_path):
+def _build_modular_model_layer_config(request, endpoint_path, multimodal_settings=None):
+    normal_color = getattr(multimodal_settings, "normal_color", "#b0b0b0")
+    warning_color = getattr(multimodal_settings, "warning_color", "#ffc107")
+    alarm_color = getattr(multimodal_settings, "alarm_color", "#ff9800")
+    emergency_color = getattr(multimodal_settings, "emergency_color", "#d32f2f")
+
     return {
         "type": "geojson",
         "source": {
@@ -41,11 +81,11 @@ def _build_modular_model_layer_config(request, endpoint_path):
                         "circle-color": [
                             "match",
                             ["get", "alert_level"],
-                            "emergency", "#d32f2f",
-                            "alarm", "#ff9800",
-                            "warning", "#ffc107",
-                            "normal", "#4caf50",
-                            "#4caf50",
+                            "emergency", emergency_color,
+                            "alarm", alarm_color,
+                            "warning", warning_color,
+                            "normal", normal_color,
+                            normal_color,
                         ],
                         "circle-radius": 5,
                         "circle-opacity": 0.85,
@@ -59,11 +99,13 @@ def _build_modular_model_layer_config(request, endpoint_path):
     }
 
 
-def _patch_modular_model_datasets(request, datasets_data):
+def _patch_modular_model_datasets(request, datasets_data, multimodal_settings=None):
     """Patch placeholder model layers to true GeoJSON sources with popup fields."""
+    shared_multimodal_legend = _build_shared_multimodal_legend_config(multimodal_settings)
+
     overrides = {
         "GeoSFM Flood Forecast": {
-            "endpoint": "/api/geosfm/geojson/",
+            "endpoint": "/api/v1/models/geosfm/geojson/",
             "interaction_output": [
                 {"column": "admin_name", "property": "Location", "type": "string"},
                 {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
@@ -79,7 +121,7 @@ def _patch_modular_model_datasets(request, datasets_data):
             ],
         },
         "Mike Hydro": {
-            "endpoint": "/api/mike-hydro/geojson/",
+            "endpoint": "/api/v1/models/mike-hydro/geojson/",
             "interaction_output": [
                 {"column": "admin_name", "property": "Location", "type": "string"},
                 {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
@@ -98,7 +140,7 @@ def _patch_modular_model_datasets(request, datasets_data):
             ],
         },
         "Google Flood Forecast": {
-            "endpoint": "/api/google-flood/geojson/",
+            "endpoint": "/api/v1/google-flood/geojson/",
             "interaction_output": [
                 {"column": "admin_name", "property": "Location", "type": "string"},
                 {"column": "gauge_id", "property": "Gauge ID", "type": "string"},
@@ -106,7 +148,55 @@ def _patch_modular_model_datasets(request, datasets_data):
                 {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
                 {"column": "alert_level", "property": "Alert Level", "type": "string"},
                 {"column": "google_flood_severity", "property": "Google Severity", "type": "string"},
+                {"column": "confidence_level", "property": "Confidence", "type": "string"},
+                {"column": "confidence_score", "property": "Confidence Score", "type": "number"},
                 {"column": "daily_avg", "property": "Forecast Flow (m³/s)", "type": "number"},
+                {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
+                {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
+                {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
+                {"column": "data_date", "property": "Data Date", "type": "string"},
+                {"column": "forecasts", "property": "Forecasts", "type": "string", "hidden": True},
+                {"column": "data_endpoint", "property": "Data Endpoint", "type": "string", "hidden": True},
+            ],
+            "params": {
+                "confidence": "high",
+                "extended_coverage": "false",
+            },
+            "params_selector_config": [
+                {
+                    "key": "extended_coverage",
+                    "url_param": "extended_coverage",
+                    "required": False,
+                    "type": "radio",
+                    "sentence": "{selector}",
+                    "selectorDescription": "Extended coverage",
+                    "default": "false",
+                    "options": [
+                        {
+                            "label": "Default coverage",
+                            "value": "false",
+                            "linkedParams": {"confidence": "high"},
+                            "hidden": True,
+                        },
+                        {
+                            "label": "Extended coverage",
+                            "value": "true",
+                            "linkedParams": {"confidence": "all"},
+                            "allowUncheck": True,
+                            "uncheckedValue": "false",
+                        },
+                    ],
+                },
+            ],
+        },
+        "Floodproofs Discharge Forecast": {
+            "endpoint": "/api/v1/models/floodproof/geojson/",
+            "interaction_output": [
+                {"column": "admin_name", "property": "Location", "type": "string"},
+                {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
+                {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
+                {"column": "alert_level", "property": "Alert Level", "type": "string"},
+                {"column": "daily_avg", "property": "Floodproof (m³/s)", "type": "number"},
                 {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
                 {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
                 {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
@@ -119,19 +209,26 @@ def _patch_modular_model_datasets(request, datasets_data):
 
     for dataset in datasets_data:
         dataset_name = dataset.get("name") or dataset.get("title")
+        applies_shared_legend = _is_multimodal_provider_dataset(dataset_name)
         override = overrides.get(dataset_name)
-        if not override:
-            continue
 
-        endpoint_path = override["endpoint"]
         for layer in dataset.get("layers", []):
-            layer["layerConfig"] = _build_modular_model_layer_config(request, endpoint_path)
+            if applies_shared_legend:
+                layer["legendConfig"] = shared_multimodal_legend
+
+            if not override:
+                continue
+
+            endpoint_path = override["endpoint"]
+            layer["layerConfig"] = _build_modular_model_layer_config(
+                request, endpoint_path, multimodal_settings
+            )
             layer["interactionConfig"] = {
                 "type": "intersection",
                 "output": override["interaction_output"],
             }
-            # Keep these model layers unparameterized; API serves latest or requested date.
-            layer["params"] = {}
+            layer["params"] = override.get("params", {})
+            layer["paramsSelectorConfig"] = override.get("params_selector_config", [])
 
 
 @api_view(['GET'])
@@ -147,7 +244,14 @@ def get_mapviewer_config(request):
     # Add datasets with layers
     datasets = Dataset.objects.filter(published=True)
     datasets_data = DatasetSerializer(datasets, many=True, context={"request": request}).data
-    _patch_modular_model_datasets(request, datasets_data)
+
+    cluster_settings = None
+    try:
+        cluster_settings = MultimodalClusterSettings.load(request_or_site=request)
+    except Exception:
+        cluster_settings = None
+
+    _patch_modular_model_datasets(request, datasets_data, cluster_settings)
 
     response = {
         "categories": categories_data,
@@ -236,12 +340,8 @@ def get_mapviewer_config(request):
     response.update({"basemaps": base_maps_data})
 
     # Add multimodal cluster settings
-    try:
-        cluster_settings = MultimodalClusterSettings.load(request_or_site=request)
+    if cluster_settings:
         response.update({"multimodalClusterConfig": cluster_settings.get_config()})
-    except Exception:
-        # Settings not configured - cluster layer will use its own defaults
-        pass
 
     # Add boundary layer config
     response.update({

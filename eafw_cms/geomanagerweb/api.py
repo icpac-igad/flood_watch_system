@@ -2,7 +2,7 @@ from wagtail.api.v2.router import WagtailAPIRouter
 from wagtail.api.v2.views import BaseAPIViewSet
 from django.http import JsonResponse
 from django.views import View
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # WHCA project countries (ISO2) for scope fallback when whca_selected is unset
 WHCA_COUNTRY_CODES = ("SD", "SS", "UG", "ET", "RW")
@@ -11,6 +11,38 @@ WHCA_SCOPE_SQL_CONDITION = (
     "(COALESCE(cp.whca_selected, FALSE) IS TRUE OR "
     f"UPPER(COALESCE(cp.country_code, '')) IN ({WHCA_COUNTRY_CODES_SQL}))"
 )
+
+COUNTRY_NAME_TO_ISO2 = {
+    "burundi": "BD",
+    "djibouti": "DJ",
+    "eritrea": "ER",
+    "ethiopia": "ET",
+    "kenya": "KE",
+    "rwanda": "RW",
+    "somalia": "SO",
+    "south sudan": "SS",
+    "sudan": "SD",
+    "tanzania": "TZ",
+    "uganda": "UG",
+    "zanzibar": "TZ",
+    "region": "REGION",
+    "east africa region": "REGION",
+}
+
+ISO2_TO_COUNTRY_NAME = {
+    "BD": "Burundi",
+    "DJ": "Djibouti",
+    "ER": "Eritrea",
+    "ET": "Ethiopia",
+    "KE": "Kenya",
+    "RW": "Rwanda",
+    "SO": "Somalia",
+    "SS": "South Sudan",
+    "SD": "Sudan",
+    "TZ": "Tanzania",
+    "UG": "Uganda",
+    "REGION": "East Africa Region",
+}
 
 
 def _add_cors_headers(response):
@@ -44,6 +76,151 @@ def _parse_query_date(date_str):
     except ValueError:
         response = JsonResponse({'error': 'Invalid date format. Use YYYY-MM-DD'}, status=400)
         return None, _add_cors_headers(response)
+
+
+def _is_truthy_param(value):
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _coerce_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in ('1', 'true', 'yes', 'on'):
+        return True
+    if text in ('0', 'false', 'no', 'off'):
+        return False
+    return default
+
+
+def _split_csv_values(raw_value):
+    if not raw_value:
+        return []
+    return [item.strip() for item in str(raw_value).split(',') if item and item.strip()]
+
+
+def _resolve_scope_mode(request):
+    scope_mode = (request.GET.get('scope') or '').strip().lower()
+    if not scope_mode and _is_truthy_param(request.GET.get('whca_filter')):
+        scope_mode = 'whca'
+    return scope_mode or 'all'
+
+
+def _normalize_country_code(raw_value):
+    value = (raw_value or "").strip()
+    if not value:
+        return ""
+
+    mapped = COUNTRY_NAME_TO_ISO2.get(value.lower())
+    if mapped:
+        return mapped
+
+    upper_value = value.upper()
+    if upper_value in ("REGION",):
+        return "REGION"
+    if len(upper_value) == 2 and upper_value.isalpha():
+        return upper_value
+    return value
+
+
+def _parse_creator_metadata(created_by):
+    raw = (created_by or "").strip()
+    if not raw:
+        return {
+            "creator_type": "unknown",
+            "contributor_name": "",
+            "contributor_country": "",
+        }
+
+    # Encoded format used by flood-analysis UI:
+    #   "kpp|<name>|<country_code>" or "public|<name>|<country_code>"
+    parts = raw.split("|")
+    if len(parts) >= 3 and parts[0] in ("kpp", "public"):
+        return {
+            "creator_type": "key_point_person" if parts[0] == "kpp" else "public",
+            "contributor_name": parts[1].strip(),
+            "contributor_country": _normalize_country_code(parts[2]),
+        }
+
+    # Legacy fallback keeps old created_by values visible as a name.
+    return {
+        "creator_type": "legacy",
+        "contributor_name": raw,
+        "contributor_country": "",
+    }
+
+
+def _format_report_key(expert_type, country_code, assessment_date):
+    expert_prefix = (expert_type or "general").strip().lower()
+    country_suffix = (_normalize_country_code(country_code) or "REGION").upper()
+    date_part = (assessment_date or "").strip()
+    return f"{expert_prefix}_{country_suffix}_{date_part}"
+
+
+def _resolve_filter_geometry_ewkt(
+    cursor,
+    country_name='',
+    region_name='',
+    district_name='',
+    project_countries=None,
+):
+    """Resolve admin/project clip geometry and return EWKT text or None."""
+    country_name = (country_name or '').strip()
+    region_name = (region_name or '').strip()
+    district_name = (district_name or '').strip()
+    project_countries = project_countries or []
+
+    if district_name:
+        cursor.execute(
+            """
+            SELECT ST_AsEWKT(geom)
+            FROM gha.admin2
+            WHERE LOWER(name_2) = LOWER(%s)
+              AND (%s = '' OR LOWER(name_1) = LOWER(%s))
+              AND (%s = '' OR LOWER(country) = LOWER(%s))
+            LIMIT 1
+            """,
+            [district_name, region_name, region_name, country_name, country_name],
+        )
+    elif region_name:
+        cursor.execute(
+            """
+            SELECT ST_AsEWKT(geom)
+            FROM gha.admin1
+            WHERE LOWER(name_1) = LOWER(%s)
+              AND (%s = '' OR LOWER(country) = LOWER(%s))
+            LIMIT 1
+            """,
+            [region_name, country_name, country_name],
+        )
+    elif country_name:
+        cursor.execute(
+            """
+            SELECT ST_AsEWKT(geom)
+            FROM gha.admin0
+            WHERE LOWER(country) = LOWER(%s)
+            LIMIT 1
+            """,
+            [country_name],
+        )
+    elif project_countries:
+        cursor.execute(
+            """
+            SELECT ST_AsEWKT(ST_Union(geom))
+            FROM gha.admin0
+            WHERE country = ANY(%s)
+            """,
+            [project_countries],
+        )
+    else:
+        return None
+
+    row = cursor.fetchone()
+    return row[0] if row and row[0] else None
 
 # Create API router
 api_router = WagtailAPIRouter("webapi")
@@ -329,14 +506,19 @@ class MultimodalForecastGeoJSONView(View):
         # Get filter parameter for alert level filtering
         filter_mode = request.GET.get('filter', 'all')
 
-        # Optional country scope filter
-        scope_mode = request.GET.get('scope', 'all').strip().lower()
+        # Optional country scope filter (also inferred from whca_filter=true)
+        scope_mode = _resolve_scope_mode(request)
         if scope_mode not in ('all', 'whca'):
             response = JsonResponse({
                 'error': 'Invalid scope. Use all or whca'
             }, status=400)
             response['Access-Control-Allow-Origin'] = '*'
             return response
+
+        country_name = request.GET.get('country_name', '')
+        region_name = request.GET.get('region_name', '')
+        district_name = request.GET.get('district_name', '')
+        project_countries = _split_csv_values(request.GET.get('project_countries', ''))
 
         # Get thresholds from CMS settings
         try:
@@ -359,10 +541,6 @@ class MultimodalForecastGeoJSONView(View):
         elif filter_mode == 'emergency':
             filter_sql = f"WHERE daily_avg >= {emergency_threshold}"
 
-        scope_sql = ""
-        if scope_mode == 'whca':
-            scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
-
         with connection.cursor() as cursor:
             try:
                 # Parse date or get latest
@@ -380,6 +558,25 @@ class MultimodalForecastGeoJSONView(View):
                 else:
                     query_date_sql = "(SELECT MAX(data_date) FROM gha.multimodal_forecasts)"
                     params = []
+
+                clip_geom_ewkt = _resolve_filter_geometry_ewkt(
+                    cursor,
+                    country_name=country_name,
+                    region_name=region_name,
+                    district_name=district_name,
+                    project_countries=project_countries,
+                )
+
+                point_filters = []
+                point_filter_params = []
+                if scope_mode == 'whca':
+                    point_filters.append(WHCA_SCOPE_SQL_CONDITION)
+                if clip_geom_ewkt:
+                    point_filters.append("ST_Within(cp.geom, ST_GeomFromEWKT(%s))")
+                    point_filter_params.append(clip_geom_ewkt)
+
+                point_where_sql = f"WHERE {' AND '.join(point_filters)}" if point_filters else ""
+                query_params = params + point_filter_params
 
                 # Query using normalized tables - builds GeoJSON from control points and forecasts
                 cursor.execute(f"""
@@ -436,7 +633,7 @@ class MultimodalForecastGeoJSONView(View):
                             ON f.point_id = cp.point_id
                             AND f.data_date = qp.query_date
                             AND f.forecast_date = ff.forecast_date
-                        {scope_sql}
+                        {point_where_sql}
                     )
                     SELECT json_build_object(
                         'type', 'FeatureCollection',
@@ -469,7 +666,7 @@ class MultimodalForecastGeoJSONView(View):
                     ) as geojson
                     FROM point_data
                     {filter_sql}
-                """, params)
+                """, query_params)
 
                 result = cursor.fetchone()
 
@@ -700,7 +897,7 @@ class MultimodalAvailableDatesView(View):
 class BaseModularModelGeoJSONView(View):
     """Base GeoJSON API for model-specific views sourced from multimodal forecasts."""
 
-    endpoint_path = "/api/multimodal/geojson/"
+    endpoint_path = "/api/v1/multimodal/geojson/"
 
     def _current_value_sql(self, alias):
         raise NotImplementedError
@@ -714,10 +911,15 @@ class BaseModularModelGeoJSONView(View):
 
         date_str = request.GET.get('date')
         filter_mode = request.GET.get('filter', 'all')
-        scope_mode = request.GET.get('scope', 'all').strip().lower()
+        scope_mode = _resolve_scope_mode(request)
 
         if scope_mode not in ('all', 'whca'):
             return _add_cors_headers(JsonResponse({'error': 'Invalid scope. Use all or whca'}, status=400))
+
+        country_name = request.GET.get('country_name', '')
+        region_name = request.GET.get('region_name', '')
+        district_name = request.GET.get('district_name', '')
+        project_countries = _split_csv_values(request.GET.get('project_countries', ''))
 
         warning_threshold, alarm_threshold, emergency_threshold = _get_multimodal_thresholds(request)
 
@@ -728,10 +930,6 @@ class BaseModularModelGeoJSONView(View):
             filter_sql = f"WHERE daily_avg >= {alarm_threshold}"
         elif filter_mode == 'emergency':
             filter_sql = f"WHERE daily_avg >= {emergency_threshold}"
-
-        scope_sql = ""
-        if scope_mode == 'whca':
-            scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
 
         query_date, date_error = _parse_query_date(date_str)
         if date_error:
@@ -751,6 +949,25 @@ class BaseModularModelGeoJSONView(View):
 
         with connection.cursor() as cursor:
             try:
+                clip_geom_ewkt = _resolve_filter_geometry_ewkt(
+                    cursor,
+                    country_name=country_name,
+                    region_name=region_name,
+                    district_name=district_name,
+                    project_countries=project_countries,
+                )
+
+                point_filters = []
+                point_filter_params = []
+                if scope_mode == 'whca':
+                    point_filters.append(WHCA_SCOPE_SQL_CONDITION)
+                if clip_geom_ewkt:
+                    point_filters.append("ST_Within(cp.geom, ST_GeomFromEWKT(%s))")
+                    point_filter_params.append(clip_geom_ewkt)
+
+                point_where_sql = f"WHERE {' AND '.join(point_filters)}" if point_filters else ""
+                query_params = params + point_filter_params
+
                 cursor.execute(
                     f"""
                     WITH query_params AS (
@@ -798,7 +1015,7 @@ class BaseModularModelGeoJSONView(View):
                             ON f.point_id = cp.point_id
                             AND f.data_date = qp.query_date
                             AND f.forecast_date = ff.forecast_date
-                        {scope_sql}
+                        {point_where_sql}
                     )
                     SELECT json_build_object(
                         'type', 'FeatureCollection',
@@ -840,7 +1057,7 @@ class BaseModularModelGeoJSONView(View):
                     FROM point_data
                     {filter_sql}
                     """,
-                    params,
+                    query_params,
                 )
                 result = cursor.fetchone()
                 geojson = result[0] if result and result[0] else {'type': 'FeatureCollection', 'features': []}
@@ -853,7 +1070,7 @@ class BaseModularModelGeoJSONView(View):
 
 
 class GeoSFMGeoJSONView(BaseModularModelGeoJSONView):
-    endpoint_path = "/api/geosfm/geojson/"
+    endpoint_path = "/api/v1/models/geosfm/geojson/"
 
     def _current_value_sql(self, alias):
         return f"{alias}.geosfm"
@@ -867,7 +1084,7 @@ class GeoSFMGeoJSONView(BaseModularModelGeoJSONView):
 
 
 class MikeHydroGeoJSONView(BaseModularModelGeoJSONView):
-    endpoint_path = "/api/mike-hydro/geojson/"
+    endpoint_path = "/api/v1/models/mike-hydro/geojson/"
 
     def _current_value_sql(self, alias):
         return (
@@ -890,7 +1107,7 @@ class MikeHydroGeoJSONView(BaseModularModelGeoJSONView):
 class FloodproofGeoJSONView(BaseModularModelGeoJSONView):
     """Floodproof model-only view sourced from gha.multimodal_forecasts.floodproof."""
 
-    endpoint_path = "/api/floodproof/geojson/"
+    endpoint_path = "/api/v1/models/floodproof/geojson/"
 
     def _current_value_sql(self, alias):
         return f"{alias}.floodproof"
@@ -906,7 +1123,7 @@ class FloodproofGeoJSONView(BaseModularModelGeoJSONView):
 class GoogleFloodGeoJSONView(View):
     """GeoJSON endpoint backed by synced Google Flood API rows in gha.google_flood_points_latest."""
 
-    endpoint_path = "/api/google-flood/geojson/"
+    endpoint_path = "/api/v1/google-flood/geojson/"
 
     def get(self, request):
         from django.db import connection
@@ -914,10 +1131,27 @@ class GoogleFloodGeoJSONView(View):
 
         date_str = request.GET.get('date')
         filter_mode = request.GET.get('filter', 'all')
-        scope_mode = request.GET.get('scope', 'all').strip().lower()
+        scope_mode = _resolve_scope_mode(request)
+        confidence_mode = request.GET.get('confidence', 'high').strip().lower()
+        extended_coverage_param = request.GET.get('extended_coverage', 'false').strip().lower()
+        country_name = request.GET.get('country_name', '')
+        region_name = request.GET.get('region_name', '')
+        district_name = request.GET.get('district_name', '')
+        project_countries = _split_csv_values(request.GET.get('project_countries', ''))
+
+        extended_coverage_enabled = extended_coverage_param in ('1', 'true', 'yes', 'on')
 
         if scope_mode not in ('all', 'whca'):
             return _add_cors_headers(JsonResponse({'error': 'Invalid scope. Use all or whca'}, status=400))
+        if confidence_mode not in ('all', 'high', 'low'):
+            # Be resilient to unresolved template placeholders (e.g. {{confidence}})
+            # and fall back to the default high-confidence view.
+            confidence_mode = 'high'
+
+        # Extended coverage mirrors Google Flood Hub behavior by including
+        # lower-confidence gauges in addition to the default high-confidence set.
+        if extended_coverage_enabled:
+            confidence_mode = 'all'
 
         query_date, date_error = _parse_query_date(date_str)
         if date_error:
@@ -937,6 +1171,14 @@ class GoogleFloodGeoJSONView(View):
                     query_date_sql = "(SELECT MAX(data_date) FROM gha.google_flood_points_latest)"
                     params = []
 
+                clip_geom_ewkt = _resolve_filter_geometry_ewkt(
+                    cursor,
+                    country_name=country_name,
+                    region_name=region_name,
+                    district_name=district_name,
+                    project_countries=project_countries,
+                )
+
                 scope_sql = ""
                 if scope_mode == 'whca':
                     scope_sql = (
@@ -951,6 +1193,17 @@ class GoogleFloodGeoJSONView(View):
                     filter_sql = "WHERE alert_level IN ('alarm', 'emergency')"
                 elif filter_mode == 'emergency':
                     filter_sql = "WHERE alert_level = 'emergency'"
+
+                confidence_sql = ""
+                if confidence_mode == 'high':
+                    confidence_sql = "AND UPPER(COALESCE(g.confidence_level, '')) = 'HIGH'"
+                elif confidence_mode == 'low':
+                    confidence_sql = "AND UPPER(COALESCE(g.confidence_level, '')) = 'LOW'"
+
+                spatial_clip_sql = ""
+                if clip_geom_ewkt:
+                    spatial_clip_sql = "AND ST_Within(g.geom, ST_GeomFromEWKT(%s))"
+                    params = params + [clip_geom_ewkt]
 
                 cursor.execute(
                     f"""
@@ -975,6 +1228,11 @@ class GoogleFloodGeoJSONView(View):
                             g.threshold_emergency,
                             g.latest_severity,
                             g.latest_forecast_trend,
+                            g.confidence_level,
+                            g.confidence_score,
+                            g.quality_verified,
+                            g.model_quality_verified,
+                            g.status_quality_verified,
                             COALESCE(g.forecasts_json, '[]'::jsonb) AS forecasts,
                             CASE
                                 WHEN g.latest_severity = 'MAJOR_FLOODING' THEN 'emergency'
@@ -988,6 +1246,8 @@ class GoogleFloodGeoJSONView(View):
                         WHERE (qp.query_date IS NULL OR g.data_date = qp.query_date)
                           AND g.geom IS NOT NULL
                           {scope_sql}
+                          {confidence_sql}
+                          {spatial_clip_sql}
                     )
                     SELECT json_build_object(
                         'type', 'FeatureCollection',
@@ -1012,6 +1272,15 @@ class GoogleFloodGeoJSONView(View):
                                     'threshold_emergency', threshold_emergency,
                                     'google_flood_severity', latest_severity,
                                     'forecast_trend', latest_forecast_trend,
+                                    'confidence_level', confidence_level,
+                                    'confidence_score', confidence_score,
+                                    'quality_verified', quality_verified,
+                                    'model_quality_verified', model_quality_verified,
+                                    'status_quality_verified', status_quality_verified,
+                                    'extended_coverage', CASE
+                                        WHEN UPPER(COALESCE(confidence_level, '')) = 'LOW' THEN TRUE
+                                        ELSE FALSE
+                                    END,
                                     'alert_level', alert_level,
                                     'data_endpoint', '{self.endpoint_path}',
                                     'forecasts', forecasts
@@ -2130,8 +2399,18 @@ class CountryAssessmentsView(View):
 
         date_str = request.GET.get('date')
         expert_type = request.GET.get('expert_type')
-        country_code = request.GET.get('country')
-        published_only = request.GET.get('published', 'false').lower() == 'true'
+        raw_country = request.GET.get('country')
+        country_code = _normalize_country_code(raw_country)
+        status = (request.GET.get('status') or 'all').strip().lower()
+        report_group = (request.GET.get('report_group') or 'all').strip().lower()
+        assessment_id = request.GET.get('id')
+        include_districts = _coerce_bool(request.GET.get('include_districts'), default=False)
+
+        published_only = request.GET.get('published')
+        if published_only is not None:
+            published_only = _coerce_bool(published_only, default=False)
+        else:
+            published_only = None
 
         with connection.cursor() as cursor:
             try:
@@ -2145,6 +2424,16 @@ class CountryAssessmentsView(View):
                 """
                 params = []
 
+                if assessment_id:
+                    try:
+                        assessment_id = int(assessment_id)
+                    except ValueError:
+                        response = JsonResponse({'error': 'Invalid assessment id'}, status=400)
+                        response['Access-Control-Allow-Origin'] = '*'
+                        return response
+                    query += " AND id = %s"
+                    params.append(assessment_id)
+
                 if expert_type:
                     query += " AND expert_type = %s"
                     params.append(expert_type)
@@ -2154,11 +2443,28 @@ class CountryAssessmentsView(View):
                     params.append(date_str)
 
                 if country_code:
-                    query += " AND country_code = %s"
-                    params.append(country_code)
+                    if country_code == "REGION":
+                        query += " AND UPPER(COALESCE(country_code, 'REGION')) = 'REGION'"
+                    elif len(country_code) == 2:
+                        query += " AND (UPPER(COALESCE(country_code, '')) = %s OR LOWER(COALESCE(country_name, '')) = LOWER(%s))"
+                        params.extend([country_code, raw_country or country_code])
+                    else:
+                        query += " AND LOWER(COALESCE(country_name, '')) = LOWER(%s)"
+                        params.append(raw_country or country_code)
 
-                if published_only:
-                    query += " AND is_published = TRUE"
+                if status == 'published':
+                    query += " AND COALESCE(is_published, FALSE) = TRUE"
+                elif status in ('draft', 'unapproved'):
+                    query += " AND COALESCE(is_published, FALSE) = FALSE"
+                elif published_only is True:
+                    query += " AND COALESCE(is_published, FALSE) = TRUE"
+                elif published_only is False:
+                    query += " AND COALESCE(is_published, FALSE) = FALSE"
+
+                if report_group == 'general':
+                    query += " AND UPPER(COALESCE(country_code, 'REGION')) = 'REGION'"
+                elif report_group in ('member', 'member_state', 'member-state'):
+                    query += " AND UPPER(COALESCE(country_code, 'REGION')) != 'REGION'"
 
                 query += " ORDER BY assessment_date DESC, country_name"
 
@@ -2170,19 +2476,115 @@ class CountryAssessmentsView(View):
                     for date_field in ['assessment_date', 'valid_from', 'valid_to', 'created_at', 'updated_at']:
                         if item.get(date_field):
                             item[date_field] = item[date_field].isoformat() if hasattr(item[date_field], 'isoformat') else str(item[date_field])
+                    normalized_country_code = _normalize_country_code(item.get('country_code') or item.get('country_name')) or 'REGION'
+                    item['country_code'] = normalized_country_code
+                    if not item.get('country_name'):
+                        item['country_name'] = ISO2_TO_COUNTRY_NAME.get(normalized_country_code, normalized_country_code)
+
+                    item['report_group'] = (
+                        'general'
+                        if normalized_country_code == 'REGION'
+                        else 'member_state'
+                    )
+                    item['status'] = 'published' if item.get('is_published') else 'draft'
+                    item['report_key'] = _format_report_key(
+                        item.get('expert_type'),
+                        normalized_country_code,
+                        item.get('assessment_date') or date_str or '',
+                    )
+                    item.update(_parse_creator_metadata(item.get('created_by')))
+                    item['district_count'] = 0
+                    if include_districts:
+                        item['district_assessments'] = []
                     assessments.append(item)
 
-            except Exception as e:
-                assessments = []
+                # Enrich with district-level inputs so a full interactive report can be restored.
+                for item in assessments:
+                    member_country_name = item.get('country_name') or ISO2_TO_COUNTRY_NAME.get(item.get('country_code'), item.get('country_code'))
+                    district_params = [item.get('expert_type'), item.get('assessment_date')]
+                    if include_districts:
+                        district_query = """
+                            SELECT country, admin1, admin2, gid_2, risk_level, comment, created_at, updated_at
+                            FROM gha.district_risk_levels
+                            WHERE expert_type = %s
+                              AND assessment_date = %s
+                        """
+                    else:
+                        district_query = """
+                            SELECT COUNT(*)
+                            FROM gha.district_risk_levels
+                            WHERE expert_type = %s
+                              AND assessment_date = %s
+                        """
+
+                    if item.get('country_code') == 'REGION':
+                        district_query += " AND UPPER(COALESCE(country, '')) LIKE 'REGION::%'"
+                    else:
+                        district_query += " AND (UPPER(COALESCE(country, '')) = %s OR LOWER(COALESCE(country, '')) = LOWER(%s))"
+                        district_params.extend([item.get('country_code'), member_country_name])
+
+                    if include_districts:
+                        district_query += " ORDER BY country, admin1, admin2"
+                        cursor.execute(district_query, district_params)
+                        districts = []
+                        for drow in cursor.fetchall():
+                            district_country = drow[0]
+                            if district_country and district_country.startswith('REGION::'):
+                                district_country = district_country.split('REGION::', 1)[1]
+                            district_item = {
+                                'country': district_country,
+                                'admin1': drow[1],
+                                'admin2': drow[2],
+                                'gid_2': drow[3],
+                                'risk_level': drow[4],
+                                'comment': drow[5] or '',
+                                'created_at': drow[6].isoformat() if drow[6] and hasattr(drow[6], 'isoformat') else (str(drow[6]) if drow[6] else None),
+                                'updated_at': drow[7].isoformat() if drow[7] and hasattr(drow[7], 'isoformat') else (str(drow[7]) if drow[7] else None),
+                            }
+                            districts.append(district_item)
+                        item['district_assessments'] = districts
+                        item['district_count'] = len(districts)
+                        item['interactive_report'] = {
+                            'overall': {
+                                'risk_level': item.get('risk_level', 'normal'),
+                                'assessment_comment': item.get('assessment_comment') or '',
+                                'affected_areas': item.get('affected_areas') or '',
+                                'recommendations': item.get('recommendations') or '',
+                            },
+                            'district_assessments': districts,
+                        }
+                    else:
+                        cursor.execute(district_query, district_params)
+                        row_count = cursor.fetchone()
+                        item['district_count'] = int(row_count[0] or 0) if row_count else 0
+
+                    has_overall_content = bool(
+                        (item.get('assessment_comment') or '').strip()
+                        or (item.get('affected_areas') or '').strip()
+                        or (item.get('recommendations') or '').strip()
+                    )
+                    if item.get('is_published'):
+                        item['completion_state'] = 'approved'
+                    elif has_overall_content or item.get('district_count', 0) > 0:
+                        item['completion_state'] = 'unapproved'
+                    else:
+                        item['completion_state'] = 'unfinished'
+
+            except Exception as exc:
+                response = JsonResponse({'error': f'Failed to fetch assessments: {str(exc)}'}, status=500)
+                response['Access-Control-Allow-Origin'] = '*'
+                response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+                response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
+                return response
 
         response = JsonResponse({'assessments': assessments, 'count': len(assessments)})
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
         return response
 
     def post(self, request):
-        from django.db import connection
+        from django.db import connection, transaction
         import json
 
         try:
@@ -2192,69 +2594,271 @@ class CountryAssessmentsView(View):
             response['Access-Control-Allow-Origin'] = '*'
             return response
 
-        expert_type = data.get('expert_type', 'hydrologist')
+        valid_risk_levels = {'normal', 'watch', 'warning', 'alarm', 'emergency'}
+        expert_type = (data.get('expert_type') or 'hydrologist').strip().lower()
+        if expert_type not in ('hydrologist', 'meteorologist'):
+            expert_type = 'hydrologist'
+
         assessment_date = data.get('forecast_date') or data.get('assessment_date')
-        country_code = data.get('country_code', 'REGION')
-        country_name = data.get('country_name', 'East Africa Region')
-        risk_level = data.get('risk_level', 'normal')
-        comment = data.get('comment', '')
-        affected_areas = data.get('affected_areas', '')
-        recommendations = data.get('recommendations', '')
-        created_by = data.get('created_by', '')
+        report_group = (data.get('report_group') or '').strip().lower()
+        raw_country_code = data.get('country_code') or data.get('country')
+        raw_country_name = data.get('country_name')
+        country_code = _normalize_country_code(raw_country_code or raw_country_name)
+        country_name = (raw_country_name or '').strip()
+        if not country_name and country_code:
+            country_name = ISO2_TO_COUNTRY_NAME.get(country_code, country_code)
+
+        if report_group in ('general',):
+            country_code = 'REGION'
+            country_name = 'East Africa Region'
+        elif report_group in ('member', 'member_state', 'member-state') and (not country_code or country_code == 'REGION'):
+            response = JsonResponse({'error': 'Member-state report requires a country'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+        elif not country_code:
+            country_code = 'REGION'
+            country_name = country_name or 'East Africa Region'
+
+        risk_level = (data.get('risk_level') or 'normal').strip().lower()
+        if risk_level not in valid_risk_levels:
+            risk_level = 'normal'
+
+        comment = data.get('comment', '') or ''
+        affected_areas = data.get('affected_areas', '') or ''
+        recommendations = data.get('recommendations', '') or ''
+        contributor_name = (data.get('contributor_name') or '').strip()
+        contributor_country = _normalize_country_code(
+            data.get('contributor_country') or data.get('country_of_origin')
+        )
+        explicit_creator = (data.get('created_by') or '').strip()
+        district_assessments = data.get('district_assessments')
+        district_payload_provided = district_assessments is not None
+        if district_payload_provided and not isinstance(district_assessments, list):
+            response = JsonResponse({'error': 'district_assessments must be a list'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+        replace_district_assessments = _coerce_bool(
+            data.get('replace_district_assessments'),
+            default=district_payload_provided,
+        )
+
+        save_mode = (data.get('save_mode') or 'draft').strip().lower()
+        is_published = _coerce_bool(
+            data.get('is_published'),
+            default=save_mode in ('submitted', 'publish', 'published'),
+        )
+        is_authenticated = bool(getattr(request, "user", None) and request.user.is_authenticated)
+        logged_in = _coerce_bool(data.get('logged_in'), default=is_authenticated)
+
+        if country_code != 'REGION' and not logged_in:
+            response = JsonResponse(
+                {'error': 'Sign-in is required for member-state expert assessments'},
+                status=403,
+            )
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        if country_code == 'REGION':
+            display_name = contributor_name or explicit_creator or 'public-user'
+            display_country = contributor_country or 'REGION'
+            created_by = f"public|{display_name}|{display_country}"
+        else:
+            if is_authenticated:
+                username = getattr(request.user, 'get_username', lambda: '')() or str(request.user)
+                display_name = explicit_creator or username
+            else:
+                display_name = explicit_creator or contributor_name or 'authenticated-user'
+            created_by = f"kpp|{display_name}|{country_code}"
 
         if not assessment_date:
             response = JsonResponse({'error': 'Assessment date is required'}, status=400)
             response['Access-Control-Allow-Origin'] = '*'
             return response
 
-        if not comment.strip():
+        if save_mode in ('submitted', 'publish', 'published') and not comment.strip():
             response = JsonResponse({'error': 'Assessment comment is required'}, status=400)
             response['Access-Control-Allow-Origin'] = '*'
             return response
 
-        with connection.cursor() as cursor:
-            try:
-                cursor.execute("""
-                    INSERT INTO gha.expert_assessments
-                        (expert_type, assessment_date, country_code, country_name,
-                         risk_level, assessment_comment, affected_areas, recommendations,
-                         created_by, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                    ON CONFLICT (expert_type, assessment_date, country_code)
-                    DO UPDATE SET
-                        risk_level = EXCLUDED.risk_level,
-                        assessment_comment = EXCLUDED.assessment_comment,
-                        affected_areas = EXCLUDED.affected_areas,
-                        recommendations = EXCLUDED.recommendations,
-                        country_name = EXCLUDED.country_name,
-                        updated_at = CURRENT_TIMESTAMP
-                    RETURNING id
-                """, [expert_type, assessment_date, country_code, country_name,
-                      risk_level, comment, affected_areas, recommendations, created_by])
+        district_saved_count = 0
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                try:
+                    cursor.execute("""
+                        INSERT INTO gha.expert_assessments
+                            (expert_type, assessment_date, country_code, country_name,
+                             risk_level, assessment_comment, affected_areas, recommendations,
+                             created_by, is_published, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                        ON CONFLICT (expert_type, assessment_date, country_code)
+                        DO UPDATE SET
+                            risk_level = EXCLUDED.risk_level,
+                            assessment_comment = EXCLUDED.assessment_comment,
+                            affected_areas = EXCLUDED.affected_areas,
+                            recommendations = EXCLUDED.recommendations,
+                            created_by = EXCLUDED.created_by,
+                            country_name = EXCLUDED.country_name,
+                            is_published = EXCLUDED.is_published,
+                            updated_at = CURRENT_TIMESTAMP
+                        RETURNING id
+                    """, [expert_type, assessment_date, country_code, country_name,
+                          risk_level, comment, affected_areas, recommendations, created_by, is_published])
 
-                result = cursor.fetchone()
-                assessment_id = result[0] if result else None
+                    result = cursor.fetchone()
+                    assessment_id = result[0] if result else None
 
-            except Exception as e:
-                response = JsonResponse({'error': f'Database error: {str(e)}'}, status=500)
-                response['Access-Control-Allow-Origin'] = '*'
-                return response
+                    # Full interactive save: persist all district/admin edits together
+                    # with the overall assessment in a single transaction.
+                    if district_payload_provided:
+                        if replace_district_assessments:
+                            if country_code == 'REGION':
+                                cursor.execute("""
+                                    DELETE FROM gha.district_risk_levels
+                                    WHERE expert_type = %s
+                                      AND assessment_date = %s
+                                      AND UPPER(COALESCE(country, '')) LIKE 'REGION::%'
+                                """, [expert_type, assessment_date])
+                            else:
+                                cursor.execute("""
+                                    DELETE FROM gha.district_risk_levels
+                                    WHERE expert_type = %s
+                                      AND assessment_date = %s
+                                      AND (UPPER(COALESCE(country, '')) = %s OR LOWER(COALESCE(country, '')) = LOWER(%s))
+                                """, [expert_type, assessment_date, country_code, country_name])
+
+                        for district in district_assessments:
+                            if not isinstance(district, dict):
+                                continue
+                            admin1 = (district.get('admin1') or district.get('name_1') or '').strip()
+                            admin2 = (district.get('admin2') or district.get('name_2') or '').strip()
+                            if not admin1 or not admin2:
+                                continue
+
+                            district_country_code = _normalize_country_code(
+                                district.get('country_code') or district.get('country') or country_code
+                            )
+                            if district_country_code == 'REGION':
+                                district_country_code = country_code if country_code != 'REGION' else ''
+
+                            district_country_name = (district.get('country_name') or '').strip()
+                            if not district_country_name and district_country_code:
+                                district_country_name = ISO2_TO_COUNTRY_NAME.get(district_country_code, '')
+                            if not district_country_name and country_code != 'REGION':
+                                district_country_name = country_name
+                            if not district_country_name:
+                                district_country_name = (district.get('country') or '').strip()
+                            if not district_country_name:
+                                continue
+
+                            district_risk_level = (district.get('risk_level') or 'normal').strip().lower()
+                            if district_risk_level not in valid_risk_levels:
+                                district_risk_level = 'normal'
+                            district_comment = (district.get('comment') or '').strip()
+                            district_gid_2 = (district.get('gid_2') or '').strip() or None
+                            stored_country = district_country_name
+                            if country_code == 'REGION':
+                                stored_country = f"REGION::{district_country_name}"
+
+                            cursor.execute("""
+                                INSERT INTO gha.district_risk_levels
+                                    (expert_type, assessment_date, country, admin1, admin2, gid_2, risk_level, comment, updated_at)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                                ON CONFLICT (expert_type, assessment_date, country, admin1, admin2)
+                                DO UPDATE SET
+                                    risk_level = EXCLUDED.risk_level,
+                                    comment = EXCLUDED.comment,
+                                    gid_2 = EXCLUDED.gid_2,
+                                    updated_at = CURRENT_TIMESTAMP
+                            """, [
+                                expert_type,
+                                assessment_date,
+                                stored_country,
+                                admin1,
+                                admin2,
+                                district_gid_2,
+                                district_risk_level,
+                                district_comment,
+                            ])
+                            district_saved_count += 1
+
+                except Exception as exc:
+                    response = JsonResponse({'error': f'Database error: {str(exc)}'}, status=500)
+                    response['Access-Control-Allow-Origin'] = '*'
+                    return response
 
         response = JsonResponse({
             'success': True,
             'id': assessment_id,
+            'status': 'published' if is_published else 'draft',
+            'report_key': _format_report_key(expert_type, country_code, str(assessment_date)),
+            'country_code': country_code,
+            'country_name': country_name,
+            'district_saved_count': district_saved_count,
+            'replace_district_assessments': replace_district_assessments,
+            'full_saved': True,
             'message': 'Expert assessment saved successfully'
         })
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
         return response
 
     def options(self, request):
         response = JsonResponse({})
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
+        return response
+
+
+class CountryAssessmentPublishView(View):
+    """Publish or unpublish expert assessments."""
+
+    def post(self, request, assessment_id):
+        from django.db import connection
+        import json
+
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            data = {}
+
+        publish = _coerce_bool(data.get('is_published'), default=True)
+
+        with connection.cursor() as cursor:
+            try:
+                cursor.execute("""
+                    UPDATE gha.expert_assessments
+                    SET is_published = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    RETURNING id, is_published
+                """, [publish, assessment_id])
+                row = cursor.fetchone()
+                if not row:
+                    response = JsonResponse({'error': 'Assessment not found'}, status=404)
+                    response['Access-Control-Allow-Origin'] = '*'
+                    return response
+            except Exception as exc:
+                response = JsonResponse({'error': f'Database error: {str(exc)}'}, status=500)
+                response['Access-Control-Allow-Origin'] = '*'
+                return response
+
+        response = JsonResponse({
+            'success': True,
+            'id': row[0],
+            'is_published': row[1],
+            'status': 'published' if row[1] else 'draft',
+        })
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
+        return response
+
+    def options(self, request, assessment_id):
+        response = JsonResponse({})
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
         return response
 
 
@@ -2386,6 +2990,190 @@ class RiverBasinsView(View):
                 return response
 
         response = JsonResponse(basins, safe=False)
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
+
+
+# =============================================================================
+# FloodWatch: Forecast Majority Risk API
+# Aggregates forecast point risk by admin unit and returns majority risk level
+# =============================================================================
+class ForecastMajorityRiskView(View):
+    """Majority flood risk by admin unit from forecast points."""
+
+    def get(self, request):
+        from django.db import connection
+
+        date_str = request.GET.get('date')
+        country = (request.GET.get('country') or '').strip()
+        country_code = _normalize_country_code(country)
+        country_name = ISO2_TO_COUNTRY_NAME.get(country_code, country) if country_code else ''
+        admin_level = str(request.GET.get('admin_level', '2')).strip()
+        if admin_level not in ('1', '2'):
+            admin_level = '2'
+
+        warning_threshold, alarm_threshold, emergency_threshold = _get_multimodal_thresholds(request)
+
+        with connection.cursor() as cursor:
+            try:
+                if date_str:
+                    try:
+                        query_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        response = JsonResponse({'error': 'Invalid date format. Use YYYY-MM-DD'}, status=400)
+                        response['Access-Control-Allow-Origin'] = '*'
+                        return response
+                else:
+                    cursor.execute("SELECT MAX(data_date) FROM gha.multimodal_forecasts")
+                    query_date = cursor.fetchone()[0]
+
+                if not query_date:
+                    response = JsonResponse({'risk_by_admin': [], 'count': 0})
+                    response['Access-Control-Allow-Origin'] = '*'
+                    return response
+
+                country_filter_sql = ""
+                params = [query_date]
+                if country_code and country_code != 'REGION':
+                    # Admin tables may store either country names or ISO-like values;
+                    # support both to keep the filter resilient.
+                    country_filter_sql = "AND (UPPER(COALESCE(ad.country, '')) = %s OR LOWER(COALESCE(ad.country, '')) = LOWER(%s))"
+                    params.extend([country_code, country_name or country])
+
+                admin_fields = (
+                    "ad.country, ad.name_1 as admin1, ad.name_2 as admin2, ad.gid_2 as gid_2"
+                    if admin_level == '2'
+                    else "ad.country, ad.name_1 as admin1, NULL::text as admin2, NULL::text as gid_2"
+                )
+                admin_group = "country, admin1, admin2, gid_2"
+                admin_join_table = "gha.admin2" if admin_level == '2' else "gha.admin1"
+
+                cursor.execute(f"""
+                    WITH query_params AS (
+                        SELECT %s::date as query_date
+                    ),
+                    first_forecast AS (
+                        SELECT MIN(forecast_date) as forecast_date
+                        FROM gha.multimodal_forecasts mf, query_params qp
+                        WHERE mf.data_date = qp.query_date
+                          AND mf.forecast_date >= qp.query_date
+                    ),
+                    points AS (
+                        SELECT
+                            cp.point_id,
+                            cp.geom,
+                            COALESCE(f.daily_avg, 0) as daily_avg
+                        FROM gha.multimodal_control_points cp
+                        CROSS JOIN query_params qp
+                        CROSS JOIN first_forecast ff
+                        LEFT JOIN gha.multimodal_forecasts f
+                            ON f.point_id = cp.point_id
+                            AND f.data_date = qp.query_date
+                            AND f.forecast_date = ff.forecast_date
+                    ),
+                    risk_points AS (
+                        SELECT
+                            p.point_id,
+                            p.geom,
+                            CASE
+                                WHEN p.daily_avg >= {emergency_threshold} THEN 'emergency'
+                                WHEN p.daily_avg >= {alarm_threshold} THEN 'alarm'
+                                WHEN p.daily_avg >= {warning_threshold} THEN 'warning'
+                                ELSE 'normal'
+                            END as risk_level
+                        FROM points p
+                    ),
+                    point_admin AS (
+                        SELECT
+                            {admin_fields},
+                            rp.risk_level
+                        FROM risk_points rp
+                        JOIN {admin_join_table} ad
+                          ON ST_Within(rp.geom, ad.geom)
+                        WHERE 1=1 {country_filter_sql}
+                    ),
+                    grouped AS (
+                        SELECT
+                            {admin_group},
+                            risk_level,
+                            COUNT(*) as point_count
+                        FROM point_admin
+                        GROUP BY {admin_group}, risk_level
+                    ),
+                    ranked AS (
+                        SELECT
+                            g.*,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY {admin_group}
+                                ORDER BY
+                                    g.point_count DESC,
+                                    CASE
+                                        WHEN g.risk_level = 'emergency' THEN 4
+                                        WHEN g.risk_level = 'alarm' THEN 3
+                                        WHEN g.risk_level = 'warning' THEN 2
+                                        ELSE 1
+                                    END DESC
+                            ) as rn
+                        FROM grouped g
+                    ),
+                    totals AS (
+                        SELECT
+                            {admin_group},
+                            SUM(point_count) as total_points
+                        FROM grouped
+                        GROUP BY {admin_group}
+                    )
+                    SELECT
+                        r.country,
+                        r.admin1,
+                        r.admin2,
+                        r.gid_2,
+                        r.risk_level,
+                        r.point_count as majority_points,
+                        t.total_points
+                    FROM ranked r
+                    JOIN totals t
+                      ON t.country = r.country
+                     AND t.admin1 = r.admin1
+                     AND (t.admin2 = r.admin2 OR (t.admin2 IS NULL AND r.admin2 IS NULL))
+                     AND (t.gid_2 = r.gid_2 OR (t.gid_2 IS NULL AND r.gid_2 IS NULL))
+                    WHERE r.rn = 1
+                    ORDER BY r.country, r.admin1, r.admin2
+                """, params)
+
+                rows = cursor.fetchall()
+                risk_by_admin = []
+                for row in rows:
+                    item = {
+                        'country': row[0],
+                        'admin1': row[1],
+                        'admin2': row[2],
+                        'gid_2': row[3],
+                        'risk_level': row[4],
+                        'majority_points': int(row[5] or 0),
+                        'total_points': int(row[6] or 0),
+                    }
+                    if item['gid_2']:
+                        item['key'] = item['gid_2']
+                    elif item['admin2']:
+                        item['key'] = f"{item['country']}-{item['admin1']}-{item['admin2']}"
+                    else:
+                        item['key'] = f"{item['country']}-{item['admin1']}"
+                    risk_by_admin.append(item)
+
+            except Exception as exc:
+                response = JsonResponse({'error': f'Query failed: {str(exc)}'}, status=500)
+                response['Access-Control-Allow-Origin'] = '*'
+                return response
+
+        response = JsonResponse({
+            'date': query_date.strftime('%Y-%m-%d') if hasattr(query_date, 'strftime') else str(query_date),
+            'admin_level': admin_level,
+            'risk_by_admin': risk_by_admin,
+            'count': len(risk_by_admin),
+        })
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
         response['Access-Control-Allow-Headers'] = 'Content-Type'

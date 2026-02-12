@@ -3,13 +3,18 @@
 {% if footer %}
 <footer class="footer-professional">
   <div class="footer-content">
-    <div class="footer-brand">
-      {% if footer.logo %}
-        {% image footer.logo max-50x50 class="footer-logo" %}
-      {% endif %}
-      <div class="footer-info">
-        <span class="footer-title">East Africa Flood Watch</span>
-        <span class="footer-desc">{{ footer.description }}</span>
+    <div class="footer-top-row">
+      <div class="footer-brand">
+        {% if footer.logo %}
+          {% image footer.logo max-50x50 class="footer-logo" %}
+        {% endif %}
+        <div class="footer-info">
+          <span class="footer-title">East Africa Flood Watch</span>
+          <span class="footer-desc">{{ footer.description }}</span>
+        </div>
+      </div>
+      <div class="footer-links">
+        <a href="https://www.icpac.net/data-center/" target="_blank" rel="noopener noreferrer" class="footer-link">Data Center</a>
       </div>
     </div>
     <span class="copyright">&copy; {{ footer.copyright_organization }} {% now "Y" %}. All rights reserved.</span>
@@ -31,6 +36,13 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+  }
+
+  .footer-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
   }
 
   .footer-brand {
@@ -62,6 +74,27 @@
     opacity: 0.85;
   }
 
+  .footer-links {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .footer-link {
+    color: rgba(255,255,255,0.85);
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: opacity 0.2s;
+  }
+
+  .footer-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+    color: #fff;
+  }
+
   .copyright {
     font-size: 0.75rem;
     opacity: 0.7;
@@ -70,6 +103,12 @@
   }
 
   @media screen and (max-width: 768px) {
+    .footer-top-row {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
     .footer-brand {
       flex-direction: column;
       text-align: center;

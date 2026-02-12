@@ -41,6 +41,9 @@ const MODEL_LABELS = {
   Mike_Hydro_IMERG: "Mike Hydro (IMERG)",
 };
 
+const isGoogleFloodEndpoint = (endpoint = "") =>
+  String(endpoint).toLowerCase().includes("/api/v1/google-flood/geojson");
+
 // Define all selectable models
 const FORECAST_MODELS = ["GeoSFM", "Floodproof", "Mike_Hydro_RFE", "Mike_Hydro_CHIRP", "Mike_Hydro_IMERG"];
 
@@ -76,14 +79,21 @@ const findForecastForDate = (forecasts, targetDate = null) => {
 };
 
 /**
- * Extracts daily_avg from a forecast object
+ * Extracts primary discharge value from a forecast object.
+ * Uses daily_avg first, then falls back to daily_max/daily_min when needed.
  */
-const extractDailyAvg = (forecast) => {
-  if (!forecast || forecast.daily_avg === undefined) {
-    return 0;
+const extractPrimaryDischarge = (forecast) => {
+  if (!forecast) {
+    return null;
   }
-  const val = parseFloat(forecast.daily_avg);
-  return !isNaN(val) && val >= 0 ? val : 0;
+  const candidates = [forecast.daily_avg, forecast.daily_max, forecast.daily_min];
+  for (const value of candidates) {
+    const val = parseFloat(value);
+    if (!isNaN(val) && val >= 0 && val < 1e10) {
+      return val;
+    }
+  }
+  return null;
 };
 
 /**
@@ -183,12 +193,10 @@ const transformForChart = (forecasts) => {
       }
     });
 
-    // Also include daily_avg for reference
-    if (f.daily_avg !== undefined && f.daily_avg !== null) {
-      const val = parseFloat(f.daily_avg);
-      if (!isNaN(val) && val >= 0 && val < 1e10) {
-        entry.daily_avg = val;
-      }
+    // Include primary discharge series for single-series model feeds (e.g., Google)
+    const discharge = extractPrimaryDischarge(f);
+    if (discharge !== null) {
+      entry.daily_avg = discharge;
     }
 
     return entry;
@@ -245,7 +253,7 @@ const findTodayIndex = (chartData) => {
 /**
  * Chart tooltip component - shows model values on hover
  */
-const ChartTooltip = ({ active, payload }) => {
+const ChartTooltip = ({ active, payload, metricLabel = "Daily Avg" }) => {
   if (!active || !payload || !payload.length) {
     return null;
   }
@@ -273,7 +281,7 @@ const ChartTooltip = ({ active, payload }) => {
       <p className="tooltip-date">{dataPoint.displayDate || ""}</p>
       {dataPoint.daily_avg !== undefined && (
         <p style={{ color: "#333", fontWeight: "bold", margin: "4px 0" }}>
-          Daily Avg: {dataPoint.daily_avg.toFixed(2)} m³/s
+          {metricLabel}: {dataPoint.daily_avg.toFixed(2)} m³/s
         </p>
       )}
       <div className="tooltip-models">
@@ -290,6 +298,7 @@ const ChartTooltip = ({ active, payload }) => {
 ChartTooltip.propTypes = {
   active: PropTypes.bool,
   payload: PropTypes.array,
+  metricLabel: PropTypes.string,
 };
 
 /**
@@ -452,13 +461,14 @@ const exportAsImage = async (chartRef, filename) => {
 /**
  * Export chart data as CSV
  */
-const exportAsCSV = (chartData, adminName, availableModels) => {
+const exportAsCSV = (chartData, adminName, availableModels, metricLabel = "Daily Avg") => {
   if (!chartData || !chartData.length) {
     console.error("No chart data to export");
     return;
   }
 
-  const headers = ["Date", "Daily_Avg", ...availableModels.map(m => MODEL_LABELS[m] || m)];
+  const valueHeader = metricLabel.replace(/\s+/g, "_");
+  const headers = ["Date", valueHeader, ...availableModels.map(m => MODEL_LABELS[m] || m)];
 
   const rows = chartData.map((row) => {
     const values = [row.date, row.daily_avg !== undefined ? row.daily_avg.toFixed(4) : ""];
@@ -486,6 +496,7 @@ const exportAsCSV = (chartData, adminName, availableModels) => {
  */
 const MultiModelChart = ({
   forecastsJson,
+  layerName,
   adminName,
   pointId,
   dataEndpoint,
@@ -524,6 +535,17 @@ const MultiModelChart = ({
     };
   }, [thresholds]);
 
+  const isGoogleLayer = useMemo(
+    () => isGoogleFloodEndpoint(dataEndpoint),
+    [dataEndpoint]
+  );
+  const summaryMetricLabel = isGoogleLayer ? "Discharge" : "Daily Avg";
+  const chartTitle = useMemo(() => {
+    const defaultTitle = isGoogleLayer ? "Google Flood Forecast" : "Multi-Model Forecast";
+    const baseTitle = layerName || defaultTitle;
+    return `${baseTitle}${adminName ? ` - ${adminName}` : ""}`;
+  }, [isGoogleLayer, layerName, adminName]);
+
   const handleDragStart = useCallback((e) => {
     if (typeof onDragStart === "function") {
       onDragStart(e);
@@ -560,7 +582,7 @@ const MultiModelChart = ({
       setError(null);
 
       try {
-        let url = dataEndpoint || `${API_BASE_URL}/api/multimodal/geojson/`;
+        let url = dataEndpoint || `${API_BASE_URL}/api/v1/multimodal/geojson/`;
         if (!/^https?:\/\//i.test(url) && !url.startsWith("/")) {
           url = `/${url}`;
         }
@@ -656,8 +678,8 @@ const MultiModelChart = ({
 
     const { forecast: targetForecast, usedDate } = findForecastForDate(forecasts, selectedDate);
     const dailyAvg = targetForecast
-      ? extractDailyAvg(targetForecast)
-      : extractDailyAvg(forecasts[0]);
+      ? extractPrimaryDischarge(targetForecast) ?? 0
+      : extractPrimaryDischarge(forecasts[0]) ?? 0;
 
     console.log(`[MultiModelChart] Data points: ${data.length}, Available models: ${models.join(", ")}, maxVal: ${maxVal.toFixed(2)}`);
 
@@ -701,7 +723,7 @@ const MultiModelChart = ({
   // Handle export
   const handleExport = useCallback(
     (format) => {
-      const displayName = adminName || "forecast";
+          const displayName = adminName || "forecast";
       const safeFilename = displayName.replace(/[^a-zA-Z0-9_-]/g, "_");
 
       switch (format) {
@@ -709,13 +731,13 @@ const MultiModelChart = ({
           exportAsImage(chartRef, `forecast_${safeFilename}_${getTodayStr()}`);
           break;
         case "csv":
-          exportAsCSV(chartData, displayName, availableModels);
+          exportAsCSV(chartData, displayName, availableModels, summaryMetricLabel);
           break;
         default:
           console.warn("Unknown export format:", format);
       }
     },
-    [chartData, availableModels, adminName]
+    [chartData, availableModels, adminName, summaryMetricLabel]
   );
 
   // Loading state
@@ -759,7 +781,7 @@ const MultiModelChart = ({
         {/* Header */}
         <div className="chart-header">
           <div className="header-title-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h4 style={{ margin: 0 }}>Multi-Model Forecast{adminName ? ` - ${adminName}` : ""}</h4>
+            <h4 style={{ margin: 0 }}>{chartTitle}</h4>
             <div className="header-controls">
               {zoomRange && (
                 <button
@@ -779,7 +801,7 @@ const MultiModelChart = ({
           </div>
           {dateRange && <p className="date-range" style={{ margin: "4px 0", fontSize: "11px", color: "#666" }}>{dateRange}</p>}
           <p style={{ fontSize: "11px", color: "#333", margin: "2px 0" }}>
-            <strong>{actualDate || "Latest"} Daily Avg: {todayDailyAvg.toFixed(2)} m³/s</strong>
+            <strong>{actualDate || "Latest"} {summaryMetricLabel}: {todayDailyAvg.toFixed(2)} m³/s</strong>
             {hybasId && <span style={{ marginLeft: "8px", fontWeight: "normal", color: "#666" }}>| Basin: {hybasId}</span>}
           </p>
         </div>
@@ -859,7 +881,7 @@ const MultiModelChart = ({
             }
           />
 
-          <Tooltip content={<ChartTooltip />} />
+          <Tooltip content={<ChartTooltip metricLabel={summaryMetricLabel} />} />
 
           {refAreaLeft !== null && refAreaRight !== null && (
             <ReferenceArea
@@ -918,7 +940,7 @@ const MultiModelChart = ({
             <Line
               type="monotone"
               dataKey="daily_avg"
-              name="Forecast"
+              name={summaryMetricLabel}
               stroke="#1f77b4"
               strokeWidth={2.5}
               dot={false}
@@ -998,6 +1020,7 @@ const MultiModelChart = ({
 
 MultiModelChart.propTypes = {
   forecastsJson: PropTypes.oneOfType([PropTypes.string, PropTypes.array]),
+  layerName: PropTypes.string,
   adminName: PropTypes.string,
   pointId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   dataEndpoint: PropTypes.string,

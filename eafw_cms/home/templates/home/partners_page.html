@@ -15,6 +15,37 @@
     </div>
 
     {% if footer %}
+    <!-- Member Countries Section -->
+    {% if footer.member_countries %}
+    <div class="countries-section">
+      <h2 class="section-title">
+        <i class="fas fa-globe-africa"></i>
+        Member Countries
+      </h2>
+      <p class="section-description">
+        The East Africa Flood Watch system serves the following IGAD member countries.
+      </p>
+      <div class="countries-grid">
+        {% for item in footer.member_countries|sort_member_countries %}
+          <div class="country-card">
+            {% if item.value.url %}
+            <a href="{{ item.value.url }}" target="_blank" rel="noopener noreferrer" class="country-link">
+            {% endif %}
+              <div class="country-flag-wrapper">
+                <img src="https://flagcdn.com/h80/{{ item.value.country|lower }}.png"
+                     alt="{{ item.value.country|country_name }}"
+                     class="country-flag">
+              </div>
+              <div class="country-name">{{ item.value.country|country_name }}</div>
+            {% if item.value.url %}
+            </a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Partners Section -->
     {% if footer.partners %}
     <div class="partners-section">
@@ -40,37 +71,6 @@
                 <div class="partner-description">{{ item.value.description }}</div>
                 {% endif %}
               </div>
-            {% if item.value.url %}
-            </a>
-            {% endif %}
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Member Countries Section -->
-    {% if footer.member_countries %}
-    <div class="countries-section">
-      <h2 class="section-title">
-        <i class="fas fa-globe-africa"></i>
-        Member Countries
-      </h2>
-      <p class="section-description">
-        The East Africa Flood Watch system serves the following IGAD member countries.
-      </p>
-      <div class="countries-grid">
-        {% for item in footer.member_countries %}
-          <div class="country-card">
-            {% if item.value.url %}
-            <a href="{{ item.value.url }}" target="_blank" rel="noopener noreferrer" class="country-link">
-            {% endif %}
-              <div class="country-flag-wrapper">
-                <img src="https://flagcdn.com/h80/{{ item.value.country|lower }}.png"
-                     alt="{{ item.value.country|country_name }}"
-                     class="country-flag">
-              </div>
-              <div class="country-name">{{ item.value.country|country_name }}</div>
             {% if item.value.url %}
             </a>
             {% endif %}

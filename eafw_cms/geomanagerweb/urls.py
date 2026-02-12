@@ -23,6 +23,12 @@ from geomanagerweb.api import (
     GoogleFloodAvailableDatesView,
     CountrySummaryWithBoundsView,
     SituationSummaryView,
+    CountryAssessmentsView,
+    RiskAssessmentView,
+    RegionalSummaryView,
+    RiverBasinsView,
+    ForecastMajorityRiskView,
+    CountryAssessmentPublishView,
 )
 
 ADMIN_URL_PATH = getattr(settings, "ADMIN_URL_PATH", None)
@@ -57,6 +63,18 @@ urlpatterns = [
     ),
     path("api/situation-summary/", SituationSummaryView.as_view(), name="situation_summary"),
     path("api/situation-summary", SituationSummaryView.as_view(), name="situation_summary_noslash"),
+    path("api/country-assessments/", CountryAssessmentsView.as_view(), name="country_assessments"),
+    path("api/country-assessments", CountryAssessmentsView.as_view(), name="country_assessments_noslash"),
+    path("api/country-assessments/<int:assessment_id>/publish/", CountryAssessmentPublishView.as_view(), name="country_assessment_publish"),
+    path("api/country-assessments/<int:assessment_id>/publish", CountryAssessmentPublishView.as_view(), name="country_assessment_publish_noslash"),
+    path("api/risk-assessments/", RiskAssessmentView.as_view(), name="risk_assessments"),
+    path("api/risk-assessments", RiskAssessmentView.as_view(), name="risk_assessments_noslash"),
+    path("api/risk-majority/", ForecastMajorityRiskView.as_view(), name="risk_majority"),
+    path("api/risk-majority", ForecastMajorityRiskView.as_view(), name="risk_majority_noslash"),
+    path("api/regional-summary/generate/", RegionalSummaryView.as_view(), name="regional_summary_generate"),
+    path("api/regional-summary/generate", RegionalSummaryView.as_view(), name="regional_summary_generate_noslash"),
+    path("api/river-basins/", RiverBasinsView.as_view(), name="river_basins"),
+    path("api/river-basins", RiverBasinsView.as_view(), name="river_basins_noslash"),
     # Custom mapviewer config (includes datasets and layers)
     path("mapviewer-config", get_mapviewer_config, name="mapview_config_alias"),
     path("api/mapviewer-config", get_mapviewer_config, name="mapview_config"),

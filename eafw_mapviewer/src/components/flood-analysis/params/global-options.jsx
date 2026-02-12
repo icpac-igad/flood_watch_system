@@ -4,7 +4,7 @@
  * Provides time and area selection for flood forecast reports
  * Uses native HTML components for compatibility
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { isEmpty } from "lodash";
 
 import Button from "@/components/ui/button";
@@ -12,14 +12,43 @@ import { CMS_API } from "@/utils/constants";
 
 import "./global-options.scss";
 
-// Alert level filter options
+// Alert level filter options (no Normal per feedback)
 const ALERT_LEVELS = [
   { value: "all", label: "All Points" },
   { value: "emergency", label: "Emergency" },
   { value: "alarm", label: "Alarm" },
   { value: "warning", label: "Warning" },
-  { value: "normal", label: "Normal" },
 ];
+
+// Countries to exclude from dropdown (merge into parent country)
+const EXCLUDED_COUNTRIES = new Set(["zanzibar"]);
+
+// Available projects for the Projects reporting unit
+const PROJECTS = [
+  { code: "whca", name: "WHCA (Water at Heart of Climate Action)" },
+];
+
+const DEFAULT_COUNTRIES = [
+  { code: "Burundi", name: "Burundi" },
+  { code: "Djibouti", name: "Djibouti" },
+  { code: "Eritrea", name: "Eritrea" },
+  { code: "Ethiopia", name: "Ethiopia" },
+  { code: "Kenya", name: "Kenya" },
+  { code: "Rwanda", name: "Rwanda" },
+  { code: "Somalia", name: "Somalia" },
+  { code: "South Sudan", name: "South Sudan" },
+  { code: "Sudan", name: "Sudan" },
+  { code: "Tanzania", name: "Tanzania" },
+  { code: "Uganda", name: "Uganda" },
+];
+
+const WHCA_COUNTRY_SET = new Set([
+  "ethiopia",
+  "rwanda",
+  "south sudan",
+  "sudan",
+  "uganda",
+]);
 
 // Date selector component
 const DateSelector = ({ value, onChange, disabled, label }) => (
@@ -96,7 +125,7 @@ const GlobalOptions = ({
     const fetchAvailableDates = async () => {
       setDatesLoading(true);
       try {
-        const response = await fetch(`${CMS_API}/multimodal/dates/`);
+        const response = await fetch(`/api/v1/multimodal/dates/`);
         if (response.ok) {
           const data = await response.json();
           const dates = data.timestamps || [];
@@ -120,29 +149,73 @@ const GlobalOptions = ({
     fetchAvailableDates();
   }, []);
 
-  // Fetch admin boundaries when needed (countries)
+  // Fetch admin boundaries (countries)
   useEffect(() => {
     const fetchAdminBoundaries = async () => {
       try {
-        // API returns array directly: [{code, name}, ...]
-        const response = await fetch(`/api/admin-boundaries/`);
-        if (response.ok) {
-          const data = await response.json();
-          // Response is direct array, not wrapped in {countries: [...]}
-          setAdminBoundaries((prev) => ({
-            ...prev,
-            admin0: Array.isArray(data) ? data : [],
-          }));
+        const response = await fetch(`/api/v1/boundaries/admin-boundaries/`);
+        if (!response.ok) {
+          throw new Error(`Countries endpoint returned ${response.status}`);
         }
+
+        const data = await response.json();
+        const countries = (Array.isArray(data) ? data : [])
+          .map((item) => {
+            const name = (item?.name || item?.code || "").trim();
+            return {
+              code: name,
+              name,
+            };
+          })
+          .filter((item) => item.name && !EXCLUDED_COUNTRIES.has(item.name.toLowerCase()));
+
+        setAdminBoundaries((prev) => ({
+          ...prev,
+          admin0: countries.length > 0 ? countries : DEFAULT_COUNTRIES,
+        }));
       } catch (error) {
         console.error("Failed to fetch admin boundaries:", error);
+        // Keep the country selector usable even if API request fails.
+        setAdminBoundaries((prev) => ({
+          ...prev,
+          admin0: DEFAULT_COUNTRIES,
+        }));
       }
     };
 
-    if (params.reporting_unit === "Administrative Boundary") {
-      fetchAdminBoundaries();
+    fetchAdminBoundaries();
+  }, []);
+
+  const projectCountryOptions = useMemo(() => {
+    if ((params.unit_id || "").toLowerCase() !== "whca") {
+      return adminBoundaries.admin0;
     }
-  }, [params.reporting_unit]);
+    return (adminBoundaries.admin0 || []).filter((item) =>
+      WHCA_COUNTRY_SET.has((item.name || "").toLowerCase())
+    );
+  }, [adminBoundaries.admin0, params.unit_id]);
+
+  useEffect(() => {
+    if (params.reporting_unit !== "Projects") return;
+    if ((params.unit_id || "").toLowerCase() !== "whca") return;
+    if (!params.admin0_code) return;
+
+    const exists = projectCountryOptions.some(
+      (item) => item.code === params.admin0_code || item.name === params.admin0_code
+    );
+    if (!exists) {
+      updateParams({
+        admin0_code: null,
+        admin1_code: null,
+      });
+    }
+  }, [
+    params.reporting_unit,
+    params.unit_id,
+    params.admin0_code,
+    projectCountryOptions,
+    updateParams,
+  ]);
 
   // Fetch admin1 when country is selected
   useEffect(() => {
@@ -153,7 +226,7 @@ const GlobalOptions = ({
         // API params: admin_level=0 means get children (admin1) of country
         // unit_id is the country name
         const response = await fetch(
-          `/api/admin-boundaries/?admin_level=0&unit_id=${encodeURIComponent(params.admin0_code)}`
+          `/api/v1/boundaries/admin-boundaries/?admin_level=0&unit_id=${encodeURIComponent(params.admin0_code)}`
         );
         if (response.ok) {
           const data = await response.json();
@@ -175,7 +248,7 @@ const GlobalOptions = ({
   useEffect(() => {
     const fetchRiverBasins = async () => {
       try {
-        const response = await fetch(`${CMS_API}/river-basins/`);
+        const response = await fetch(`/api/v1/risk/river-basins`);
         if (response.ok) {
           const data = await response.json();
           setRiverBasins(Array.isArray(data) ? data : []);
@@ -203,6 +276,7 @@ const GlobalOptions = ({
       unit_id: null,
       admin0_code: null,
       admin1_code: null,
+      scope: unit === "Projects" ? (params.scope || "all") : "all",
     });
   };
 
@@ -237,6 +311,37 @@ const GlobalOptions = ({
       unit_id: code,
       admin_level: null,
       placename: basin?.name || code,
+    });
+  };
+
+  // Handle project selection
+  const handleProjectChange = (code) => {
+    const project = PROJECTS.find((p) => p.code === code);
+    updateParams({
+      unit_id: code,
+      admin_level: null,
+      admin0_code: null,
+      admin1_code: null,
+      placename: project?.name || code,
+      scope: code === "whca" ? "whca" : "all",
+    });
+  };
+
+  const handleProjectCountryChange = (code) => {
+    const country = projectCountryOptions.find((item) => item.code === code || item.name === code);
+    if (!country) {
+      updateParams({
+        admin0_code: null,
+        admin1_code: null,
+      });
+      return;
+    }
+
+    updateParams({
+      admin0_code: country.code,
+      admin1_code: null,
+      admin_level: "0",
+      placename: country.name,
     });
   };
 
@@ -338,7 +443,35 @@ const GlobalOptions = ({
                   options={riverBasins}
                   onChange={handleBasinChange}
                   disabled={loading}
+                  placeholder={isEmpty(riverBasins) ? "Coming soon..." : "Select basin"}
                 />
+                {isEmpty(riverBasins) && (
+                  <div className="info-note">River basin data will be available soon.</div>
+                )}
+              </div>
+            )}
+
+            {/* Projects Selector */}
+            {params.reporting_unit === "Projects" && (
+              <div className="admin-selectors">
+                <SelectInput
+                  label="Project"
+                  value={params.unit_id}
+                  options={PROJECTS}
+                  onChange={handleProjectChange}
+                  disabled={loading}
+                  placeholder="Select project"
+                />
+                {(params.unit_id || "").toLowerCase() === "whca" && (
+                  <SelectInput
+                    label="Country"
+                    value={params.admin0_code}
+                    options={projectCountryOptions}
+                    onChange={handleProjectCountryChange}
+                    disabled={loading}
+                    placeholder={isEmpty(projectCountryOptions) ? "No WHCA countries found" : "Select WHCA country"}
+                  />
+                )}
               </div>
             )}
           </div>

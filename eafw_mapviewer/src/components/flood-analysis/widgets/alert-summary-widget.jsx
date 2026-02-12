@@ -3,17 +3,22 @@
  * Displays flood risk exposure statistics - matching drought report design
  */
 import React from "react";
-import { isEmpty } from "lodash";
 
 import Loader from "@/components/ui/loader";
+import {
+  DEFAULT_THRESHOLDS,
+  ALERT_COLORS,
+  ALERT_LEVEL_ORDER,
+  ALERT_LEVEL_LABELS,
+} from "@/utils/multimodal-config";
 
-// Alert level colors matching flood watch color scheme
-const ALERT_LEVELS = [
-  { key: "emergency", label: "Emergency", color: "#F44336" },
-  { key: "alarm", label: "Alarm", color: "#FF9800" },
-  { key: "warning", label: "Warning", color: "#FFC107" },
-  { key: "normal", label: "Normal", color: "#4CAF50" },
-];
+const ALERT_LEVELS = ALERT_LEVEL_ORDER
+  .filter((level) => level !== "normal")
+  .map((level) => ({
+    key: level,
+    label: ALERT_LEVEL_LABELS[level],
+    color: ALERT_COLORS[level],
+  }));
 
 const AlertSummaryWidget = ({ params, alertData, loading }) => {
   if (loading) {
@@ -82,9 +87,9 @@ const AlertSummaryWidget = ({ params, alertData, loading }) => {
               );
             })}
             <tr className="total-row">
-              <td><strong>Total</strong></td>
-              <td><strong>{totalPoints.toLocaleString()}</strong></td>
-              <td><strong>100%</strong></td>
+              <td><strong>Total at Risk</strong></td>
+              <td><strong>{totalAtRisk.toLocaleString()}</strong></td>
+              <td><strong>{getPercentage(totalAtRisk)}%</strong></td>
             </tr>
           </tbody>
         </table>
@@ -104,8 +109,8 @@ const AlertSummaryWidget = ({ params, alertData, loading }) => {
       {/* Note about data */}
       <div className="data-note">
         Based on multi-model ensemble forecast for{" "}
-        {params?.placename || "selected region"}. Thresholds: Warning &ge; 150,
-        Alarm &ge; 300, Emergency &ge; 450 m&sup3;/s.
+        {params?.placename || "selected region"}. Thresholds: Warning &ge; {DEFAULT_THRESHOLDS.warning},
+        Alarm &ge; {DEFAULT_THRESHOLDS.alarm}, Emergency &ge; {DEFAULT_THRESHOLDS.emergency} m&sup3;/s.
       </div>
     </div>
   );

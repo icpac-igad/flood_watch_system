@@ -209,7 +209,7 @@ async def get_multimodal_cluster_settings():
                     "emergency": 450,
                 },
                 "colors": {
-                    "normal": "#4CAF50",
+                    "normal": "#b0b0b0",
                     "warning": "#FFC107",
                     "alarm": "#FF9800",
                     "emergency": "#F44336",

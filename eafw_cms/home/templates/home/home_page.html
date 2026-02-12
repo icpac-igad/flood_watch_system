@@ -4,11 +4,16 @@
 {% block body_class %}homepage{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260209-6">
+<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260210-5">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" />
 {% endblock %}
 
 {% block content %}
+{% if map_category_svg_sprite %}
+<div id="django-svg-data-sprite" style="display: none;">
+    {{ map_category_svg_sprite|safe }}
+</div>
+{% endif %}
 <div class="home-wireframe">
     <section class="home-module home-module--hero">
         {% include "home/partials/hero_section.html" %}
@@ -42,6 +47,8 @@
     let resizeTimer = null;
     let mapResizeFrame = null;
     let selectedMapScope = 'all';
+    let selectedMiniMapLayerKey = 'multimodal';
+    let mapStatusToastTimer = null;
     let pointLayerEventsBound = false;
     let adminLayerEventsBound = false;
     let admin0FeaturesCache = null;
@@ -54,6 +61,15 @@
     const FOCUS_MASK_LAYER_ID = 'focus-mask-layer';
     const WHCA_ADMIN0_CODES = new Set(['ETH', 'RWA', 'SSD', 'SDN', 'UGA']);
     const WHCA_MEMBER_CODES = new Set(['SD', 'SS', 'UG', 'ET', 'RW']);
+    const WHCA_ALLOWED_PARTNER_KEYS = new Set([
+        'wmo',
+        'worldmeteorologicalorganization',
+        'wateratheart',
+        'wateratheartfoundation',
+        'netherlandsredcross',
+        'thenetherlandsredcross',
+        'nlrc'
+    ]);
     const ISO2_TO_ISO3 = Object.freeze({
         BI: 'BDI',
         DJ: 'DJI',
@@ -93,6 +109,10 @@
             scopeParam: 'whca'
         }
     };
+    const PREFERRED_LAYER_ORDER = ['multimodal', 'extreme-rainfall', 'impact'];
+    const LAYER_VALIDATION_MESSAGE = 'Selected dataset is undergoing validation. It will be available soon.';
+    const EXTREME_WRF_VALIDATION_MESSAGE = 'Extreme WRF rainfall data is undergoing validation. It will be available soon.';
+    const IMPACT_VALIDATION_MESSAGE = 'Impact data is undergoing validation. It will be available soon.';
 
     // CMS Configuration
     const mapConfig = {
@@ -116,7 +136,7 @@
         emergency: '{{ multimodal_settings.emergency_color|default:"#d32f2f" }}',
         alarm: '{{ multimodal_settings.alarm_color|default:"#ff9800" }}',
         warning: '{{ multimodal_settings.warning_color|default:"#ffc107" }}',
-        normal: '{{ multimodal_settings.normal_color|default:"#4caf50" }}'
+        normal: '{{ multimodal_settings.normal_color|default:"#b0b0b0" }}'
     };
 
     // Country flag URLs (using flagcdn.com)
@@ -134,32 +154,70 @@
         'BI': 'https://flagcdn.com/w80/bi.png'
     };
 
-    // Use Django API endpoints (DRF-style paths) for homepage widgets.
+    // FastAPI v1 endpoints for homepage widgets.
     const apiEndpoints = {
-        geojson: [
-            '/api/multimodal/geojson',
-            '/api/multimodal/geojson/'
+        multimodalGeojson: [
+            '/api/v1/multimodal/geojson',
+            '/api/v1/multimodal/geojson/'
+        ],
+        extremeRainfallGeojson: [
+            '/api/v1/models/geosfm/geojson',
+            '/api/v1/models/geosfm/geojson/'
+        ],
+        impactGeojson: [
+            '/api/v1/models/floodproof/geojson',
+            '/api/v1/models/floodproof/geojson/'
         ],
         countrySummary: [
-            '/api/country-summary-with-bounds/',
-            '/api/country-summary-with-bounds'
+            '/api/v1/multimodal/country-summary-with-bounds/',
+            '/api/v1/multimodal/country-summary-with-bounds'
         ],
         situationSummary: [
-            '/api/situation-summary/',
-            '/api/situation-summary'
+            '/api/v1/multimodal/situation-summary/',
+            '/api/v1/multimodal/situation-summary'
         ],
         admin0: [
             '/api/v1/boundaries/admin0',
             '/api/v1/boundaries/admin0/'
         ]
     };
+    const miniMapLayerConfig = Object.freeze({
+        multimodal: {
+            key: 'multimodal',
+            label: 'Multimodal',
+            geojsonUrls: apiEndpoints.multimodalGeojson,
+            available: true,
+            valueLabel: 'Discharge',
+            valueUnit: 'm³/s'
+        },
+        'extreme-rainfall': {
+            key: 'extreme-rainfall',
+            label: 'Extreme Rainfall',
+            geojsonUrls: apiEndpoints.extremeRainfallGeojson,
+            available: false,
+            validationMessage: EXTREME_WRF_VALIDATION_MESSAGE,
+            valueLabel: 'Rainfall Risk',
+            valueUnit: ''
+        },
+        impact: {
+            key: 'impact',
+            label: 'Impact',
+            geojsonUrls: apiEndpoints.impactGeojson,
+            available: false,
+            validationMessage: IMPACT_VALIDATION_MESSAGE,
+            valueLabel: 'Impact Value',
+            valueUnit: ''
+        }
+    });
 
     document.addEventListener('DOMContentLoaded', function() {
         setHomepageLayoutHeights();
         initMapScopeControl();
+        initCategoryMenuControl();
         updateScopeHeadings();
         initRiskTickerLoop();
         updateMemberCountriesByScope();
+        updatePartnersByScope();
         initMiniMap();
         loadCountryData();
         loadSituationSummary();
@@ -171,7 +229,7 @@
         setInterval(() => {
             loadCountryData();
             loadSituationSummary();
-            if (miniMap) loadMapPoints();
+            if (miniMap) loadMapPoints(null, { silent: true });
         }, 5 * 60 * 1000);
     });
 
@@ -349,6 +407,213 @@
         return urls.map((url) => `${url}?${query}`);
     }
 
+    function normalizeLayerKey(value) {
+        const normalized = String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[_\s]+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+
+        if (!normalized) return '';
+        if (normalized.includes('multimodal')) return 'multimodal';
+        if (
+            normalized.includes('extreme-rainfall') ||
+            normalized.includes('heavy-rainfall') ||
+            normalized.includes('rainfall') ||
+            normalized.includes('weather')
+        ) {
+            return 'extreme-rainfall';
+        }
+        if (normalized.includes('impact') || normalized.includes('floodproof')) return 'impact';
+        return normalized;
+    }
+
+    function getMiniMapLayerConfig(layerKey = selectedMiniMapLayerKey) {
+        const normalizedKey = normalizeLayerKey(layerKey);
+        return miniMapLayerConfig[normalizedKey] || miniMapLayerConfig.multimodal;
+    }
+
+    function resolveLayerConfigFromCategory(buttonEl) {
+        if (!buttonEl) return null;
+        const layerKey = normalizeLayerKey(buttonEl.getAttribute('data-layer-key'));
+        const layerName = normalizeLayerKey(buttonEl.getAttribute('data-layer-name'));
+        const resolvedKey = layerKey || layerName || 'multimodal';
+        return miniMapLayerConfig[resolvedKey] || null;
+    }
+
+    function setActiveCategoryButton(targetButton) {
+        const allButtons = document.querySelectorAll('.c-map-menu .menu-category');
+        allButtons.forEach((btn) => btn.classList.remove('active'));
+        if (targetButton) {
+            targetButton.classList.add('active');
+        }
+    }
+
+    function getCategoryButtonByLayerKey(layerKey) {
+        const normalized = normalizeLayerKey(layerKey);
+        return Array.from(document.querySelectorAll('.c-map-menu .menu-category')).find((btn) => {
+            const config = resolveLayerConfigFromCategory(btn);
+            return config?.key === normalized;
+        }) || null;
+    }
+
+    function showMapStatusToast(message, options = {}) {
+        const toast = document.getElementById('map-status-toast');
+        if (!toast) return;
+        const { withSpinner = true, autoHideMs = 1000 } = options;
+        if (mapStatusToastTimer) {
+            clearTimeout(mapStatusToastTimer);
+            mapStatusToastTimer = null;
+        }
+        toast.textContent = message;
+        toast.hidden = false;
+        toast.classList.add('visible');
+        toast.classList.toggle('with-spinner', Boolean(withSpinner));
+        if (autoHideMs > 0) {
+            mapStatusToastTimer = window.setTimeout(() => {
+                hideMapStatusToast();
+            }, autoHideMs);
+        }
+    }
+
+    function hideMapStatusToast() {
+        const toast = document.getElementById('map-status-toast');
+        if (!toast) return;
+        if (mapStatusToastTimer) {
+            clearTimeout(mapStatusToastTimer);
+            mapStatusToastTimer = null;
+        }
+        toast.hidden = true;
+        toast.classList.remove('visible');
+        toast.classList.remove('with-spinner');
+        toast.textContent = '';
+    }
+
+    function setMapLoadingState(isLoading, label = 'Loading map...') {
+        const mapLoading = document.getElementById('map-loading');
+        if (!mapLoading) return;
+
+        if (isLoading) {
+            const messageEl = mapLoading.querySelector('span');
+            if (messageEl) messageEl.textContent = label;
+            mapLoading.style.display = 'flex';
+            return;
+        }
+
+        mapLoading.style.display = 'none';
+    }
+
+    function clearMapPointsLayer() {
+        if (!miniMap || !miniMap.isStyleLoaded()) return;
+        if (miniMap.getLayer('forecast-points-layer')) miniMap.removeLayer('forecast-points-layer');
+        if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
+    }
+
+    function clearMapPopups() {
+        if (!miniMap) return;
+        const mapContainer = miniMap.getContainer();
+        if (!mapContainer) return;
+        mapContainer.querySelectorAll('.maplibregl-popup').forEach((popupEl) => popupEl.remove());
+    }
+
+    function applyAdminOnlyLayerState() {
+        clearMapPointsLayer();
+        clearMapPopups();
+        applyCountryFiltersToMapLayers();
+    }
+
+    function formatLayerPopupValue(properties, layerConfig) {
+        const rawValue = Number(properties?.daily_avg);
+        if (Number.isFinite(rawValue)) {
+            const rounded = Math.round(rawValue);
+            return layerConfig.valueUnit ? `${rounded} ${layerConfig.valueUnit}` : `${rounded}`;
+        }
+        return properties?.alert_level ? String(properties.alert_level).toUpperCase() : 'N/A';
+    }
+
+    function applyPreferredCategoryOrder() {
+        const menu = document.querySelector('.c-map-menu');
+        if (!menu) return;
+
+        const categories = Array.from(menu.querySelectorAll('.menu-category'));
+        if (!categories.length) return;
+
+        const getPriority = (button) => {
+            const layerConfig = resolveLayerConfigFromCategory(button);
+            const index = PREFERRED_LAYER_ORDER.indexOf(layerConfig?.key || '');
+            return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+        };
+
+        categories
+            .sort((a, b) => getPriority(a) - getPriority(b))
+            .forEach((categoryEl) => menu.appendChild(categoryEl));
+    }
+
+    async function handleCategoryClick(categoryButton) {
+        if (!categoryButton || !miniMap || !miniMap.isStyleLoaded()) return;
+
+        const selectedLayerConfig = resolveLayerConfigFromCategory(categoryButton);
+        if (!selectedLayerConfig) {
+            showMapStatusToast(LAYER_VALIDATION_MESSAGE);
+            return;
+        }
+
+        if (selectedLayerConfig.available === false) {
+            selectedMiniMapLayerKey = selectedLayerConfig.key;
+            setActiveCategoryButton(categoryButton);
+            applyAdminOnlyLayerState();
+            showMapStatusToast(selectedLayerConfig.validationMessage || LAYER_VALIDATION_MESSAGE);
+            return;
+        }
+
+        const previousLayerKey = selectedMiniMapLayerKey;
+        const previousButton = getCategoryButtonByLayerKey(previousLayerKey);
+        if (selectedLayerConfig.key === previousLayerKey) return;
+
+        categoryButton.classList.add('loading');
+        setMapLoadingState(true, `Loading ${selectedLayerConfig.label}...`);
+
+        const loadResult = await loadMapPoints(selectedLayerConfig, { silent: true });
+
+        categoryButton.classList.remove('loading');
+        setMapLoadingState(false);
+
+        if (loadResult.ok) {
+            selectedMiniMapLayerKey = selectedLayerConfig.key;
+            setActiveCategoryButton(categoryButton);
+            hideMapStatusToast();
+            return;
+        }
+
+        selectedMiniMapLayerKey = previousLayerKey;
+        setActiveCategoryButton(previousButton || getCategoryButtonByLayerKey(previousLayerKey));
+        showMapStatusToast(LAYER_VALIDATION_MESSAGE);
+    }
+
+    function initCategoryMenuControl() {
+        const menu = document.querySelector('.c-map-menu');
+        if (!menu) return;
+
+        applyPreferredCategoryOrder();
+
+        let activeCategory = menu.querySelector('.menu-category.active');
+        if (!activeCategory) {
+            activeCategory = getCategoryButtonByLayerKey('multimodal') || menu.querySelector('.menu-category');
+        }
+
+        const activeConfig = resolveLayerConfigFromCategory(activeCategory);
+        if (activeConfig) {
+            selectedMiniMapLayerKey = activeConfig.key;
+            setActiveCategoryButton(activeCategory);
+        }
+
+        menu.addEventListener('click', async (event) => {
+            const categoryButton = event.target.closest('.menu-category');
+            if (!categoryButton || !menu.contains(categoryButton)) return;
+            await handleCategoryClick(categoryButton);
+        });
+    }
+
     // ========================================
     // HERO SLIDESHOW
     // ========================================
@@ -416,11 +681,17 @@
         selectedCountry = null;
         updateMapScopeUI();
         updateMemberCountriesByScope();
+        updatePartnersByScope();
         updateScopeHeadings();
 
         if (miniMap && miniMap.isStyleLoaded()) {
             const scopeBounds = await loadAdmin0Boundaries();
-            await loadMapPoints();
+            const scopeLayerResult = await loadMapPoints(null, { silent: true });
+            if (!scopeLayerResult?.ok) {
+                showMapStatusToast(scopeLayerResult?.message || LAYER_VALIDATION_MESSAGE);
+            } else {
+                hideMapStatusToast();
+            }
             fitMapToScopeBounds(scopeBounds, nextScope, false);
         }
 
@@ -449,6 +720,54 @@
         }
 
         membersGroup.style.display = visibleCount > 0 ? '' : 'none';
+    }
+
+    function normalizePartnerName(value) {
+        return String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/&/g, 'and')
+            .replace(/[^a-z0-9]+/g, '');
+    }
+
+    function isWhcaPartner(rawName) {
+        const normalizedName = normalizePartnerName(rawName);
+        if (!normalizedName) return false;
+        if (WHCA_ALLOWED_PARTNER_KEYS.has(normalizedName)) return true;
+
+        return (
+            normalizedName.includes('worldmeteorologicalorganization') ||
+            normalizedName.includes('wateratheart') ||
+            normalizedName.includes('nlrc') ||
+            (normalizedName.includes('netherlands') && normalizedName.includes('redcross'))
+        );
+    }
+
+    function updatePartnersByScope() {
+        const partnersGroup = document.querySelector('.partners-group');
+        if (!partnersGroup) return;
+
+        const partnerItems = Array.from(partnersGroup.querySelectorAll('.partner-item'));
+        if (!partnerItems.length) return;
+
+        let visibleCount = 0;
+        partnerItems.forEach((item) => {
+            const logo = item.querySelector('.partner-logo');
+            const rawName = item.getAttribute('data-partner-name')
+                || logo?.getAttribute('alt')
+                || logo?.getAttribute('title')
+                || '';
+            const isVisible = selectedMapScope !== 'whca' || isWhcaPartner(rawName);
+            item.style.display = isVisible ? '' : 'none';
+            if (isVisible) visibleCount += 1;
+        });
+
+        const label = partnersGroup.querySelector('.partners-label');
+        if (label) {
+            label.textContent = selectedMapScope === 'whca' ? 'WHCA Partners' : 'Partners';
+        }
+
+        partnersGroup.style.display = visibleCount > 0 ? '' : 'none';
     }
 
     function getCountryByCode(code) {
@@ -999,7 +1318,10 @@
 
                 // Load all data while spinner covers the map
                 await loadAdmin0Boundaries();
-                await loadMapPoints();
+                const initialLayerResult = await loadMapPoints(null, { silent: true });
+                if (!initialLayerResult?.ok) {
+                    showMapStatusToast(initialLayerResult?.message || LAYER_VALIDATION_MESSAGE);
+                }
 
                 // Apply the final default camera once (before revealing the map)
                 // so users don't see an intermediate camera state.
@@ -1025,45 +1347,73 @@
     // ========================================
     // LOAD MAP POINTS
     // ========================================
-    async function loadMapPoints() {
-        if (!miniMap) return;
+    async function loadMapPoints(selectedLayerConfig = null, options = {}) {
+        if (!miniMap) {
+            return { ok: false, reason: 'map_not_initialized' };
+        }
+
+        const { silent = false } = options || {};
+        const layerConfig = selectedLayerConfig || getMiniMapLayerConfig();
+
+        if (layerConfig.available === false) {
+            applyAdminOnlyLayerState();
+            return {
+                ok: false,
+                reason: 'unavailable',
+                message: layerConfig.validationMessage || LAYER_VALIDATION_MESSAGE
+            };
+        }
 
         try {
             const params = {};
             if (mapConfig.pointFilter !== 'all') params.filter = mapConfig.pointFilter;
             if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
 
-            const geojsonUrls = buildUrlsWithParams(apiEndpoints.geojson, params);
+            const geojsonUrls = buildUrlsWithParams(layerConfig.geojsonUrls, params);
             const geojson = await fetchJsonWithFallback(geojsonUrls);
             if (!geojson || !Array.isArray(geojson.features)) {
                 throw new Error('Invalid GeoJSON response');
             }
 
-            // Add alert_level based on thresholds
+            if (geojson.features.length === 0) {
+                return { ok: false, reason: 'no_data' };
+            }
+
+            // Add alert_level based on thresholds when endpoint doesn't provide one.
             const thresholds = {
-                warning: {{ multimodal_settings.warning_threshold|default:150 }},
-                alarm: {{ multimodal_settings.alarm_threshold|default:300 }},
-                emergency: {{ multimodal_settings.emergency_threshold|default:450 }}
+                warning: {{ multimodal_settings.warning_threshold|default:300 }},
+                alarm: {{ multimodal_settings.alarm_threshold|default:500 }},
+                emergency: {{ multimodal_settings.emergency_threshold|default:750 }}
             };
 
-            geojson.features = geojson.features.map(f => {
-                const dailyAvg = f.properties.daily_avg || 0;
-                let alertLevel = 'normal';
+            geojson.features = geojson.features.map((feature) => {
+                const properties = feature.properties || {};
+                const dailyAvg = Number(properties.daily_avg);
+                let alertLevel = String(properties.alert_level || '').toLowerCase();
 
-                if (dailyAvg >= thresholds.emergency) alertLevel = 'emergency';
-                else if (dailyAvg >= thresholds.alarm) alertLevel = 'alarm';
-                else if (dailyAvg >= thresholds.warning) alertLevel = 'warning';
+                if (!['emergency', 'alarm', 'warning', 'normal'].includes(alertLevel)) {
+                    if (Number.isFinite(dailyAvg)) {
+                        if (dailyAvg >= thresholds.emergency) alertLevel = 'emergency';
+                        else if (dailyAvg >= thresholds.alarm) alertLevel = 'alarm';
+                        else if (dailyAvg >= thresholds.warning) alertLevel = 'warning';
+                        else alertLevel = 'normal';
+                    } else {
+                        alertLevel = 'normal';
+                    }
+                }
 
-                f.properties.alert_level = alertLevel;
-                return f;
+                feature.properties = {
+                    ...properties,
+                    alert_level: alertLevel
+                };
+                return feature;
             });
 
-            // Remove existing
+            // Remove existing layer/source before adding selected dataset.
             if (miniMap.getLayer('forecast-points-layer')) miniMap.removeLayer('forecast-points-layer');
             if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
 
             miniMap.addSource('forecast-points', { type: 'geojson', data: geojson });
-
             miniMap.addLayer({
                 id: 'forecast-points-layer',
                 type: 'circle',
@@ -1090,17 +1440,19 @@
             applyCountryFiltersToMapLayers();
 
             if (!pointLayerEventsBound) {
-                // Click popup
                 miniMap.on('click', 'forecast-points-layer', function(e) {
                     const props = e.features[0].properties;
                     const coords = e.features[0].geometry.coordinates.slice();
+                    const popupLayerConfig = getMiniMapLayerConfig();
+                    const popupValueLabel = popupLayerConfig.valueLabel || 'Value';
+                    const popupValue = formatLayerPopupValue(props, popupLayerConfig);
 
                     new maplibregl.Popup({ closeButton: true, maxWidth: '220px' })
                         .setLngLat(coords)
                         .setHTML(`
                             <div class="popup-title">${props.admin_name || 'Forecast Point'}</div>
-                            <div class="popup-value">Alert: <span class="${props.alert_level}">${props.alert_level.toUpperCase()}</span></div>
-                            <div class="popup-value">Discharge: <span>${Math.round(props.daily_avg || 0)} m³/s</span></div>
+                            <div class="popup-value">Alert: <span class="${props.alert_level}">${String(props.alert_level || 'normal').toUpperCase()}</span></div>
+                            <div class="popup-value">${popupValueLabel}: <span>${popupValue}</span></div>
                         `)
                         .addTo(miniMap);
                 });
@@ -1110,8 +1462,15 @@
                 pointLayerEventsBound = true;
             }
 
+            hideMapStatusToast();
+
+            return { ok: true, reason: 'loaded', featureCount: geojson.features.length };
         } catch (error) {
             console.error('Error loading map points:', error);
+            if (!silent) {
+                showMapStatusToast(LAYER_VALIDATION_MESSAGE);
+            }
+            return { ok: false, reason: 'request_failed', error };
         }
     }
 
@@ -1180,7 +1539,7 @@
             if (unknownAtRisk > 0) {
                 container.innerHTML = '<div class="country-loading"><span style="color:#f57c00;">Alerts detected, country mapping pending</span></div>';
             } else {
-                container.innerHTML = '<div class="country-loading"><span style="color:#4caf50;">No flood alerts</span></div>';
+                container.innerHTML = '<div class="country-loading"><span style="color:#b0b0b0;">No flood alerts</span></div>';
             }
             scheduleMiniMapResize(mapUiConfig.listResizeDelayMs);
             return;

@@ -8,11 +8,12 @@ import queryString from "query-string";
 
 import FullscreenLayout from "@/wrappers/fullscreen";
 import Loader from "@/components/ui/loader";
-import { CMS_API, REPORTS_API } from "@/utils/constants";
 
 import GlobalOptions from "@/components/flood-analysis/params/global-options";
 import FloodWidgets from "@/components/flood-analysis/widgets";
+import ReportSidePanel from "@/components/flood-analysis/report-side-panel";
 import ActionButtons from "@/components/flood-analysis/shared/action-buttons";
+import AuthProvider from "@/providers/auth-provider";
 
 import { encodeJsonToBase64, decodeBase64ToJson } from "@/utils/url-encoding";
 
@@ -34,6 +35,7 @@ const DEFAULT_SETTINGS = {
     "East Africa Region",
     "Administrative Boundary",
     "River Basin",
+    "Projects",
   ],
   pdf: { loading: false, url: null },
 };
@@ -82,15 +84,18 @@ const FloodAnalysisPage = () => {
     setError(null);
 
     try {
+      const selectedCountry = params?.admin0_code || null;
       const queryParams = new URLSearchParams({
         date: params.forecast_date,
         forecast_date: params.forecast_date, // backward compatibility with endpoints expecting forecast_date
         ...(params.unit_id && { unit_id: params.unit_id }),
         ...(params.admin_level && { admin_level: params.admin_level }),
+        ...(params.scope && params.scope !== "all" && { scope: params.scope }),
+        ...(selectedCountry && { country: selectedCountry }),
       });
 
       // Fetch from eafw_api situation-summary endpoint
-      const summaryResponse = await fetch(`/api/situation-summary/?${queryParams}`);
+      const summaryResponse = await fetch(`/api/v1/multimodal/situation-summary/?${queryParams}`);
 
       if (!summaryResponse.ok) {
         throw new Error(`API returned ${summaryResponse.status}: Failed to fetch forecast data`);
@@ -177,7 +182,9 @@ const FloodAnalysisPage = () => {
       description="Multi-model flood forecast report"
     >
       <div className="c-flood-analysis">
-        {/* ICPAC Header - matching drought report */}
+        <AuthProvider />
+
+        {/* ICPAC Header */}
         <header className="icpac-header">
           <div className="logo-container">
             <img
@@ -186,76 +193,81 @@ const FloodAnalysisPage = () => {
               className="icpac-logo"
               onError={(e) => { e.target.style.display = 'none'; }}
             />
-            <div className="logo-text">
-              <span className="igad-text">IGAD</span>
-              <span className="icpac-text">ICPAC</span>
-              <span className="icpac-subtitle">IGAD Climate Prediction<br/>and Applications Centre</span>
-            </div>
           </div>
         </header>
 
-        {/* Alert Level Color Bar */}
+        {/* Alert Level Color Bar - 4 levels only, no watch */}
         <div className="alert-color-bar">
           <div className="color-segment normal"></div>
-          <div className="color-segment watch"></div>
           <div className="color-segment warning"></div>
           <div className="color-segment alarm"></div>
           <div className="color-segment emergency"></div>
         </div>
 
-        <div className="c-flood-analysis-body">
-          {/* Report Title */}
-          <div className="report-title-section">
-            <h1 className="report-main-title">
-              Flood Forecast Report for {params.placename}
-            </h1>
-            <p className="report-reference-date">
-              Reference Date: {params.forecast_date}
-            </p>
+        <div className="c-report-layout">
+          <aside className="report-sidebar left">
+            <ReportSidePanel mode="draft" params={params} />
+          </aside>
+
+          <div className="c-flood-analysis-body">
+            {/* Report Title */}
+            <div className="report-title-section">
+              <h1 className="report-main-title">
+                Flood Forecast Report for {params.placename}
+              </h1>
+              <p className="report-reference-date">
+                Reference Date: {params.forecast_date ? new Date(params.forecast_date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "—"}
+              </p>
+            </div>
+
+            {/* Global Options - Time and Area Selection */}
+            <GlobalOptions
+              params={params}
+              settings={settings}
+              loading={loading}
+              updateParams={updateParams}
+              updateSettings={updateSettings}
+              onGenerateAnalysis={handleGenerateAnalysis}
+            />
+
+            {/* Error Display */}
+            {error && (
+              <div className="error-container">
+                <div className="error-message">
+                  <strong>⚠️ API Error:</strong> {error}
+                </div>
+              </div>
+            )}
+
+            {/* Flood Model Widgets - only show if we have data */}
+            <FloodWidgets
+              params={params}
+              settings={settings}
+              forecastData={forecastData}
+              loading={loading}
+              error={error}
+              updateParams={updateParams}
+            />
+
+            {/* Action Buttons */}
+            <ActionButtons
+              params={params}
+              settings={settings}
+              forecastData={forecastData}
+              updateSettings={updateSettings}
+            />
+
+            {/* Report Footer */}
+            <footer className="report-footer">
+              <div className="footer-left">East Africa Flood Watch</div>
+              <div className="footer-center">Page 1 of 1</div>
+              <div className="footer-right">https://floodwatch.icpac.net</div>
+            </footer>
           </div>
 
-          {/* Global Options - Time and Area Selection */}
-          <GlobalOptions
-            params={params}
-            settings={settings}
-            loading={loading}
-            updateParams={updateParams}
-            updateSettings={updateSettings}
-            onGenerateAnalysis={handleGenerateAnalysis}
-          />
-
-          {/* Error Display */}
-          {error && (
-            <div className="error-container">
-              <div className="error-message">
-                <strong>⚠️ API Error:</strong> {error}
-              </div>
-            </div>
-          )}
-
-          {/* Flood Model Widgets - only show if we have data */}
-          <FloodWidgets
-            params={params}
-            settings={settings}
-            forecastData={forecastData}
-            loading={loading}
-            error={error}
-          />
-
-          {/* Action Buttons */}
-          <ActionButtons
-            params={params}
-            settings={settings}
-            forecastData={forecastData}
-            updateSettings={updateSettings}
-          />
-
-          {/* Report Footer */}
-          <footer className="report-footer">
-            <div className="footer-left">East Africa Flood Watch</div>
-            <div className="footer-center">Page 1 of 1</div>
-            <div className="footer-right">https://floodwatch.icpac.net</div>
-          </footer>
+          <aside className="report-sidebar right">
+            <ReportSidePanel mode="published" params={params} />
+          </aside>
         </div>
       </div>
     </FullscreenLayout>

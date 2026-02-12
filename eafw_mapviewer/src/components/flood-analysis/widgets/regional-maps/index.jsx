@@ -7,13 +7,14 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "
 import PropTypes from "prop-types";
 import maplibregl from "maplibre-gl";
 import { CMS_API } from "@/utils/constants";
+import { ALERT_COLORS as SHARED_ALERT_COLORS, ALERT_LEVEL_ORDER, ALERT_LEVEL_LABELS } from "@/utils/multimodal-config";
 import Loader from "@/components/ui/loader";
 
 import "./styles.scss";
 
 // GHA Countries configuration
 const GHA_COUNTRIES = [
-  { code: "Burundi", name: "Burundi", adminPrefix: "BD", bounds: [[28.9, -4.5], [30.9, -2.3]], color: "#1976d2" },
+  { code: "Burundi", name: "Burundi", adminPrefix: "BI", bounds: [[28.9, -4.5], [30.9, -2.3]], color: "#1976d2" },
   { code: "Djibouti", name: "Djibouti", adminPrefix: "DJ", bounds: [[41.7, 10.9], [43.5, 12.8]], color: "#388e3c" },
   { code: "Eritrea", name: "Eritrea", adminPrefix: "ER", bounds: [[36.4, 12.3], [43.2, 18.1]], color: "#f57c00" },
   { code: "Ethiopia", name: "Ethiopia", adminPrefix: "ET", bounds: [[33.0, 3.4], [48.0, 15.0]], color: "#7b1fa2" },
@@ -26,13 +27,23 @@ const GHA_COUNTRIES = [
   { code: "Uganda", name: "Uganda", adminPrefix: "UG", bounds: [[29.5, -1.5], [35.1, 4.3]], color: "#d84315" },
 ];
 
-// Alert level colors
-const ALERT_COLORS = {
-  emergency: "#F44336",
-  alarm: "#FF9800",
-  warning: "#FFC107",
-  normal: "#4CAF50",
+const WHCA_COUNTRIES = new Set(["Ethiopia", "Rwanda", "South Sudan", "Sudan", "Uganda"]);
+const ISO2_TO_COUNTRY_NAME = {
+  BI: "Burundi",
+  DJ: "Djibouti",
+  ER: "Eritrea",
+  ET: "Ethiopia",
+  KE: "Kenya",
+  RW: "Rwanda",
+  SO: "Somalia",
+  SS: "South Sudan",
+  SD: "Sudan",
+  TZ: "Tanzania",
+  UG: "Uganda",
 };
+
+// Alert level colors - from shared config for consistency
+const ALERT_COLORS = SHARED_ALERT_COLORS;
 
 // GHA region bounds
 const GHA_BOUNDS = [[21, -12], [52, 23]];
@@ -82,10 +93,15 @@ const CountryCard = memo(({ country, alertCounts, onClick, isSelected }) => {
 CountryCard.displayName = "CountryCard";
 
 // Regional Overview - Single map with all countries
-const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCountrySelect, selectedCountry }) => {
+const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCountrySelect, selectedCountry, scope, visibleCountries }) => {
   const mapContainer = useRef(null);
   const map = useRef(null);
+  const visibleCountriesRef = useRef(new Set((visibleCountries || []).map((item) => item.code)));
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    visibleCountriesRef.current = new Set((visibleCountries || []).map((item) => item.code));
+  }, [visibleCountries]);
 
   // Initialize map once
   useEffect(() => {
@@ -155,7 +171,11 @@ const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCo
         const country = e.features[0]?.properties?.country;
         if (country) {
           const countryData = GHA_COUNTRIES.find((c) => c.code === country);
-          if (countryData && onCountrySelect) {
+          if (
+            countryData
+            && visibleCountriesRef.current.has(countryData.code)
+            && onCountrySelect
+          ) {
             onCountrySelect(countryData);
           }
         }
@@ -180,6 +200,21 @@ const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCo
     };
   }, [onCountrySelect]);
 
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+    const visibleCodes = (visibleCountries || []).map((country) => country.code);
+    const filterExpression = visibleCodes.length > 0 && visibleCodes.length < GHA_COUNTRIES.length
+      ? ["in", ["get", "country"], ["literal", visibleCodes]]
+      : null;
+
+    try {
+      map.current.setFilter("country-fill", filterExpression);
+      map.current.setFilter("country-outline", filterExpression);
+    } catch (error) {
+      // Layers may not be ready yet.
+    }
+  }, [visibleCountries]);
+
   // Fetch and update points when date/filter changes
   useEffect(() => {
     if (!map.current || !forecastDate) return;
@@ -189,7 +224,8 @@ const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCo
     const fetchPoints = async () => {
       try {
         const filterParam = alertFilter && alertFilter !== "all" ? `&filter=${alertFilter}` : "";
-        const url = `${CMS_API}/multimodal/geojson/?date=${forecastDate}${filterParam}`;
+        const scopeParam = scope && scope !== "all" ? `&scope=${scope}` : "";
+        const url = `/api/v1/multimodal/geojson/?date=${forecastDate}${filterParam}${scopeParam}`;
         const response = await fetch(url, { signal: controller.signal });
 
         if (response.ok) {
@@ -212,7 +248,7 @@ const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCo
     }
 
     return () => controller.abort();
-  }, [forecastDate, alertFilter]);
+  }, [forecastDate, alertFilter, scope]);
 
   return (
     <div className="regional-overview">
@@ -225,10 +261,10 @@ const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCo
           {/* Legend */}
           <div className="map-legend">
             <div className="legend-title">Alert Levels</div>
-            {Object.entries(ALERT_COLORS).map(([level, color]) => (
+            {ALERT_LEVEL_ORDER.map((level) => (
               <div key={level} className="legend-item">
-                <span className="legend-dot" style={{ backgroundColor: color }} />
-                {level.charAt(0).toUpperCase() + level.slice(1)}
+                <span className="legend-dot" style={{ backgroundColor: ALERT_COLORS[level] }} />
+                {ALERT_LEVEL_LABELS[level]}
               </div>
             ))}
           </div>
@@ -238,7 +274,7 @@ const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCo
         <div className="countries-sidebar">
           <h4>Countries</h4>
           <div className="countries-list">
-            {GHA_COUNTRIES.map((country) => (
+            {visibleCountries.map((country) => (
               <CountryCard
                 key={country.code}
                 country={country}
@@ -361,13 +397,21 @@ const CountryDetailView = memo(({ country, forecastDate, alertFilter, onBack }) 
     const fetchPoints = async () => {
       try {
         const filterParam = alertFilter && alertFilter !== "all" ? `&filter=${alertFilter}` : "";
-        const url = `${CMS_API}/multimodal/geojson/?date=${forecastDate}${filterParam}&country=${encodeURIComponent(country.code)}`;
+        const url = `/api/v1/multimodal/geojson/?date=${forecastDate}${filterParam}&country=${encodeURIComponent(country.code)}`;
         const response = await fetch(url, { signal: controller.signal });
 
         if (response.ok) {
           const data = await response.json();
           if (map.current && map.current.getSource("forecast-points")) {
-            map.current.getSource("forecast-points").setData(data);
+            const countryIso2 = (country.adminPrefix || "").toUpperCase();
+            const filteredFeatures = (data?.features || []).filter((feature) => {
+              const featureCountry = (feature?.properties?.country_code || "").toString().toUpperCase();
+              return !countryIso2 || featureCountry === countryIso2;
+            });
+            map.current.getSource("forecast-points").setData({
+              type: "FeatureCollection",
+              features: filteredFeatures,
+            });
           }
         }
       } catch (error) {
@@ -421,7 +465,7 @@ const CountryDetailView = memo(({ country, forecastDate, alertFilter, onBack }) 
       <div className="detail-header" style={{ borderLeftColor: country.color }}>
         <button className="back-btn" onClick={onBack}>Back to Regional Report</button>
         <h3>{country.name} - Flood Report Details</h3>
-        <p>Detailed report section for {forecastDate}</p>
+        <p>Detailed report section for {forecastDate ? new Date(forecastDate + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
       </div>
 
       <div className="detail-content">
@@ -431,10 +475,10 @@ const CountryDetailView = memo(({ country, forecastDate, alertFilter, onBack }) 
 
           <div className="map-legend">
             <div className="legend-title">Alert Levels</div>
-            {Object.entries(ALERT_COLORS).map(([level, color]) => (
+            {ALERT_LEVEL_ORDER.map((level) => (
               <div key={level} className="legend-item">
-                <span className="legend-dot" style={{ backgroundColor: color }} />
-                {level.charAt(0).toUpperCase() + level.slice(1)}
+                <span className="legend-dot" style={{ backgroundColor: ALERT_COLORS[level] }} />
+                {ALERT_LEVEL_LABELS[level]}
               </div>
             ))}
           </div>
@@ -471,9 +515,13 @@ const CountryDetailView = memo(({ country, forecastDate, alertFilter, onBack }) 
 CountryDetailView.displayName = "CountryDetailView";
 
 // Main Regional Maps component
-const RegionalMapsWidget = ({ params, forecastDate, alertFilter, onCountrySelect }) => {
+const RegionalMapsWidget = ({ params, forecastDate, alertFilter, onCountrySelect, updateParams, scope }) => {
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [countrySummary, setCountrySummary] = useState({});
+  const visibleCountries = useMemo(() => {
+    if (scope !== "whca") return GHA_COUNTRIES;
+    return GHA_COUNTRIES.filter((country) => WHCA_COUNTRIES.has(country.code));
+  }, [scope]);
 
   // Fetch summary data for all countries in a single request
   useEffect(() => {
@@ -483,8 +531,9 @@ const RegionalMapsWidget = ({ params, forecastDate, alertFilter, onCountrySelect
 
     const fetchSummary = async () => {
       try {
+        const scopeParam = scope && scope !== "all" ? `&scope=${scope}` : "";
         const response = await fetch(
-          `${CMS_API}/situation-summary/?date=${forecastDate}`,
+          `/api/v1/multimodal/situation-summary/?date=${forecastDate}${scopeParam}`,
           { signal: controller.signal }
         );
         if (response.ok) {
@@ -492,7 +541,9 @@ const RegionalMapsWidget = ({ params, forecastDate, alertFilter, onCountrySelect
           // Transform country_breakdown to keyed object
           const summary = {};
           (data.country_breakdown || []).forEach((item) => {
-            summary[item.country] = {
+            const rawCode = (item.code || item.country_code || item.country || item.name || "").toString().trim().toUpperCase();
+            const countryName = ISO2_TO_COUNTRY_NAME[rawCode] || item.country || item.name || rawCode;
+            summary[countryName] = {
               emergency: item.emergency || 0,
               alarm: item.alarm || 0,
               warning: item.warning || 0,
@@ -510,13 +561,21 @@ const RegionalMapsWidget = ({ params, forecastDate, alertFilter, onCountrySelect
 
     fetchSummary();
     return () => controller.abort();
-  }, [forecastDate]);
+  }, [forecastDate, scope]);
 
   // Check if country selected via params
   const countryFromParams = useMemo(() => {
     if (!params?.admin0_code) return null;
-    return GHA_COUNTRIES.find((c) => c.code === params.admin0_code || c.name === params.admin0_code);
-  }, [params?.admin0_code]);
+    return visibleCountries.find((c) => c.code === params.admin0_code || c.name === params.admin0_code);
+  }, [params?.admin0_code, visibleCountries]);
+
+  useEffect(() => {
+    if (!selectedCountry) return;
+    const stillVisible = visibleCountries.some((country) => country.code === selectedCountry.code);
+    if (!stillVisible) {
+      setSelectedCountry(null);
+    }
+  }, [visibleCountries, selectedCountry]);
 
   const activeCountry = countryFromParams || selectedCountry;
 
@@ -527,7 +586,11 @@ const RegionalMapsWidget = ({ params, forecastDate, alertFilter, onCountrySelect
 
   const handleBack = useCallback(() => {
     setSelectedCountry(null);
-  }, []);
+    // Also clear params-based country selection so back button works
+    if (updateParams && params?.admin0_code) {
+      updateParams({ admin0_code: null, placename: "East Africa Region" });
+    }
+  }, [updateParams, params?.admin0_code]);
 
   // Show detail view if country selected
   if (activeCountry) {
@@ -557,6 +620,8 @@ const RegionalMapsWidget = ({ params, forecastDate, alertFilter, onCountrySelect
         countrySummary={countrySummary}
         onCountrySelect={handleCountryClick}
         selectedCountry={selectedCountry}
+        scope={scope}
+        visibleCountries={visibleCountries}
       />
     </div>
   );

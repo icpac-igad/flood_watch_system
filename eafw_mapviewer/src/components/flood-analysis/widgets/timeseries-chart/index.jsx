@@ -1,12 +1,10 @@
 /**
  * Timeseries Chart Widget
- * Shows historical and forecast trends for selected region
- * Allows model selection and comparison
+ * Fixed-lead historical model behavior + latest-run forecast (separate sections)
  */
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -15,40 +13,79 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
-  Area,
-  ComposedChart,
+  LineChart,
 } from "recharts";
 import { isEmpty } from "lodash";
 
-import { CMS_API } from "@/utils/constants";
 import { DEFAULT_THRESHOLDS } from "@/utils/multimodal-config";
 import Loader from "@/components/ui/loader";
 
 import "./styles.scss";
 
-// Available flood models
 const FLOOD_MODELS = [
-  { id: "geosfm", name: "GeoSFM", color: "#1976d2", description: "Geospatial Stream Flow Model" },
-  { id: "floodproof", name: "Floodproof", color: "#388e3c", description: "CIMA Floodproof Model" },
-  { id: "mike_hydro_rfe", name: "MIKE RFE", color: "#f57c00", description: "MIKE Hydro with RFE" },
-  { id: "mike_hydro_chirp", name: "MIKE CHIRPS", color: "#7b1fa2", description: "MIKE Hydro with CHIRPS" },
-  { id: "mike_hydro_imerg", name: "MIKE IMERG", color: "#c62828", description: "MIKE Hydro with IMERG" },
+  { id: "geosfm", apiKey: "GeoSFM", name: "GeoSFM", color: "#1976d2", description: "Geospatial Stream Flow Model" },
+  { id: "floodproof", apiKey: "Floodproof", name: "Floodproof", color: "#388e3c", description: "CIMA Floodproof Model" },
+  { id: "mike_hydro_rfe", apiKey: "Mike_Hydro_RFE", name: "MIKE RFE", color: "#f57c00", description: "MIKE Hydro with RFE" },
+  { id: "mike_hydro_chirp", apiKey: "Mike_Hydro_CHIRP", name: "MIKE CHIRPS", color: "#7b1fa2", description: "MIKE Hydro with CHIRPS" },
+  { id: "mike_hydro_imerg", apiKey: "Mike_Hydro_IMERG", name: "MIKE IMERG", color: "#c62828", description: "MIKE Hydro with IMERG" },
 ];
 
-// Alert thresholds - use shared config (warning: 150, alarm: 300, emergency: 450 m³/s)
-const THRESHOLDS = DEFAULT_THRESHOLDS;
+const HISTORY_WINDOWS = [
+  { value: "30d", label: "30 Days", days: 30 },
+  { value: "90d", label: "90 Days", days: 90 },
+  { value: "180d", label: "180 Days", days: 180 },
+  { value: "365d", label: "1 Year", days: 365 },
+];
 
-// Custom tooltip
+const LEAD_OPTIONS = [1, 3, 5, 7, 10, 14];
+const FORECAST_HORIZON_OPTIONS = [7, 14, 21, 30];
+
+const toNumberOrNull = (value) => {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatDateLabel = (dateValue) => {
+  if (!dateValue) return "";
+  const dateObj = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(dateObj.getTime())) return dateValue;
+  return dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
+
+const normalizeSeries = (series = []) => {
+  if (!Array.isArray(series)) return [];
+
+  return series
+    .map((item) => {
+      const point = {
+        date: item.date,
+        dateLabel: formatDateLabel(item.date),
+        ensemble_avg: toNumberOrNull(item.daily_avg),
+      };
+
+      FLOOD_MODELS.forEach((model) => {
+        point[model.apiKey] = toNumberOrNull(item[model.apiKey]);
+      });
+
+      return point;
+    })
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+};
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload || payload.length === 0) return null;
+
+  const validEntries = payload.filter((entry) => entry.value !== null && entry.value !== undefined);
+  if (validEntries.length === 0) return null;
 
   return (
     <div className="custom-tooltip">
       <div className="tooltip-date">{label}</div>
-      {payload.map((entry, index) => (
+      {validEntries.map((entry, index) => (
         <div key={index} className="tooltip-item" style={{ color: entry.color }}>
           <span className="tooltip-name">{entry.name}:</span>
-          <span className="tooltip-value">{entry.value?.toFixed(1)} m³/s</span>
+          <span className="tooltip-value">{Number(entry.value).toFixed(1)} m³/s</span>
         </div>
       ))}
     </div>
@@ -62,17 +99,31 @@ const TimeseriesChartWidget = ({
   forecastDate,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [chartData, setChartData] = useState([]);
+  const [historicalData, setHistoricalData] = useState([]);
+  const [currentForecastData, setCurrentForecastData] = useState([]);
   const [selectedModels, setSelectedModels] = useState(["geosfm", "floodproof"]);
-  const [timeRange, setTimeRange] = useState("7d"); // 7d, 14d, 30d, historical
+  const [historyWindow, setHistoryWindow] = useState("90d");
+  const [leadTime, setLeadTime] = useState(1);
+  const [forecastHorizon, setForecastHorizon] = useState(14);
   const [showThresholds, setShowThresholds] = useState(true);
   const [showTrend, setShowTrend] = useState(true);
+  const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
 
-  // Fetch timeseries data - NO DEMO DATA, API only
+  const selectedHistoryDays = useMemo(
+    () => HISTORY_WINDOWS.find((entry) => entry.value === historyWindow)?.days || 90,
+    [historyWindow]
+  );
+
+  const selectedModelConfigs = useMemo(
+    () => FLOOD_MODELS.filter((model) => selectedModels.includes(model.id)),
+    [selectedModels]
+  );
+
   useEffect(() => {
-    const fetchTimeseriesData = async () => {
+    const fetchModelBehavior = async () => {
       if (!forecastDate) {
-        setChartData([]);
+        setHistoricalData([]);
+        setCurrentForecastData([]);
         return;
       }
 
@@ -80,115 +131,133 @@ const TimeseriesChartWidget = ({
       try {
         const queryParams = new URLSearchParams({
           date: forecastDate,
-          range: timeRange,
+          lead: String(leadTime),
+          history_days: String(selectedHistoryDays),
+          forecast_horizon_days: String(forecastHorizon),
           ...(selectedCountry && { country: selectedCountry }),
           ...(selectedPoint && { point_id: selectedPoint }),
+          ...(params?.scope && params.scope !== "all" && { scope: params.scope }),
         });
 
-        // Try multimodal geojson endpoint for forecast data
-        const response = await fetch(`${CMS_API}/multimodal/geojson/?${queryParams}`);
+        const response = await fetch(`/api/v1/multimodal/model-behavior?${queryParams.toString()}`);
 
-        if (response.ok) {
-          const data = await response.json();
-          // Transform GeoJSON features to timeseries format
-          const transformedData = transformGeoJSONToTimeseries(data);
-          setChartData(transformedData);
+        if (!response.ok) {
+          console.error("Failed to fetch model behavior data:", response.status);
+          setHistoricalData([]);
+          setCurrentForecastData([]);
+          return;
+        }
+
+        const data = await response.json();
+        setHistoricalData(normalizeSeries(data?.historical_behavior || []));
+        setCurrentForecastData(normalizeSeries(data?.current_forecast || []));
+
+        if (data?.thresholds) {
+          setThresholds({
+            warning: toNumberOrNull(data.thresholds.warning) ?? DEFAULT_THRESHOLDS.warning,
+            alarm: toNumberOrNull(data.thresholds.alarm) ?? DEFAULT_THRESHOLDS.alarm,
+            emergency: toNumberOrNull(data.thresholds.emergency) ?? DEFAULT_THRESHOLDS.emergency,
+          });
         } else {
-          console.error("Failed to fetch timeseries data:", response.status);
-          setChartData([]);
+          setThresholds(DEFAULT_THRESHOLDS);
         }
       } catch (error) {
-        console.error("Error fetching timeseries:", error);
-        setChartData([]);
+        console.error("Error fetching model behavior timeseries:", error);
+        setHistoricalData([]);
+        setCurrentForecastData([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTimeseriesData();
-  }, [forecastDate, timeRange, selectedCountry, selectedPoint]);
+    fetchModelBehavior();
+  }, [
+    forecastDate,
+    leadTime,
+    selectedHistoryDays,
+    forecastHorizon,
+    selectedCountry,
+    selectedPoint,
+    params?.scope,
+  ]);
 
-  // Transform GeoJSON response to timeseries format
-  const transformGeoJSONToTimeseries = (geojson) => {
-    if (!geojson?.features?.length) return [];
-
-    // Get forecasts from first feature (all features have same dates)
-    const firstFeature = geojson.features.find(f => f.properties?.forecasts?.length > 0);
-    if (!firstFeature?.properties?.forecasts) return [];
-
-    // Aggregate all points to get regional averages
-    const dateMap = {};
-
-    geojson.features.forEach(feature => {
-      const forecasts = feature.properties?.forecasts || [];
-      forecasts.forEach(forecast => {
-        const date = forecast.date;
-        if (!dateMap[date]) {
-          dateMap[date] = {
-            date,
-            dateLabel: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-            isForecast: new Date(date) >= new Date(forecastDate),
-            geosfm_sum: 0, geosfm_count: 0,
-            floodproof_sum: 0, floodproof_count: 0,
-            mike_hydro_rfe_sum: 0, mike_hydro_rfe_count: 0,
-            mike_hydro_chirp_sum: 0, mike_hydro_chirp_count: 0,
-            mike_hydro_imerg_sum: 0, mike_hydro_imerg_count: 0,
-            daily_avg_sum: 0, daily_avg_count: 0,
-          };
-        }
-
-        if (forecast.GeoSFM != null) { dateMap[date].geosfm_sum += forecast.GeoSFM; dateMap[date].geosfm_count++; }
-        if (forecast.Floodproof != null) { dateMap[date].floodproof_sum += forecast.Floodproof; dateMap[date].floodproof_count++; }
-        if (forecast.Mike_Hydro_RFE != null) { dateMap[date].mike_hydro_rfe_sum += forecast.Mike_Hydro_RFE; dateMap[date].mike_hydro_rfe_count++; }
-        if (forecast.Mike_Hydro_CHIRP != null) { dateMap[date].mike_hydro_chirp_sum += forecast.Mike_Hydro_CHIRP; dateMap[date].mike_hydro_chirp_count++; }
-        if (forecast.Mike_Hydro_IMERG != null) { dateMap[date].mike_hydro_imerg_sum += forecast.Mike_Hydro_IMERG; dateMap[date].mike_hydro_imerg_count++; }
-        if (forecast.daily_avg != null) { dateMap[date].daily_avg_sum += forecast.daily_avg; dateMap[date].daily_avg_count++; }
-      });
-    });
-
-    // Convert to averages
-    return Object.values(dateMap)
-      .map(d => ({
-        date: d.date,
-        dateLabel: d.dateLabel,
-        isForecast: d.isForecast,
-        geosfm: d.geosfm_count > 0 ? d.geosfm_sum / d.geosfm_count : null,
-        floodproof: d.floodproof_count > 0 ? d.floodproof_sum / d.floodproof_count : null,
-        mike_hydro_rfe: d.mike_hydro_rfe_count > 0 ? d.mike_hydro_rfe_sum / d.mike_hydro_rfe_count : null,
-        mike_hydro_chirp: d.mike_hydro_chirp_count > 0 ? d.mike_hydro_chirp_sum / d.mike_hydro_chirp_count : null,
-        mike_hydro_imerg: d.mike_hydro_imerg_count > 0 ? d.mike_hydro_imerg_sum / d.mike_hydro_imerg_count : null,
-        ensemble_avg: d.daily_avg_count > 0 ? d.daily_avg_sum / d.daily_avg_count : null,
-      }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-  };
-
-  // Toggle model selection
   const toggleModel = (modelId) => {
     setSelectedModels((prev) => {
       if (prev.includes(modelId)) {
+        if (prev.length === 1) return prev;
         return prev.filter((id) => id !== modelId);
       }
       return [...prev, modelId];
     });
   };
 
-  // Calculate trend
   const trendInfo = useMemo(() => {
-    if (chartData.length < 2) return null;
+    if (currentForecastData.length < 2) return null;
 
-    const forecastData = chartData.filter((d) => d.isForecast);
-    if (forecastData.length < 2) return null;
+    const first = currentForecastData[0];
+    const last = currentForecastData[currentForecastData.length - 1];
+    const fallbackModelKey = selectedModelConfigs[0]?.apiKey;
 
-    const firstValue = forecastData[0]?.ensemble_avg || forecastData[0]?.geosfm || 0;
-    const lastValue = forecastData[forecastData.length - 1]?.ensemble_avg ||
-                      forecastData[forecastData.length - 1]?.geosfm || 0;
+    const firstValue = first?.ensemble_avg ?? (fallbackModelKey ? first?.[fallbackModelKey] : null);
+    const lastValue = last?.ensemble_avg ?? (fallbackModelKey ? last?.[fallbackModelKey] : null);
+
+    if (!Number.isFinite(firstValue) || !Number.isFinite(lastValue) || firstValue === 0) return null;
+
     const change = ((lastValue - firstValue) / firstValue) * 100;
 
     return {
       direction: change > 5 ? "increasing" : change < -5 ? "decreasing" : "stable",
       change: Math.abs(change).toFixed(1),
     };
-  }, [chartData]);
+  }, [currentForecastData, selectedModelConfigs]);
+
+  const renderChart = (data, emptyMessage) => {
+    if (loading) {
+      return <div className="chart-loader"><Loader /></div>;
+    }
+
+    if (isEmpty(data)) {
+      return <div className="no-data">{emptyMessage}</div>;
+    }
+
+    return (
+      <ResponsiveContainer width="100%" height={320}>
+        <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
+          <XAxis dataKey="dateLabel" tick={{ fontSize: 11 }} tickLine={false} />
+          <YAxis
+            tick={{ fontSize: 11 }}
+            tickLine={false}
+            label={{ value: "Discharge (m\u00B3/s)", angle: -90, position: "insideLeft", fontSize: 12 }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Legend />
+
+          {showThresholds && (
+            <>
+              <ReferenceLine y={thresholds.warning} stroke="#FFC107" strokeDasharray="5 5" label="Warning" />
+              <ReferenceLine y={thresholds.alarm} stroke="#FF9800" strokeDasharray="5 5" label="Alarm" />
+              <ReferenceLine y={thresholds.emergency} stroke="#F44336" strokeDasharray="5 5" label="Emergency" />
+            </>
+          )}
+
+          {selectedModelConfigs.map((model) => (
+            <Line
+              key={model.id}
+              type="monotone"
+              dataKey={model.apiKey}
+              name={model.name}
+              stroke={model.color}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 5 }}
+              connectNulls={false}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    );
+  };
 
   return (
     <div className="c-timeseries-chart">
@@ -197,41 +266,62 @@ const TimeseriesChartWidget = ({
           <h3>Forecast Timeseries</h3>
           <p>
             {selectedCountry ? `${selectedCountry} - ` : "Regional "}
-            Multi-model discharge forecast
+            Fixed-lead model behavior and latest-run forecast
           </p>
         </div>
 
         {trendInfo && showTrend && (
           <div className={`trend-indicator ${trendInfo.direction}`}>
-            <span className="trend-icon">
-              {trendInfo.direction === "increasing" ? "📈" :
-               trendInfo.direction === "decreasing" ? "📉" : "➡️"}
-            </span>
             <span className="trend-text">
-              {trendInfo.direction === "stable" ? "Stable" :
-               `${trendInfo.direction} ${trendInfo.change}%`}
+              {trendInfo.direction === "stable"
+                ? "Stable"
+                : `${trendInfo.direction.charAt(0).toUpperCase() + trendInfo.direction.slice(1)} ${trendInfo.change}%`}
             </span>
           </div>
         )}
       </div>
 
-      {/* Controls */}
       <div className="chart-controls">
-        <div className="time-range-selector">
-          <label>Time Range:</label>
+        <div className="control-group">
+          <label>Historical Window:</label>
           <div className="range-buttons">
-            {[
-              { value: "7d", label: "7 Days" },
-              { value: "14d", label: "14 Days" },
-              { value: "30d", label: "30 Days" },
-              { value: "historical", label: "Historical" },
-            ].map((range) => (
+            {HISTORY_WINDOWS.map((range) => (
               <button
                 key={range.value}
-                className={`range-btn ${timeRange === range.value ? "active" : ""}`}
-                onClick={() => setTimeRange(range.value)}
+                className={`range-btn ${historyWindow === range.value ? "active" : ""}`}
+                onClick={() => setHistoryWindow(range.value)}
               >
                 {range.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="control-group">
+          <label>Lead:</label>
+          <div className="range-buttons">
+            {LEAD_OPTIONS.map((leadOption) => (
+              <button
+                key={leadOption}
+                className={`range-btn ${leadTime === leadOption ? "active" : ""}`}
+                onClick={() => setLeadTime(leadOption)}
+              >
+                {leadOption}d
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="control-group">
+          <label>Forecast Horizon:</label>
+          <div className="range-buttons">
+            {FORECAST_HORIZON_OPTIONS.map((horizonDays) => (
+              <button
+                key={horizonDays}
+                className={`range-btn ${forecastHorizon === horizonDays ? "active" : ""}`}
+                onClick={() => setForecastHorizon(horizonDays)}
+              >
+                {horizonDays}d
               </button>
             ))}
           </div>
@@ -257,7 +347,6 @@ const TimeseriesChartWidget = ({
         </div>
       </div>
 
-      {/* Model Selection */}
       <div className="model-selector">
         <label>Models:</label>
         <div className="model-chips">
@@ -276,111 +365,43 @@ const TimeseriesChartWidget = ({
               {model.name}
             </button>
           ))}
-          <button
-            className={`model-chip ensemble ${selectedModels.length === FLOOD_MODELS.length ? "active" : ""}`}
-            onClick={() => {
-              if (selectedModels.length === FLOOD_MODELS.length) {
-                setSelectedModels(["geosfm"]);
-              } else {
-                setSelectedModels(FLOOD_MODELS.map((m) => m.id));
-              }
-            }}
-          >
-            {selectedModels.length === FLOOD_MODELS.length ? "Single" : "All Models"}
-          </button>
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="chart-container">
-        {loading ? (
-          <div className="chart-loader"><Loader /></div>
-        ) : isEmpty(chartData) ? (
-          <div className="no-data">No timeseries data available</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={350}>
-            <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-              <XAxis
-                dataKey="dateLabel"
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-                label={{ value: "Discharge (m³/s)", angle: -90, position: "insideLeft", fontSize: 12 }}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
+      <div className="chart-sections">
+        <section className="chart-section">
+          <h4>Historical Model Behaviour (Fixed Lead = {leadTime} day{leadTime > 1 ? "s" : ""})</h4>
+          <p className="section-caption">
+            Fair model comparison using a standardized lead time over the selected historical window.
+          </p>
+          <div className="chart-container">
+            {renderChart(
+              historicalData,
+              "No historical fixed-lead data available for this selection"
+            )}
+          </div>
+        </section>
 
-              {/* Threshold lines */}
-              {showThresholds && (
-                <>
-                  <ReferenceLine y={THRESHOLDS.warning} stroke="#FFC107" strokeDasharray="5 5" label="Warning" />
-                  <ReferenceLine y={THRESHOLDS.alarm} stroke="#FF9800" strokeDasharray="5 5" label="Alarm" />
-                  <ReferenceLine y={THRESHOLDS.emergency} stroke="#F44336" strokeDasharray="5 5" label="Emergency" />
-                </>
-              )}
-
-              {/* Today reference line */}
-              <ReferenceLine
-                x={chartData.find((d) => d.isForecast)?.dateLabel}
-                stroke="#666"
-                strokeDasharray="3 3"
-                label={{ value: "Today", position: "top", fontSize: 10 }}
-              />
-
-              {/* Model lines */}
-              {selectedModels.map((modelId) => {
-                const model = FLOOD_MODELS.find((m) => m.id === modelId);
-                if (!model) return null;
-
-                return (
-                  <Line
-                    key={modelId}
-                    type="monotone"
-                    dataKey={modelId}
-                    name={model.name}
-                    stroke={model.color}
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 5 }}
-                  />
-                );
-              })}
-
-              {/* Ensemble range area (if showing all models) */}
-              {selectedModels.length >= 3 && (
-                <Area
-                  type="monotone"
-                  dataKey="ensemble_max"
-                  stackId="ensemble"
-                  stroke="none"
-                  fill="#e0e0e0"
-                  fillOpacity={0.3}
-                />
-              )}
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
+        <section className="chart-section">
+          <h4>Current Forecast (Latest Run)</h4>
+          <p className="section-caption">
+            Next {forecastHorizon} days from run date {forecastDate || "-"}.
+          </p>
+          <div className="chart-container">
+            {renderChart(
+              currentForecastData,
+              "No latest-run forecast data available for this selection"
+            )}
+          </div>
+        </section>
       </div>
 
-      {/* Legend / Info */}
       <div className="chart-legend">
-        <div className="legend-item">
-          <span className="legend-line historical"></span>
-          Historical data
-        </div>
-        <div className="legend-item">
-          <span className="legend-line forecast"></span>
-          Forecast data
-        </div>
         {showThresholds && (
           <>
-            <div className="legend-item threshold warning">Warning: {THRESHOLDS.warning} m³/s</div>
-            <div className="legend-item threshold alarm">Alarm: {THRESHOLDS.alarm} m³/s</div>
-            <div className="legend-item threshold emergency">Emergency: {THRESHOLDS.emergency} m³/s</div>
+            <div className="legend-item threshold warning">Warning: {thresholds.warning} m³/s</div>
+            <div className="legend-item threshold alarm">Alarm: {thresholds.alarm} m³/s</div>
+            <div className="legend-item threshold emergency">Emergency: {thresholds.emergency} m³/s</div>
           </>
         )}
       </div>
@@ -391,7 +412,7 @@ const TimeseriesChartWidget = ({
 TimeseriesChartWidget.propTypes = {
   params: PropTypes.object,
   selectedCountry: PropTypes.string,
-  selectedPoint: PropTypes.string,
+  selectedPoint: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   forecastDate: PropTypes.string,
 };
 

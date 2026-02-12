@@ -154,9 +154,10 @@ class LayerManagerComponent extends PureComponent {
         <LayerManager map={map} plugin={PluginMapboxGl} providers={{}}>
           {allLayers.map((l) => {
             const config = l.config || l.layerConfig;
-            // FloodWatch: Include tile URL in key to force re-render when filter changes
+            // FloodWatch: Include source URL in key to force re-render when params change.
             const tileUrl = config?.source?.tiles?.[0] || '';
-            const layerKey = `${l.id}-${tileUrl}`;
+            const dataUrl = typeof config?.source?.data === 'string' ? config.source.data : '';
+            const layerKey = `${l.id}-${tileUrl}-${dataUrl}`;
             return (
               <Layer
                 key={layerKey}

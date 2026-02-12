@@ -20,11 +20,11 @@ import {
   ReferenceLine,
 } from "recharts";
 
-// Alert thresholds for reference lines
+// Alert thresholds for reference lines (must match multimodal-config.js)
 const THRESHOLDS = {
-  warning: 500,
-  alarm: 750,
-  emergency: 1500,
+  warning: 300,
+  alarm: 500,
+  emergency: 750,
 };
 
 // Custom tooltip for the chart

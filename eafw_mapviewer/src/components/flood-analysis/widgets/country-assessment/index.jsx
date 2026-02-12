@@ -30,7 +30,7 @@ const GHA_COUNTRIES = [
 
 // Risk levels
 const RISK_LEVELS = [
-  { value: "normal", label: "Normal", color: "#4CAF50" },
+  { value: "normal", label: "Normal", color: "#b0b0b0" },
   { value: "watch", label: "Watch", color: "#2196F3" },
   { value: "warning", label: "Warning", color: "#FFC107" },
   { value: "alarm", label: "Alarm", color: "#FF9800" },

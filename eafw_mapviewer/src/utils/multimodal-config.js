@@ -10,9 +10,9 @@
 // =============================================================================
 
 export const DEFAULT_THRESHOLDS = {
-  warning: 150,      // >= 150 m³/s
-  alarm: 300,        // >= 300 m³/s
-  emergency: 450,    // >= 450 m³/s
+  warning: 300,      // >= 300 m³/s
+  alarm: 500,        // >= 500 m³/s
+  emergency: 750,    // >= 750 m³/s
 };
 
 // =============================================================================
@@ -20,10 +20,19 @@ export const DEFAULT_THRESHOLDS = {
 // =============================================================================
 
 export const ALERT_COLORS = {
-  normal: "#808080",
+  normal: "#b0b0b0",
   warning: "#ffc107",
   alarm: "#ff9800",
   emergency: "#d32f2f",
+};
+
+export const ALERT_LEVEL_ORDER = ["emergency", "alarm", "warning", "normal"];
+
+export const ALERT_LEVEL_LABELS = {
+  emergency: "Emergency",
+  alarm: "Alarm",
+  warning: "Warning",
+  normal: "Normal",
 };
 
 // =============================================================================
@@ -112,6 +121,17 @@ export const calculateAlertLevelFromForecasts = (forecasts, thresholds = DEFAULT
 export const getAlertColor = (level) => {
   return ALERT_COLORS[level?.toLowerCase()] || ALERT_COLORS.normal;
 };
+
+export const getAlertLabel = (level) => {
+  return ALERT_LEVEL_LABELS[level?.toLowerCase()] || ALERT_LEVEL_LABELS.normal;
+};
+
+export const buildMultimodalLegendItems = (colors = ALERT_COLORS) =>
+  ALERT_LEVEL_ORDER.map((level) => ({
+    name: getAlertLabel(level),
+    color: colors[level] || ALERT_COLORS[level],
+    level,
+  }));
 
 /**
  * Get priority for an alert level (for cluster aggregation)

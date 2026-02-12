@@ -78,7 +78,7 @@
     border-radius: 2px;
     overflow: hidden;
   }
-  .alert-bar .normal { background: #4CAF50; flex: 1; }
+  .alert-bar .normal { background: #b0b0b0; flex: 1; }
   .alert-bar .watch { background: #2196F3; flex: 1; }
   .alert-bar .warning { background: #FFC107; flex: 1; }
   .alert-bar .alarm { background: #FF9800; flex: 1; }
@@ -114,7 +114,7 @@
   .status-badge.emergency { background: #F44336; }
   .status-badge.alarm { background: #FF9800; }
   .status-badge.warning { background: #FFC107; color: #333; }
-  .status-badge.normal { background: #4CAF50; }
+  .status-badge.normal { background: #b0b0b0; }
 
   /* Section headers */
   .section-header {
@@ -167,7 +167,7 @@
   .level-dot.emergency { background: #F44336; }
   .level-dot.alarm { background: #FF9800; }
   .level-dot.warning { background: #FFC107; }
-  .level-dot.normal { background: #4CAF50; }
+  .level-dot.normal { background: #b0b0b0; }
 
   /* Country breakdown table */
   .country-table {
@@ -196,6 +196,15 @@
   .count-emergency { color: #F44336; font-weight: 700; }
   .count-alarm { color: #FF9800; font-weight: 700; }
   .count-warning { color: #b8860b; font-weight: 700; }
+
+  .country-flag {
+    width: 24px;
+    height: 16px;
+    border: 1px solid #eee;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
 
   /* Images */
   .map-container, .chart-container {
@@ -285,7 +294,7 @@
   .stat-card.emergency .stat-value { color: #F44336; }
   .stat-card.alarm .stat-value { color: #FF9800; }
   .stat-card.warning .stat-value { color: #b8860b; }
-  .stat-card.normal .stat-value { color: #4CAF50; }
+  .stat-card.normal .stat-value { color: #b0b0b0; }
 </style>
 </head>
 <body>
@@ -414,7 +423,7 @@
   <tbody>
     {% for country in country_breakdown %}
     <tr>
-      <td>{{ country.name }}</td>
+      <td><img src="https://flagcdn.com/w40/{{ country.code|lower }}.png" class="country-flag" alt="">{{ country.name }}</td>
       <td class="count-emergency">{{ country.emergency }}</td>
       <td class="count-alarm">{{ country.alarm }}</td>
       <td class="count-warning">{{ country.warning }}</td>

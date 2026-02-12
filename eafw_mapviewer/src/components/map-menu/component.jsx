@@ -14,10 +14,63 @@ import chevronRightIcon from "@/assets/icons/chevron-right.svg?sprite";
 import "./styles.scss";
 
 class MapMenu extends PureComponent {
+  getDatasetOrderMap = () => {
+    const { datasetSections } = this.props;
+    const orderMap = new Map();
+    let currentIndex = 0;
+
+    (datasetSections || []).forEach((section) => {
+      if (section.subCategories && section.subCategories.length) {
+        section.subCategories.forEach((subCategory) => {
+          (subCategory.datasets || []).forEach((dataset) => {
+            if (!orderMap.has(dataset.id)) {
+              orderMap.set(dataset.id, currentIndex++);
+            }
+          });
+        });
+        return;
+      }
+
+      (section.datasets || []).forEach((dataset) => {
+        if (!orderMap.has(dataset.id)) {
+          orderMap.set(dataset.id, currentIndex++);
+        }
+      });
+    });
+
+    return orderMap;
+  };
+
+  sortActiveDatasetsByCmsOrder = (activeDatasets = []) => {
+    const orderMap = this.getDatasetOrderMap();
+    const fallback = Number.MAX_SAFE_INTEGER;
+
+    return [...activeDatasets].sort((a, b) => {
+      const aIndex = orderMap.has(a.dataset) ? orderMap.get(a.dataset) : fallback;
+      const bIndex = orderMap.has(b.dataset) ? orderMap.get(b.dataset) : fallback;
+      return aIndex - bIndex;
+    });
+  };
+
+  reorderActiveDatasetsIfNeeded = () => {
+    const { activeDatasets, setMapSettings } = this.props;
+    if (!activeDatasets || !activeDatasets.length) return;
+
+    const sorted = this.sortActiveDatasetsByCmsOrder(activeDatasets);
+    const changed = sorted.some(
+      (dataset, index) => dataset.dataset !== activeDatasets[index]?.dataset
+    );
+
+    if (changed) {
+      setMapSettings({ datasets: sorted });
+    }
+  };
+
   componentDidMount() {
     const { datasetSections } = this.props;
     // If datasets are already loaded at mount, auto-open with delay
     if (datasetSections && datasetSections.length > 0) {
+      this.reorderActiveDatasetsIfNeeded();
       setTimeout(() => {
         this.handleAutoOpen();
       }, 150);
@@ -31,6 +84,7 @@ class MapMenu extends PureComponent {
     // Handle auto-open when datasetSections loads after mount
     if ((!prevProps.datasetSections || prevProps.datasetSections.length === 0) &&
         datasetSections && datasetSections.length > 0) {
+      this.reorderActiveDatasetsIfNeeded();
       // Small delay to ensure URL restoration completes first
       setTimeout(() => {
         this.handleAutoOpen();
@@ -64,7 +118,8 @@ class MapMenu extends PureComponent {
         (l) => l.dataset !== dataset
       );
     } else {
-      newActiveDatasets = [
+      newActiveDatasets = this.sortActiveDatasetsByCmsOrder([
+        ...newActiveDatasets,
         {
           dataset,
           opacity: 1,
@@ -74,7 +129,7 @@ class MapMenu extends PureComponent {
             mapSide: activeCompareSide,
           }),
         },
-      ].concat([...newActiveDatasets]);
+      ]);
     }
 
     this.props.setMapSettings({

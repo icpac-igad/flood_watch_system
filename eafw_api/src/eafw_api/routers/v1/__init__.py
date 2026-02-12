@@ -16,6 +16,9 @@ from .cms import router as cms_router
 from .multimodal import router as multimodal_router
 from .basins import router as basins_router
 from .reports import router as reports_router
+from .models import router as models_router
+from .google_flood import router as google_flood_router
+from .risk import router as risk_router
 
 router = APIRouter(tags=["v1"])
 
@@ -29,3 +32,6 @@ router.include_router(bulletins_router, prefix="/bulletins", tags=["Flood Bullet
 router.include_router(multimodal_router, prefix="/multimodal", tags=["Multimodal Forecasts"])
 router.include_router(basins_router, prefix="/basins", tags=["HydroBasins"])
 router.include_router(reports_router, prefix="/reports", tags=["Reports"])
+router.include_router(models_router, prefix="/models", tags=["Model-specific Forecasts"])
+router.include_router(google_flood_router, prefix="/google-flood", tags=["Google Flood"])
+router.include_router(risk_router, prefix="/risk", tags=["Risk & Summaries"])

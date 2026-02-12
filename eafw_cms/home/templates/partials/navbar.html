@@ -22,7 +22,7 @@
       {% for item in navbar.menu_items %}
         {% if item.block_type == 'link' %}
           <li>
-            <a class="navbar-item nav-main-item {% if item.value.name|upper == 'MAPVIEWER' %}mapviewer-link{% endif %}"
+            <a class="navbar-item nav-main-item"
                href="{{ item.value.url }}"
                {% if item.value.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>
               {{ item.value.name }}
@@ -49,30 +49,41 @@
         {% endif %}
       {% endfor %}
 
-      <!-- Language Switcher as navbar item -->
+      <!-- Google Translate Language Switcher -->
       <li class="language-switcher">
-        <div class="language-dropdown-wrapper">
-          <button class="language-dropdown-trigger" aria-label="{% trans 'Select language' %}">
+        <div class="language-dropdown-wrapper" id="lang-dropdown-wrapper">
+          <button class="language-dropdown-trigger" id="lang-trigger" aria-label="Select language">
             <svg class="globe-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
               <ellipse cx="12" cy="12" rx="4" ry="10" stroke="currentColor" stroke-width="2"/>
               <path d="M2 12h20" stroke="currentColor" stroke-width="2"/>
             </svg>
-            <span class="current-lang">{{ current_language|upper }}</span>
+            <span class="current-lang" id="current-lang-label">EN</span>
             <svg class="dropdown-arrow" width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-          </button>
-          <div class="language-dropdown-menu">
-            {% for lang_code, lang_name in cms_languages %}
-              <a href="?language={{ lang_code }}"
-                 class="language-dropdown-item {% if lang_code == current_language %}is-active{% endif %}"
-                 data-lang="{{ lang_code }}">
-                {{ lang_name }}
-              </a>
-            {% endfor %}
-          </div>
-        </div>
+	          </button>
+		          <div class="language-dropdown-menu" id="lang-dropdown-menu">
+                <div class="language-search-wrap">
+                  <input
+                    type="text"
+                    id="lang-filter-input"
+                    class="language-filter-input"
+                    placeholder="Type to filter languages..."
+                    autocomplete="off"
+                  >
+                </div>
+		            {% for lang_code, lang_name in cms_languages %}
+		              <a href="#"
+		                 class="language-dropdown-item {% if lang_code == 'en' %}is-active{% endif %}"
+		                 data-lang="{{ lang_code }}">
+		                {{ lang_name }}
+	              </a>
+	            {% endfor %}
+	          </div>
+	        </div>
+	        <!-- Hidden Google Translate element -->
+	        <div id="google_translate_element" style="display:none;"></div>
       </li>
     </ul>
   </div>
@@ -80,6 +91,69 @@
 {% endif %}
 
 <style>
+  /* Hide Google Translate UI (we drive translation via our own dropdown). */
+  #google_translate_element,
+  #google_translate_element * {
+    display: none !important;
+  }
+
+  iframe.goog-te-banner-frame,
+  .goog-te-banner-frame,
+  iframe.goog-te-menu-frame,
+  .goog-te-menu-frame,
+  iframe[src*="translate.google"],
+  .goog-te-balloon-frame,
+  .goog-te-spinner-pos,
+  .goog-te-spinner,
+  #goog-gt-tt,
+  #goog-gt-vt,
+  .goog-tooltip,
+  .goog-tooltip:hover,
+  .goog-text-highlight,
+  .goog-logo-link,
+  .goog-te-gadget-icon,
+  .goog-te-gadget {
+    display: none !important;
+  }
+
+  .goog-te-spinner-pos,
+  .goog-te-spinner-pos *,
+  .goog-te-spinner,
+  .goog-te-spinner * {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+
+  #goog-gt-vt,
+  #goog-gt-vt * {
+    display: none !important;
+  }
+
+  /* Newer Google Translate banner/container classes. */
+  .VIpgJd-ZVi9od-ORHb,
+  .VIpgJd-ZVi9od-ORHb-OEVmcd,
+  .VIpgJd-ZVi9od-aZ2wEe,
+  .VIpgJd-ZVi9od-aZ2wEe-wOHMyf {
+    display: none !important;
+  }
+
+  /* Catch-all for newer injected GT UI wrappers/badges (classnames change often). */
+  [class*="VIpgJd-ZVi9od"] {
+    display: none !important;
+  }
+
+  /* Catch-all for GT's newer classnames. */
+  [class^="VIpgJd-"],
+  [class*=" VIpgJd-"] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    top: 0 !important;
+  }
+
   .navbar{
       background-color: var(--navbar-bg);
   }
@@ -224,14 +298,8 @@
     padding-left: 1.75rem;
   }
 
-  /* Special styling for MAPVIEWER link */
-  .navbar-item.nav-main-item.mapviewer-link {
-    background-color: var(--accent-color) !important;
-    border-radius: 64px;
-    color: var(--button-accent-text) !important;
-  }
-
-  .navbar-item.nav-main-item.mapviewer-link:hover {
+  /* Active page hover keeps accent color */
+  .navbar-item.nav-main-item.active-page:hover {
     background-color: var(--accent-hover) !important;
     color: var(--button-accent-text) !important;
   }
@@ -305,6 +373,22 @@
     filter: brightness(0) invert(1); /* Makes SVG icons white to match navbar text */
   }
 
+  /* Hide Google Translate default banner, frame, and popups */
+  .goog-te-banner-frame,
+  .skiptranslate,
+  #goog-gt-tt,
+  .goog-te-balloon-frame,
+  .goog-tooltip,
+  .goog-tooltip:hover,
+  .goog-text-highlight {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  body { top: 0 !important; }
+  .goog-te-menu-frame {
+    box-shadow: none !important;
+  }
+
   /* Language Switcher Styles */
   .language-switcher {
     margin-left: auto !important;
@@ -369,7 +453,7 @@
     position: absolute;
     top: calc(100% + 11px);
     right: 0;
-    min-width: 160px;
+    min-width: 180px;
     background-color: var(--navbar-bg);
     border: 1px solid color-mix(in srgb, var(--navbar-text) 20%, transparent);
     border-radius: 6px;
@@ -377,8 +461,38 @@
     z-index: 1001;
     padding: 0.5rem 0;
     animation: fadeInDown 0.2s ease-out;
-    max-height: 300px;
+    max-height: 350px;
     overflow-y: auto;
+  }
+
+  .language-search-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 0.35rem 0.6rem 0.5rem;
+    background: var(--navbar-bg);
+    border-bottom: 1px solid color-mix(in srgb, var(--navbar-text) 16%, transparent);
+  }
+
+  .language-filter-input {
+    width: 100%;
+    border: 1px solid color-mix(in srgb, var(--navbar-text) 28%, transparent);
+    background: color-mix(in srgb, var(--navbar-text) 10%, transparent);
+    color: var(--navbar-text);
+    border-radius: 6px;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    outline: none;
+  }
+
+  .language-filter-input::placeholder {
+    color: color-mix(in srgb, var(--navbar-text) 72%, transparent);
+  }
+
+  .language-filter-input:focus {
+    border-color: color-mix(in srgb, var(--accent-color) 75%, white);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 28%, transparent);
   }
 
   .language-switcher .language-dropdown-wrapper.is-active .language-dropdown-menu {
@@ -437,6 +551,65 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  // Best-effort removal of Google Translate injected UI (banner/spinner/icons).
+  // Note: GT likes to re-inject UI when a non-English language is active.
+  const gtUiSelectors = [
+    "iframe.goog-te-banner-frame",
+    ".goog-te-banner-frame",
+    "iframe.goog-te-menu-frame",
+    ".goog-te-menu-frame",
+    "iframe[src*=\"translate.google\"]",
+    ".goog-te-balloon-frame",
+    ".goog-te-spinner-pos",
+    ".goog-te-spinner",
+    "#goog-gt-tt",
+    "#goog-gt-vt",
+    "[class^=\"VIpgJd-\"]",
+    "[class*=\" VIpgJd-\"]",
+  ];
+
+  function suppressGoogleTranslateUi(root = document) {
+    gtUiSelectors.forEach((sel) => {
+      root.querySelectorAll(sel).forEach((el) => {
+        if (!el) return;
+        if (el.id === "google_translate_element") return;
+        try {
+          // Prefer hiding over removing: removal can sometimes break translation,
+          // but hiding is usually sufficient to suppress GT's UI.
+          el.style.setProperty("display", "none", "important");
+          el.style.setProperty("visibility", "hidden", "important");
+          el.style.setProperty("height", "0", "important");
+          el.style.setProperty("width", "0", "important");
+          el.style.setProperty("opacity", "0", "important");
+          el.style.setProperty("pointer-events", "none", "important");
+        } catch (_) {
+          // ignore
+        }
+      });
+    });
+
+    // GT sometimes offsets the page to make room for its banner.
+    document.documentElement.style.top = "0px";
+    if (document.body) document.body.style.top = "0px";
+  }
+
+  suppressGoogleTranslateUi();
+
+  let gtSuppressScheduled = false;
+  const scheduleSuppress = () => {
+    if (gtSuppressScheduled) return;
+    gtSuppressScheduled = true;
+    requestAnimationFrame(() => {
+      gtSuppressScheduled = false;
+      suppressGoogleTranslateUi();
+    });
+  };
+
+  const gtObserver = new MutationObserver(scheduleSuppress);
+  gtObserver.observe(document.documentElement, { childList: true, subtree: true });
+  setTimeout(suppressGoogleTranslateUi, 500);
+  setTimeout(suppressGoogleTranslateUi, 1500);
+
   const burger = document.getElementById("navbar-burger");
   const menu = document.getElementById("navbar-menu");
   const burgerIcon = document.getElementById("burger-icon");
@@ -483,96 +656,185 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Language Switcher functionality
-  const langWrapper = document.querySelector(".language-dropdown-wrapper");
-  const langTrigger = document.querySelector(".language-dropdown-trigger");
+  // Language Switcher with Google Translate
+	  const langWrapper = document.getElementById("lang-dropdown-wrapper");
+	  const langTrigger = document.getElementById("lang-trigger");
+    const langFilterInput = document.getElementById("lang-filter-input");
+		  const langLabel = document.getElementById("current-lang-label");
+	
+	  // Language code to short label mapping
+	  const langLabels = {
+	    {% for lang_code, lang_name in cms_languages %}
+	      "{{ lang_code|escapejs }}": "{{ lang_code|upper|escapejs }}"{% if not forloop.last %},{% endif %}
+	    {% endfor %}
+	  };
 
-  if (langWrapper && langTrigger) {
-    // Desktop: hover behavior
-    langWrapper.addEventListener("mouseenter", function() {
-      if (window.innerWidth > 1023) {
+	  if (langWrapper && langTrigger) {
+      const langItems = Array.from(document.querySelectorAll(".language-dropdown-item"));
+
+      function normalizeLangCode(code) {
+        return String(code || "").trim().toLowerCase();
+      }
+
+      function normalizeFilterValue(value) {
+        return String(value || "").trim().toLowerCase();
+      }
+
+      function filterLanguageItems(value) {
+        const query = normalizeFilterValue(value);
+        langItems.forEach(function(item) {
+          const code = normalizeLangCode(item.getAttribute("data-lang"));
+          const name = normalizeFilterValue(item.textContent);
+          const isMatch = !query || name.startsWith(query) || code.startsWith(query);
+          item.style.display = isMatch ? "" : "none";
+        });
+      }
+
+      function openLanguageDropdown() {
         langWrapper.classList.add("is-active");
-      }
-    });
-
-    langWrapper.addEventListener("mouseleave", function() {
-      if (window.innerWidth > 1023) {
-        langWrapper.classList.remove("is-active");
-      }
-    });
-
-    // Click behavior (both mobile and desktop)
-    langTrigger.addEventListener("click", function(e) {
-      e.preventDefault();
-      langWrapper.classList.toggle("is-active");
-    });
-
-    // Language selection - use Django's set_language view
-    const langItems = document.querySelectorAll(".language-dropdown-item");
-    langItems.forEach(function(item) {
-      item.addEventListener("click", function(e) {
-        e.preventDefault();
-        const lang = this.getAttribute("data-lang");
-        // Create a form to submit to Django's set_language view
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = "/i18n/setlang/";
-
-        const csrfInput = document.createElement("input");
-        csrfInput.type = "hidden";
-        csrfInput.name = "csrfmiddlewaretoken";
-        csrfInput.value = getCookie("csrftoken");
-
-        const langInput = document.createElement("input");
-        langInput.type = "hidden";
-        langInput.name = "language";
-        langInput.value = lang;
-
-        const nextInput = document.createElement("input");
-        nextInput.type = "hidden";
-        nextInput.name = "next";
-        nextInput.value = window.location.pathname;
-
-        form.appendChild(csrfInput);
-        form.appendChild(langInput);
-        form.appendChild(nextInput);
-        document.body.appendChild(form);
-        form.submit();
-      });
-    });
-  }
-
-  // Helper function to get cookie value
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
+        if (langFilterInput) {
+          langFilterInput.value = "";
+          filterLanguageItems("");
+          langFilterInput.focus();
         }
       }
+
+      function closeLanguageDropdown() {
+        langWrapper.classList.remove("is-active");
+        if (langFilterInput) {
+          langFilterInput.value = "";
+          filterLanguageItems("");
+        }
+      }
+
+	    // Desktop: hover behavior
+	    langWrapper.addEventListener("mouseenter", function() {
+	      if (window.innerWidth > 1023) {
+	        openLanguageDropdown();
+	      }
+	    });
+
+	    langWrapper.addEventListener("mouseleave", function() {
+	      if (window.innerWidth > 1023) {
+	        closeLanguageDropdown();
+	      }
+	    });
+
+	    // Click behavior (both mobile and desktop)
+	    langTrigger.addEventListener("click", function(e) {
+	      e.preventDefault();
+	      if (langWrapper.classList.contains("is-active")) {
+          closeLanguageDropdown();
+        } else {
+          openLanguageDropdown();
+        }
+	    });
+
+	    // Language selection - trigger Google Translate
+      if (langFilterInput) {
+        langFilterInput.addEventListener("click", function(e) {
+          e.stopPropagation();
+        });
+        langFilterInput.addEventListener("input", function() {
+          filterLanguageItems(this.value);
+        });
+      }
+
+	    langItems.forEach(function(item) {
+	      item.addEventListener("click", function(e) {
+	        e.preventDefault();
+        const lang = this.getAttribute("data-lang");
+
+        // Update active state in dropdown
+        langItems.forEach(function(el) { el.classList.remove("is-active"); });
+        this.classList.add("is-active");
+
+        // Update the button label
+        langLabel.textContent = langLabels[lang] || lang.toUpperCase();
+
+	        // Close dropdown
+	        closeLanguageDropdown();
+
+        // Trigger Google Translate
+        if (lang === "en") {
+          // Restore original page
+          var frame = document.querySelector(".goog-te-banner-frame");
+          if (frame) {
+            var btn = frame.contentDocument.querySelector(".goog-close-link");
+            if (btn) btn.click();
+          }
+          // Also try cookie approach
+          document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+          document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + window.location.hostname;
+          location.reload();
+        } else {
+          // Set Google Translate cookie and trigger
+          document.cookie = "googtrans=/en/" + lang + "; path=/;";
+          document.cookie = "googtrans=/en/" + lang + "; path=/; domain=." + window.location.hostname;
+
+          // Try to use the Google Translate select element
+          var gtSelect = document.querySelector(".goog-te-combo");
+          if (gtSelect) {
+            gtSelect.value = lang;
+            gtSelect.dispatchEvent(new Event("change"));
+          } else {
+            // If widget not yet ready, reload to apply cookie
+            location.reload();
+          }
+        }
+      });
+    });
+
+    // On page load, detect current Google Translate language from cookie
+    var googtrans = document.cookie.match(/googtrans=\/en\/([^;]+)/);
+    if (googtrans && googtrans[1]) {
+      var currentLang = googtrans[1];
+      langLabel.textContent = langLabels[currentLang] || currentLang.toUpperCase();
+      langItems.forEach(function(el) {
+        el.classList.toggle(
+          "is-active",
+          normalizeLangCode(el.getAttribute("data-lang")) === normalizeLangCode(currentLang)
+        );
+      });
     }
-    return cookieValue;
-  }
+	  }
 
   // Close language dropdown when clicking outside
-  document.addEventListener("click", function(e) {
-    if (langWrapper && !langWrapper.contains(e.target)) {
-      langWrapper.classList.remove("is-active");
-    }
-  });
+	  document.addEventListener("click", function(e) {
+	    if (langWrapper && !langWrapper.contains(e.target)) {
+	      langWrapper.classList.remove("is-active");
+        if (langFilterInput) {
+          langFilterInput.value = "";
+          const langItems = Array.from(document.querySelectorAll(".language-dropdown-item"));
+          langItems.forEach(function(item) {
+            item.style.display = "";
+          });
+        }
+	    }
+	  });
 
-  // Highlight active page in navbar (yellow like mapviewer)
+  // Highlight active page in navbar
   const currentPath = window.location.pathname;
-  const navLinks = document.querySelectorAll('.navbar-item.nav-main-item:not(.mapviewer-link)');
+  const navLinks = document.querySelectorAll('.navbar-item.nav-main-item');
   navLinks.forEach(function(link) {
     const href = link.getAttribute('href');
-    if (href && currentPath === href) {
+    if (!href) return;
+    // Exact match for homepage, prefix match for other pages
+    if (href === '/' ? currentPath === '/' : currentPath.startsWith(href)) {
       link.classList.add('active-page');
     }
   });
 });
 </script>
+
+<!-- Google Translate API -->
+<script>
+	function googleTranslateElementInit() {
+	  new google.translate.TranslateElement({
+	    pageLanguage: 'en',
+	    includedLanguages: '{% for lang_code, lang_name in cms_languages %}{{ lang_code }}{% if not forloop.last %},{% endif %}{% endfor %}',
+	    autoDisplay: false
+	  }, 'google_translate_element');
+	}
+	</script>
+<script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>

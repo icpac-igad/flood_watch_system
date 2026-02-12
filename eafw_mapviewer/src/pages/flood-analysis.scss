@@ -5,7 +5,7 @@
 
 .c-flood-analysis {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1760px;
   margin: 0 auto;
   padding: 0;
   background: #fff;
@@ -63,7 +63,7 @@
     .color-segment {
       flex: 1;
 
-      &.normal { background: #4CAF50; }
+      &.normal { background: #b0b0b0; }
       &.watch { background: #2196F3; }
       &.warning { background: #FFC107; }
       &.alarm { background: #FF9800; }
@@ -72,7 +72,22 @@
   }
 
   .c-flood-analysis-body {
-    padding: 24px 48px;
+    padding: 24px 0;
+    min-width: 0;
+  }
+
+  .c-report-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(240px, 320px);
+    gap: 20px;
+    align-items: start;
+    padding: 0 20px 24px;
+  }
+
+  .report-sidebar {
+    position: sticky;
+    top: 16px;
+    align-self: start;
   }
 
   // Report Title Section
@@ -478,7 +493,7 @@
         &.alarm { background: #FF9800; }
         &.warning { background: #FFC107; }
         &.watch { background: #2196F3; }
-        &.normal { background: #4CAF50; }
+        &.normal { background: #b0b0b0; }
       }
     }
   }
@@ -518,8 +533,19 @@
 // Responsive
 @media (max-width: 768px) {
   .c-flood-analysis {
+    .c-report-layout {
+      grid-template-columns: 1fr;
+      gap: 14px;
+      padding: 0 12px 20px;
+    }
+
+    .report-sidebar {
+      position: static;
+      top: auto;
+    }
+
     .c-flood-analysis-body {
-      padding: 16px 20px;
+      padding: 16px 0;
     }
 
     .report-title-section {
@@ -575,10 +601,16 @@
 
 @media (max-width: 1200px) {
   .c-flood-analysis {
-    max-width: 1080px;
+    max-width: 1320px;
+
+    .c-report-layout {
+      grid-template-columns: minmax(210px, 260px) minmax(0, 1fr) minmax(210px, 260px);
+      gap: 14px;
+      padding: 0 12px 24px;
+    }
 
     .c-flood-analysis-body {
-      padding: 20px 32px;
+      padding: 20px 0;
     }
   }
 }

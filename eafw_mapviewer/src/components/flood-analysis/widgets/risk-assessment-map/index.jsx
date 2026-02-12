@@ -16,7 +16,7 @@ import "./styles.scss";
 
 // Risk level configuration
 const RISK_LEVELS = [
-  { value: "normal", label: "Normal", color: "#4CAF50", description: "No flood risk expected" },
+  { value: "normal", label: "Normal", color: "#b0b0b0", description: "No flood risk expected" },
   { value: "warning", label: "Warning", color: "#FFC107", description: "Moderate flood risk - monitor situation" },
   { value: "alarm", label: "Alarm", color: "#FF9800", description: "High flood risk - prepare for action" },
   { value: "emergency", label: "Emergency", color: "#F44336", description: "Severe flood risk - immediate action required" },
@@ -148,6 +148,12 @@ const RiskAssessmentMap = ({
       setLoading(false);
     });
 
+    const hoverPopup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 10,
+    });
+
     // Click handler
     map.current.on("click", "admin2-fill", (e) => {
       if (readOnly) return;
@@ -180,18 +186,35 @@ const RiskAssessmentMap = ({
     // Hover effect
     map.current.on("mousemove", "admin2-fill", (e) => {
       if (e.features.length > 0) {
+        const props = e.features[0].properties || {};
+        const districtName = props.name_2 || "District";
+        const admin1Name = props.name_1 || "N/A";
+        const countryName = props.country || "";
+
         map.current.getCanvas().style.cursor = "pointer";
         map.current.setFilter("admin2-hover", [
           "==",
           "name_2",
-          e.features[0].properties.name_2,
+          districtName,
         ]);
+
+        hoverPopup
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="font-size:12px;line-height:1.35">`
+            + `<strong>${districtName}</strong><br/>`
+            + `<span style="color:#334155">Admin 1: ${admin1Name}</span><br/>`
+            + `<span style="color:#666">${countryName}</span>`
+            + `</div>`
+          )
+          .addTo(map.current);
       }
     });
 
     map.current.on("mouseleave", "admin2-fill", () => {
       map.current.getCanvas().style.cursor = "";
       map.current.setFilter("admin2-hover", ["==", "name_2", ""]);
+      hoverPopup.remove();
     });
 
     return () => {

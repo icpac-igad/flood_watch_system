@@ -220,6 +220,7 @@ const DataTable = ({
         },
         multiModelData: {
           forecastsJson: forecastsJsonField?.value,
+          layerName: selected?.layer?.name || selected?.layer?.label,
           adminName: adminNameField?.value,
           pointId: pointIdField?.value,
           dataEndpoint: dataEndpointField?.value,
@@ -241,7 +242,7 @@ const DataTable = ({
         multiModelData: {},
       };
     }
-  }, [data, rawHybasId]);
+  }, [data, rawHybasId, selected?.layer?.name, selected?.layer?.label]);
 
   // Determine if we should show chart or table
   const showChart = hasTimeSeriesData || hasMultiModelData;
@@ -252,6 +253,7 @@ const DataTable = ({
       {hasMultiModelData && (
         <MultiModelChart
           forecastsJson={multiModelData.forecastsJson}
+          layerName={multiModelData.layerName}
           adminName={multiModelData.adminName}
           pointId={multiModelData.pointId}
           dataEndpoint={multiModelData.dataEndpoint}

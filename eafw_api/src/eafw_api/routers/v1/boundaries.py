@@ -242,6 +242,7 @@ async def get_admin2_geojson(
         }
 
 
+@router.get("/admin-boundaries/")
 async def get_admin_boundaries_legacy(
     admin_level: Optional[str] = Query(None, description="None=countries, '0'=regions, '1'=districts"),
     unit_id: Optional[str] = Query(None, description="Parent unit name (country or region)"),

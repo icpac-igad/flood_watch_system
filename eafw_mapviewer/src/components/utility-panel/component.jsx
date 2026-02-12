@@ -97,6 +97,7 @@ class UtilityPanel extends PureComponent {
               <div className="label">FILTER</div>
             </div>
           </button>
+          {/* Draw/Upload shape tab — commented out for now
           <button
             className={cx("draw-upload-tab", { selected: activeTab === "draw" })}
             onClick={() => setUtilityActiveTab("draw")}
@@ -106,6 +107,7 @@ class UtilityPanel extends PureComponent {
               <div className="label">DRAW OR UPLOAD SHAPE</div>
             </div>
           </button>
+          */}
         </div>}
 
         {(!collapsed || hideHeader) && activeTab === "filter" && (
@@ -118,6 +120,7 @@ class UtilityPanel extends PureComponent {
           </div>
         )}
 
+        {/* Draw section — commented out for now
         {(!collapsed || hideHeader) && activeTab === "draw" && (
           <div className="utility-content">
             <DrawSection
@@ -138,6 +141,7 @@ class UtilityPanel extends PureComponent {
             />
           </div>
         )}
+        */}
       </div>
     );
   }

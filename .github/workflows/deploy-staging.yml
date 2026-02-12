@@ -172,6 +172,7 @@ jobs:
             CMS_API=/api
             BASE_PATH=/
             ASSET_PREFIX=
+            ADMIN_BOUNDARY_API=/api/v1/boundaries/admin-boundaries/
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -395,6 +396,34 @@ jobs:
               FROM gha.admin0 a0
               WHERE ST_Within(cp.geom, a0.geom) AND cp.country_code IS NULL;
             " 2>/dev/null || true
+
+            # Wait for CMS to be ready before running Django migrations
+            echo "Waiting for CMS to be ready..."
+            CMS_READY=0
+            for i in $(seq 1 30); do
+              if docker exec eafw-cms curl -sf http://localhost:8000/ >/dev/null 2>&1; then
+                CMS_READY=1
+                echo "CMS ready after $((i*5))s"
+                break
+              fi
+              [ $((i % 6)) -eq 0 ] && echo "  Still waiting for CMS ($i/30)..."
+              sleep 5
+            done
+
+            # Run Django migrations explicitly (entrypoint runs them too, but this ensures
+            # they complete and we see the output in CI logs)
+            if [ "$CMS_READY" -eq 1 ]; then
+              echo "Running Django migrations..."
+              docker exec eafw-cms /opt/venv/bin/python manage.py migrate --noinput 2>&1 || echo "WARN: Django migrate returned non-zero"
+              echo "Collecting static files..."
+              docker exec eafw-cms /opt/venv/bin/python manage.py collectstatic --clear --no-input 2>&1 || echo "WARN: collectstatic returned non-zero"
+            else
+              echo "WARN: CMS not ready, skipping explicit Django migrations (entrypoint will handle them)"
+            fi
+
+            # Force-restart nginx to pick up updated config (bind-mounted, not baked into image)
+            echo "Reloading nginx config..."
+            docker exec eafw-nginx nginx -s reload 2>&1 || docker restart eafw-nginx 2>&1 || echo "WARN: nginx reload/restart failed"
 
             # Cleanup dangling images
             docker image prune -f

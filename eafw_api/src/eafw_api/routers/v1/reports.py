@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Alert thresholds (consistent with multimodal-config)
-DEFAULT_WARNING_THRESHOLD = 150.0
-DEFAULT_ALARM_THRESHOLD = 300.0
-DEFAULT_EMERGENCY_THRESHOLD = 450.0
+DEFAULT_WARNING_THRESHOLD = 300.0
+DEFAULT_ALARM_THRESHOLD = 500.0
+DEFAULT_EMERGENCY_THRESHOLD = 750.0
 
 # Country name mapping
 COUNTRY_NAMES = {

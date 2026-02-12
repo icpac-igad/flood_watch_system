@@ -34,6 +34,7 @@ class FilterSection extends PureComponent {
         if (value !== 'project') {
           resetParams.project_filter = false;
           resetParams.project_countries = '';
+          resetParams.whca_filter = false;
         }
         if (value !== 'watershed') {
           resetParams.basin_filter = false;

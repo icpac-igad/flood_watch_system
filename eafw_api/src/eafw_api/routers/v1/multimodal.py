@@ -13,9 +13,9 @@ from eafw_api.db import get_connection
 router = APIRouter()
 
 # Default thresholds (same as CMS defaults)
-DEFAULT_WARNING_THRESHOLD = 150.0
-DEFAULT_ALARM_THRESHOLD = 300.0
-DEFAULT_EMERGENCY_THRESHOLD = 450.0
+DEFAULT_WARNING_THRESHOLD = 300.0
+DEFAULT_ALARM_THRESHOLD = 500.0
+DEFAULT_EMERGENCY_THRESHOLD = 750.0
 
 # Country name to ISO code mapping
 COUNTRY_CODES = {
@@ -23,6 +23,20 @@ COUNTRY_CODES = {
     'sudan': 'SD', 'south sudan': 'SS', 'tanzania': 'TZ',
     'rwanda': 'RW', 'burundi': 'BI', 'somalia': 'SO', 'zanzibar': 'TZ',
     'djibouti': 'DJ', 'eritrea': 'ER'
+}
+
+COUNTRY_CODE_ALIASES = {
+    "BD": "BI", "BDI": "BI",
+    "DJI": "DJ",
+    "ERI": "ER",
+    "ETH": "ET",
+    "KEN": "KE",
+    "RWA": "RW",
+    "SOM": "SO",
+    "SSD": "SS",
+    "SDN": "SD",
+    "TZA": "TZ",
+    "UGA": "UG",
 }
 
 COUNTRY_NAMES = {
@@ -68,11 +82,34 @@ WHCA_SCOPE_SQL_CONDITION = (
 )
 
 
+def _normalize_country_code(country: Optional[str]) -> Optional[str]:
+    if not country:
+        return None
+
+    value = country.strip()
+    if not value:
+        return None
+
+    mapped = COUNTRY_CODES.get(value.lower())
+    if mapped:
+        return mapped
+
+    upper_value = value.upper()
+    alias = COUNTRY_CODE_ALIASES.get(upper_value)
+    if alias:
+        return alias
+    if len(upper_value) == 2 and upper_value.isalpha():
+        return upper_value
+
+    return None
+
+
 @router.get("/geojson")
 async def get_multimodal_geojson(
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format (defaults to latest)"),
     filter: Optional[str] = Query("all", description="Filter: all, active, alarm, emergency"),
     scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    country: Optional[str] = Query(None, description="Country name or ISO2 code"),
 ):
     """
     Get multimodal ensemble forecast data as GeoJSON for map display.
@@ -90,9 +127,19 @@ async def get_multimodal_geojson(
     if scope not in ("all", "whca"):
         raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
 
-    scope_sql = ""
+    country_code = _normalize_country_code(country)
+    if country and not country_code:
+        raise HTTPException(status_code=400, detail="Invalid country. Use country name or ISO2 code")
+
+    point_filters = []
     if scope == "whca":
-        scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
+        point_filters.append(WHCA_SCOPE_SQL_CONDITION)
+    if country_code:
+        point_filters.append(f"({POINT_COUNTRY_CODE_SQL}) = '{country_code}'")
+
+    point_where_sql = ""
+    if point_filters:
+        point_where_sql = f"WHERE {' AND '.join(point_filters)}"
 
     async with get_connection() as conn:
         # Determine query date
@@ -154,7 +201,7 @@ async def get_multimodal_geojson(
                     ON f.point_id = cp.point_id
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
-                {scope_sql}
+                {point_where_sql}
             )
             SELECT json_build_object(
                 'type', 'FeatureCollection',
@@ -359,6 +406,7 @@ async def get_situation_summary(
     date_str: Optional[str] = Query(None, alias="date", description="Data date in YYYY-MM-DD format"),
     forecast_date: Optional[str] = Query(None, description="Alias for date"),
     scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    country: Optional[str] = Query(None, description="Country name or ISO2 code"),
 ):
     """
     Get situation summary for homepage KPIs and ticker.
@@ -372,6 +420,14 @@ async def get_situation_summary(
         scope_where_sql = ""
         if scope == "whca":
             scope_where_sql = f" AND {WHCA_SCOPE_SQL_CONDITION}"
+
+        country_code = _normalize_country_code(country)
+        if country and not country_code:
+            raise HTTPException(status_code=400, detail="Invalid country. Use country name or ISO2 code")
+
+        country_where_sql = ""
+        if country_code:
+            country_where_sql = f" AND ({POINT_COUNTRY_CODE_SQL}) = '{country_code}'"
 
         # Resolve query date (requested or latest available)
         if requested_date:
@@ -422,7 +478,7 @@ async def get_situation_summary(
                     ON f.point_id = cp.point_id
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
-                WHERE 1=1 {scope_where_sql}
+                WHERE 1=1 {scope_where_sql} {country_where_sql}
             ),
             risk_levels AS (
                 SELECT
@@ -450,7 +506,7 @@ async def get_situation_summary(
                 JOIN gha.multimodal_control_points cp ON cp.point_id = mf.point_id
                 CROSS JOIN query_params qp
                 WHERE mf.data_date = qp.query_date
-                {scope_where_sql}
+                {scope_where_sql} {country_where_sql}
             )
             SELECT
                 (SELECT COUNT(*) FROM risk_levels WHERE risk_level = 'emergency') as emergency_count,
@@ -491,7 +547,7 @@ async def get_situation_summary(
                     ON f.point_id = cp.point_id
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
-                WHERE 1=1 {scope_where_sql}
+                WHERE 1=1 {scope_where_sql} {country_where_sql}
             ),
             risk_levels AS (
                 SELECT
@@ -607,3 +663,248 @@ async def get_multimodal_available_dates(
             "dates": timestamps,  # backward compatibility
             "count": len(timestamps),
         }
+
+
+@router.get("/model-behavior")
+async def get_model_behavior_timeseries(
+    date: Optional[str] = Query(None, description="Reference run date YYYY-MM-DD (defaults to latest run)"),
+    country: Optional[str] = Query(None, description="Country name or ISO2 code"),
+    point_id: Optional[int] = Query(None, ge=1, description="Optional control point ID"),
+    lead: int = Query(1, ge=1, le=14, description="Fixed lead time in days for historical comparison"),
+    history_days: int = Query(90, ge=7, le=730, description="Historical window in days ending on reference date"),
+    forecast_horizon_days: int = Query(14, ge=1, le=30, description="Horizon days for latest-run forecast series"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+):
+    """
+    Fixed-lead model behavior comparison for flood-analysis reports.
+
+    Returns two separate series:
+    1) historical_behavior: fixed lead-time values per target date
+    2) current_forecast: latest-run forecast values (separate from historical)
+    """
+    if scope not in ("all", "whca"):
+        raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+
+    country_code = _normalize_country_code(country)
+    if country and not country_code:
+        raise HTTPException(status_code=400, detail=f"Invalid country value: {country}")
+
+    if date:
+        try:
+            query_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD") from exc
+    else:
+        query_date = None
+
+    async with get_connection() as conn:
+        if query_date is None:
+            query_date = await conn.fetchval("SELECT MAX(data_date) FROM gha.multimodal_forecasts")
+            if not query_date:
+                raise HTTPException(status_code=404, detail="No forecast data available")
+        else:
+            has_date = await conn.fetchval(
+                "SELECT 1 FROM gha.multimodal_forecasts WHERE data_date = $1::date LIMIT 1",
+                query_date,
+            )
+            if not has_date:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No forecast data available for date {query_date.isoformat()}",
+                )
+
+        point_conditions = []
+        params = []
+        param_idx = 1
+
+        if scope == "whca":
+            point_conditions.append(WHCA_SCOPE_SQL_CONDITION)
+
+        if point_id is not None:
+            point_conditions.append(f"cp.point_id = ${param_idx}")
+            params.append(point_id)
+            param_idx += 1
+
+        if country_code:
+            point_conditions.append(f"{POINT_COUNTRY_CODE_SQL} = ${param_idx}")
+            params.append(country_code)
+            param_idx += 1
+
+        point_where = f"WHERE {' AND '.join(point_conditions)}" if point_conditions else ""
+
+        query_date_param = param_idx
+        params.append(query_date)
+        param_idx += 1
+
+        lead_param = param_idx
+        params.append(lead)
+        param_idx += 1
+
+        history_param = param_idx
+        params.append(history_days)
+        param_idx += 1
+
+        horizon_param = param_idx
+        params.append(forecast_horizon_days)
+
+        row = await conn.fetchrow(
+            f"""
+            WITH selected_points AS (
+                SELECT cp.point_id
+                FROM gha.multimodal_control_points cp
+                {point_where}
+            ),
+            historical AS (
+                SELECT
+                    mf.forecast_date::date AS target_date,
+                    AVG(mf.daily_avg) AS daily_avg,
+                    AVG(mf.geosfm) AS geosfm,
+                    AVG(mf.floodproof) AS floodproof,
+                    AVG(mf.mike_hydro_rfe) AS mike_hydro_rfe,
+                    AVG(mf.mike_hydro_chirp) AS mike_hydro_chirp,
+                    AVG(mf.mike_hydro_imerg) AS mike_hydro_imerg
+                FROM gha.multimodal_forecasts mf
+                JOIN selected_points sp ON sp.point_id = mf.point_id
+                WHERE (mf.forecast_date - mf.data_date) = ${lead_param}
+                  AND mf.forecast_date BETWEEN (
+                        ${query_date_param}::date - (${history_param}::int - 1) * INTERVAL '1 day'
+                  )::date AND ${query_date_param}::date
+                GROUP BY mf.forecast_date
+            ),
+            latest_forecast AS (
+                SELECT
+                    mf.forecast_date::date AS target_date,
+                    AVG(mf.daily_avg) AS daily_avg,
+                    AVG(mf.geosfm) AS geosfm,
+                    AVG(mf.floodproof) AS floodproof,
+                    AVG(mf.mike_hydro_rfe) AS mike_hydro_rfe,
+                    AVG(mf.mike_hydro_chirp) AS mike_hydro_chirp,
+                    AVG(mf.mike_hydro_imerg) AS mike_hydro_imerg
+                FROM gha.multimodal_forecasts mf
+                JOIN selected_points sp ON sp.point_id = mf.point_id
+                WHERE mf.data_date = ${query_date_param}::date
+                  AND mf.forecast_date >= ${query_date_param}::date
+                  AND mf.forecast_date < (
+                        ${query_date_param}::date + ${horizon_param}::int * INTERVAL '1 day'
+                  )::date
+                GROUP BY mf.forecast_date
+            )
+            SELECT
+                (SELECT COUNT(*) FROM selected_points) AS selected_points_count,
+                COALESCE(
+                    (
+                        SELECT json_agg(
+                            json_build_object(
+                                'date', target_date::text,
+                                'daily_avg', daily_avg,
+                                'GeoSFM', geosfm,
+                                'Floodproof', floodproof,
+                                'Mike_Hydro_RFE', mike_hydro_rfe,
+                                'Mike_Hydro_CHIRP', mike_hydro_chirp,
+                                'Mike_Hydro_IMERG', mike_hydro_imerg
+                            )
+                            ORDER BY target_date
+                        )
+                        FROM historical
+                    ),
+                    '[]'::json
+                ) AS historical_behavior,
+                COALESCE(
+                    (
+                        SELECT json_agg(
+                            json_build_object(
+                                'date', target_date::text,
+                                'daily_avg', daily_avg,
+                                'GeoSFM', geosfm,
+                                'Floodproof', floodproof,
+                                'Mike_Hydro_RFE', mike_hydro_rfe,
+                                'Mike_Hydro_CHIRP', mike_hydro_chirp,
+                                'Mike_Hydro_IMERG', mike_hydro_imerg
+                            )
+                            ORDER BY target_date
+                        )
+                        FROM latest_forecast
+                    ),
+                    '[]'::json
+                ) AS current_forecast
+            """,
+            *params,
+        )
+
+        historical_behavior = row["historical_behavior"] if row and row["historical_behavior"] is not None else []
+        current_forecast = row["current_forecast"] if row and row["current_forecast"] is not None else []
+
+        if isinstance(historical_behavior, str):
+            historical_behavior = json.loads(historical_behavior)
+        if isinstance(current_forecast, str):
+            current_forecast = json.loads(current_forecast)
+
+        selected_points_count = int(row["selected_points_count"] or 0) if row else 0
+
+        return {
+            "reference_date": query_date.isoformat(),
+            "lead_time_days": lead,
+            "history_days": history_days,
+            "forecast_horizon_days": forecast_horizon_days,
+            "country": country_code,
+            "point_id": point_id,
+            "scope": scope,
+            "selected_points_count": selected_points_count,
+            "historical_behavior": historical_behavior,
+            "current_forecast": current_forecast,
+            "thresholds": {
+                "warning": DEFAULT_WARNING_THRESHOLD,
+                "alarm": DEFAULT_ALARM_THRESHOLD,
+                "emergency": DEFAULT_EMERGENCY_THRESHOLD,
+            },
+        }
+
+
+@router.get("/grid-cells/")
+async def get_grid_cells(
+    country: str = Query(..., description="Country name"),
+    region: str = Query(..., description="Region/admin1 name"),
+):
+    """
+    Get 0.25 degree grid cells for a country/region from gha.grid_025dd.
+    Used by the grid filter in the mapviewer.
+    """
+    async with get_connection() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                id,
+                xcol,
+                yrow,
+                centroid_lon,
+                centroid_lat,
+                ST_XMin(ST_Envelope(cell)) as bbox_left,
+                ST_YMin(ST_Envelope(cell)) as bbox_bottom,
+                ST_XMax(ST_Envelope(cell)) as bbox_right,
+                ST_YMax(ST_Envelope(cell)) as bbox_top
+            FROM gha.grid_025dd
+            WHERE LOWER(admin0_name) = LOWER($1)
+              AND LOWER(admin1_name) = LOWER($2)
+            ORDER BY yrow, xcol
+            """,
+            country,
+            region,
+        )
+
+        results = []
+        for row in rows:
+            results.append({
+                "id": row["id"],
+                "xcol": row["xcol"],
+                "yrow": row["yrow"],
+                "centroid_lon": float(row["centroid_lon"]) if row["centroid_lon"] is not None else None,
+                "centroid_lat": float(row["centroid_lat"]) if row["centroid_lat"] is not None else None,
+                "bbox": [
+                    float(row["bbox_left"]) if row["bbox_left"] is not None else None,
+                    float(row["bbox_bottom"]) if row["bbox_bottom"] is not None else None,
+                    float(row["bbox_right"]) if row["bbox_right"] is not None else None,
+                    float(row["bbox_top"]) if row["bbox_top"] is not None else None,
+                ],
+            })
+
+        return results

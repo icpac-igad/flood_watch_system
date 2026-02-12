@@ -8,6 +8,36 @@ const FRONTEND_ONLY_PARAMS = ['admin_filter', 'whca_filter', 'project_filter', '
 // Params that are legacy GFW-style and should be ignored
 const LEGACY_PARAMS_TO_IGNORE = ['unit_id', 'MASK_UNIT_ID', 'MASK_ADMIN_LEVEL', 'MASK_AREA', 'border_level', 'project_name'];
 
+const isTruthyFlag = (value) =>
+  value === true || value === 'true' || value === 1 || value === '1';
+
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const GOOGLE_FLOOD_GEOJSON_PATH = '/api/v1/google-flood/geojson/';
+const MODULAR_GEOJSON_PATHS = [
+  '/api/v1/multimodal/geojson/',
+  '/api/v1/models/geosfm/geojson/',
+  '/api/v1/models/mike-hydro/geojson/',
+  '/api/v1/models/floodproof/geojson/',
+  '/api/v1/google-flood/geojson/',
+];
+const GOOGLE_FLOOD_PARAM_KEYS = ['confidence', 'extended_coverage', 'date', 'scope', 'filter'];
+const GEOJSON_FILTER_PARAM_KEYS = ['country_name', 'region_name', 'district_name', 'project_countries', 'basin_id', 'date', 'filter'];
+
+const sanitizeTemplateParams = (url) => {
+  let sanitized = url;
+  // Remove unresolved placeholders like date={{time}} that can break pg_tileserv SQL casts.
+  sanitized = sanitized
+    .replace(/[&?][^=&]+=\{\{[^}]+\}\}/g, '')
+    .replace(/[&?][^=&]+=\{[^}]+\}/g, '');
+  // Normalize query separators after removals.
+  sanitized = sanitized
+    .replace(/\?&/g, '?')
+    .replace(/&&/g, '&')
+    .replace(/\?$/g, '')
+    .replace(/&$/g, '');
+  return sanitized;
+};
+
 const appendParamsToUrl = (url, params, isFilteredLayer = false) => {
   const [baseUrl, existingQuery = ''] = url.split('?');
 
@@ -50,19 +80,96 @@ const appendParamsToUrl = (url, params, isFilteredLayer = false) => {
   return result;
 };
 
+const resolveTemplateUrlParams = (url, params = {}) => {
+  if (!url || typeof url !== 'string') return url;
+
+  let resolved = url;
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+
+    const encodedValue = encodeURIComponent(String(value));
+    const escapedKey = escapeRegExp(key);
+
+    resolved = resolved
+      .replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), encodedValue)
+      .replace(new RegExp(`\\{${escapedKey}\\}`, 'g'), encodedValue);
+  });
+
+  return sanitizeTemplateParams(resolved);
+};
+
+const appendGeojsonParamsToUrl = (url, params = {}) => {
+  if (!url || typeof url !== 'string') return url;
+
+  const isModularGeojsonUrl = MODULAR_GEOJSON_PATHS.some((path) => url.includes(path));
+  if (!isModularGeojsonUrl) {
+    return url;
+  }
+
+  const [baseUrl, existingQuery = ''] = url.split('?');
+  const searchParams = new URLSearchParams(existingQuery);
+
+  // Apply shared clipping params for all modular GeoJSON model endpoints.
+  GEOJSON_FILTER_PARAM_KEYS.forEach((key) => {
+    const value = params?.[key];
+
+    if (value === undefined || value === null || value === '') {
+      searchParams.delete(key);
+      return;
+    }
+
+    searchParams.set(key, String(value));
+  });
+
+  // Convert frontend WHCA toggle to backend scope for GeoJSON endpoints.
+  if (isTruthyFlag(params?.whca_filter)) {
+    searchParams.set('scope', 'whca');
+  } else if (params?.scope !== undefined && params?.scope !== null && params?.scope !== '') {
+    searchParams.set('scope', String(params.scope));
+  } else {
+    searchParams.delete('scope');
+  }
+
+  // Keep Google-specific controls only on Google endpoint.
+  if (url.includes(GOOGLE_FLOOD_GEOJSON_PATH)) {
+    GOOGLE_FLOOD_PARAM_KEYS.forEach((key) => {
+      const value = params?.[key];
+
+      if (value === undefined || value === null || value === '') {
+        searchParams.delete(key);
+        return;
+      }
+
+      searchParams.set(key, String(value));
+    });
+  } else {
+    searchParams.delete('confidence');
+    searchParams.delete('extended_coverage');
+  }
+
+  const query = searchParams.toString();
+  return query ? `${baseUrl}?${query}` : baseUrl;
+};
+
 // =============================================================================
 // FloodWatch Custom: WHCA Countries Filter - Tile source swapping
 // When WHCA filter is active, swap pg_tileserv tile sources to use filtered versions
 // =============================================================================
 const WHCA_TILE_REPLACEMENTS = {
-  // Multimodal forecast points - use WHCA filtered function (gha schema)
-  'gha.multimodal_points': { replacement: 'gha.multimodal_points_whca' },
+  // Multimodal forecast points - use WHCA filtered clustered function (gha schema)
+  // Note: there is no non-clustered WHCA variant, so all point layers use the clustered version
+  'gha.multimodal_points': { replacement: 'gha.multimodal_points_clustered_whca' },
   'gha.multimodal_points_clustered': { replacement: 'gha.multimodal_points_clustered_whca' },
   'gha.multimodal_points_by_admin': { replacement: 'gha.multimodal_points_clustered_whca' },
   // Admin boundaries - use WHCA filtered functions (gha schema) with admin_level param
   'gha.admin0': { replacement: 'gha.admin_whca', params: 'admin_level=0' },
   'gha.admin1': { replacement: 'gha.admin_whca', params: 'admin_level=1' },
   'gha.admin2': { replacement: 'gha.admin_whca', params: 'admin_level=2' },
+  // Current mapviewer boundary baseline is admin_clipped; support WHCA swap from it.
+  'gha.admin_clipped': { replacement: 'gha.admin_whca' },
+  // If project filter was previously active, also allow swapping from project function.
+  'gha.admin_by_project': { replacement: 'gha.admin_whca' },
 };
 
 // =============================================================================
@@ -128,7 +235,7 @@ const applyBasinFilter = (tileUrl) => {
     modifiedUrl = modifiedUrl.replace(pattern2, `$1${replacement}/$2`);
   });
 
-  return { url: modifiedUrl, sourceLayer: newSourceLayer };
+  return { url: sanitizeTemplateParams(modifiedUrl), sourceLayer: newSourceLayer };
 };
 
 const applyProjectFilter = (tileUrl) => {
@@ -158,12 +265,7 @@ const applyProjectFilter = (tileUrl) => {
     }
   });
 
-  // Remove unresolved template placeholders like date={{time}} that cause SQL errors
-  modifiedUrl = modifiedUrl.replace(/[&?]date=\{\{time\}\}/g, '');
-  // Clean up leading ? or trailing & if needed
-  modifiedUrl = modifiedUrl.replace(/\?&/, '?').replace(/\?$/, '');
-
-  return { url: modifiedUrl, sourceLayer: newSourceLayer };
+  return { url: sanitizeTemplateParams(modifiedUrl), sourceLayer: newSourceLayer };
 };
 
 const applyAdminFilter = (tileUrl) => {
@@ -200,7 +302,7 @@ const applyAdminFilter = (tileUrl) => {
     }
   });
 
-  return { url: modifiedUrl, sourceLayer: newSourceLayer };
+  return { url: sanitizeTemplateParams(modifiedUrl), sourceLayer: newSourceLayer };
 };
 
 const applyWHCAFilter = (tileUrl) => {
@@ -239,7 +341,7 @@ const applyWHCAFilter = (tileUrl) => {
     }
   });
 
-  return { url: modifiedUrl, sourceLayer: newSourceLayer };
+  return { url: sanitizeTemplateParams(modifiedUrl), sourceLayer: newSourceLayer };
 };
 
 export const processLayers = (layers, paramInteractions, mapSide) => {
@@ -248,25 +350,44 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
     : layers;
 
   // FloodWatch Custom: Check filter states
-  const isProjectFilterActive = paramInteractions?.project_filter === true;
-  const isWHCAFilterActive = paramInteractions?.whca_filter === true;
-  const isAdminFilterActive = paramInteractions?.admin_filter === true;
-  const isBasinFilterActive = paramInteractions?.basin_filter === true;
-  const hasAdminSelection = !!(paramInteractions?.country_name);
+  const isProjectFilterActive =
+    isTruthyFlag(paramInteractions?.project_filter) || !!paramInteractions?.project_countries;
+  const isWHCAFilterActive = isTruthyFlag(paramInteractions?.whca_filter);
+  const isAdminFilterActive = isTruthyFlag(paramInteractions?.admin_filter);
+  const isBasinFilterActive = isTruthyFlag(paramInteractions?.basin_filter);
 
   // Determine if any filtering is active
   const isFilteringActive = isProjectFilterActive || isWHCAFilterActive || isAdminFilterActive || isBasinFilterActive;
 
-  // DEBUG: log filter state
-  if (isProjectFilterActive || paramInteractions?.project_countries) {
-    console.log('[processLayers] project_filter:', isProjectFilterActive,
-      'project_countries:', paramInteractions?.project_countries,
-      'admin_filter:', isAdminFilterActive, 'all params:', JSON.stringify(paramInteractions));
-  }
-
   return filteredLayers.map(layer => {
     let tiles = layer.layerConfig?.source?.tiles?.[0] || '';
     const newLayer = { ...layer };
+
+    // Resolve URL templates for GeoJSON string sources
+    const sourceData = newLayer.layerConfig?.source?.data;
+    if (typeof sourceData === 'string') {
+      // Merge layer params with global interactions so project/admin/WHCA
+      // clipping applies to modular GeoJSON model endpoints too.
+      const params = {
+        ...(newLayer.params || {}),
+        ...(paramInteractions || {}),
+      };
+      const resolvedSourceData = appendGeojsonParamsToUrl(
+        resolveTemplateUrlParams(sourceData, params),
+        params
+      );
+
+      if (resolvedSourceData !== sourceData) {
+        newLayer.layerConfig = {
+          ...newLayer.layerConfig,
+          source: {
+            ...newLayer.layerConfig.source,
+            data: resolvedSourceData,
+          },
+        };
+      }
+    }
+
     if (!tiles) {
       return newLayer;
     }
@@ -288,23 +409,13 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
       tiles = result.url;
       newSourceLayer = result.sourceLayer;
       tileSourceSwapped = tiles !== originalTiles;
-      if (tileSourceSwapped) {
-        console.log('[processLayers] SWAPPED:', originalTiles, '->', tiles, 'sourceLayer:', newSourceLayer);
-      } else {
-        console.log('[processLayers] NO SWAP for:', originalTiles);
-      }
     } else if (isWHCAFilterActive) {
-      if (hasAdminSelection) {
-        const result = applyAdminFilter(tiles);
-        tiles = result.url;
-        newSourceLayer = result.sourceLayer;
-        tileSourceSwapped = tiles !== originalTiles;
-      } else {
-        const result = applyWHCAFilter(tiles);
-        tiles = result.url;
-        newSourceLayer = result.sourceLayer;
-        tileSourceSwapped = tiles !== originalTiles;
-      }
+      // Always use WHCA filter — the WHCA pg_tileserv functions accept
+      // country_name, region_name, district_name for admin drill-down
+      const result = applyWHCAFilter(tiles);
+      tiles = result.url;
+      newSourceLayer = result.sourceLayer;
+      tileSourceSwapped = tiles !== originalTiles;
     } else if (isAdminFilterActive) {
       const result = applyAdminFilter(tiles);
       tiles = result.url;
@@ -318,6 +429,11 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
       (isProjectFilterActive && (
         tiles.includes('tileserv/gha.multimodal_points_by_project') ||
         tiles.includes('tileserv/gha.admin_by_project')
+      )) ||
+      (isWHCAFilterActive && (
+        tiles.includes('tileserv/gha.multimodal_points_clustered_whca') ||
+        tiles.includes('tileserv/gha.admin_whca') ||
+        tiles.includes('tileserv/gha.admin_clipped')
       )) ||
       (isAdminFilterActive && (
         tiles.includes('tileserv/gha.admin_clipped') ||

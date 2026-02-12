@@ -1,47 +1,75 @@
-/**
- * Expert Assessment Widget
- * Two sections: one for Hydrologists and one for Meteorologists
- * Each has: 1) Comment section first, 2) Interactive map to set risk levels
- * NOT side-by-side - stacked vertically
- */
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import PropTypes from "prop-types";
+import { connect } from "react-redux";
 import maplibregl from "maplibre-gl";
-import { isEmpty } from "lodash";
 
-import { CMS_API } from "@/utils/constants";
+import { ALERT_COLORS } from "@/utils/multimodal-config";
+import { getCookie } from "@/services/user";
 import Loader from "@/components/ui/loader";
 import Button from "@/components/ui/button";
 
 import "./styles.scss";
 
-// Risk level configurations
 const RISK_LEVELS = [
-  { value: "normal", label: "Normal", color: "#4CAF50", description: "Normal conditions" },
-  { value: "watch", label: "Watch", color: "#2196F3", description: "Monitoring" },
-  { value: "warning", label: "Warning", color: "#FFC107", description: "Elevated risk" },
-  { value: "alarm", label: "Alarm", color: "#FF9800", description: "High risk" },
-  { value: "emergency", label: "Emergency", color: "#F44336", description: "Severe" },
+  { value: "emergency", label: "Emergency", color: ALERT_COLORS.emergency },
+  { value: "alarm", label: "Alarm", color: ALERT_COLORS.alarm },
+  { value: "warning", label: "Warning", color: ALERT_COLORS.warning },
+  { value: "watch", label: "Watch", color: ALERT_COLORS.watch || "#2196F3" },
+  { value: "normal", label: "Normal", color: ALERT_COLORS.normal },
 ];
 
-// Expert types configuration
 const EXPERT_TYPES = {
   hydrologist: {
-    title: "Hydrologist Assessment",
-    subtitle: "Flood risk assessment based on river levels and discharge forecasts",
-    icon: "💧",
+    title: "Hydrologist",
+    subtitle: "River-level and discharge based assessment",
     color: "#1976d2",
   },
   meteorologist: {
-    title: "Meteorologist Assessment",
-    subtitle: "Weather and rainfall-related flood risk assessment",
-    icon: "🌧️",
-    color: "#FF9800",
+    title: "Meteorologist",
+    subtitle: "Rainfall and weather based assessment",
+    color: "#ef6c00",
   },
 };
 
-// Default map style
-const DEFAULT_STYLE = {
+const COUNTRY_CODE_TO_NAME = {
+  BD: "Burundi",
+  BI: "Burundi",
+  DJ: "Djibouti",
+  ER: "Eritrea",
+  ET: "Ethiopia",
+  KE: "Kenya",
+  RW: "Rwanda",
+  SO: "Somalia",
+  SS: "South Sudan",
+  SD: "Sudan",
+  TZ: "Tanzania",
+  UG: "Uganda",
+  REGION: "East Africa Region",
+};
+
+const COUNTRY_NAME_TO_CODE = {
+  burundi: "BI",
+  djibouti: "DJ",
+  eritrea: "ER",
+  ethiopia: "ET",
+  kenya: "KE",
+  rwanda: "RW",
+  somalia: "SO",
+  "south sudan": "SS",
+  sudan: "SD",
+  tanzania: "TZ",
+  uganda: "UG",
+  zanzibar: "TZ",
+  region: "REGION",
+  "east africa region": "REGION",
+};
+
+const COUNTRY_CODE_ALIASES = {
+  BD: "BI",
+  BDI: "BI",
+};
+
+const DEFAULT_MAP_STYLE = {
   version: 8,
   sources: {
     osm: {
@@ -51,539 +79,770 @@ const DEFAULT_STYLE = {
       attribution: "© OpenStreetMap",
     },
   },
-  layers: [
-    { id: "osm-tiles", type: "raster", source: "osm", minzoom: 0, maxzoom: 19 },
-  ],
+  layers: [{ id: "osm-tiles", type: "raster", source: "osm", minzoom: 0, maxzoom: 19 }],
 };
 
 const GHA_BOUNDS = [[21, -12], [52, 23]];
 
-// Single Expert Section Component
-const ExpertSection = ({
-  expertType,
-  config,
+const REPORT_GROUP_OPTIONS = [
+  { value: "member_state", label: "Member-State Report" },
+  { value: "general", label: "General Report" },
+];
+
+const normalizeCountryCode = (value) => {
+  const text = (value || "").toString().trim();
+  if (!text) return "";
+  const byName = COUNTRY_NAME_TO_CODE[text.toLowerCase()];
+  if (byName) return byName;
+  const upper = text.toUpperCase();
+  const alias = COUNTRY_CODE_ALIASES[upper];
+  if (alias) return alias;
+  if (upper.length === 2) return upper;
+  if (upper === "REGION") return "REGION";
+  return upper;
+};
+
+const resolveCountryName = (value) => {
+  if (!value) return "";
+  const code = normalizeCountryCode(value);
+  if (COUNTRY_CODE_TO_NAME[code]) return COUNTRY_CODE_TO_NAME[code];
+  return value;
+};
+
+const pickAdmin1 = (props = {}) =>
+  props.name_1
+  || props.admin1
+  || props.admin_1
+  || props.NAME_1
+  || props.ADM1_EN
+  || "";
+
+const pickAdmin2 = (props = {}) =>
+  props.name_2
+  || props.admin2
+  || props.admin_2
+  || props.NAME_2
+  || props.ADM2_EN
+  || "";
+
+const pickCountry = (props = {}) =>
+  props.country
+  || props.country_name
+  || props.COUNTRY
+  || "";
+
+const districtKey = ({ gid_2, country, admin1, admin2 }) => {
+  if (gid_2) return gid_2;
+  return `${country || ""}-${admin1 || ""}-${admin2 || ""}`;
+};
+
+const requestHeaders = () => {
+  const headers = { "Content-Type": "application/json" };
+  const csrf = getCookie("csrftoken");
+  if (csrf) headers["X-CSRFToken"] = csrf;
+  return headers;
+};
+
+const getRiskColor = (riskLevel) => {
+  const config = RISK_LEVELS.find((r) => r.value === riskLevel);
+  return config ? config.color : "rgba(200, 200, 200, 0.3)";
+};
+
+const ExpertAssessmentWidget = ({
   forecastDate,
   selectedCountry,
-  requireComment = false,
-  onCommentError,
+  loggedIn,
+  userData,
 }) => {
-  const mapContainer = useRef(null);
-  const map = useRef(null);
-  const [loading, setLoading] = useState(true);
-  const [assessments, setAssessments] = useState({});
-  const [overallComment, setOverallComment] = useState("");
-  const [overallRisk, setOverallRisk] = useState("normal");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const districtEditsRef = useRef({});
+  const mergedRiskByKeyRef = useRef({});
 
-  // For popup editing
+  const [expertType, setExpertType] = useState("hydrologist");
+  const [reportGroup, setReportGroup] = useState("member_state");
+
+  const [overallRisk, setOverallRisk] = useState("normal");
+  const [overallComment, setOverallComment] = useState("");
+  const [affectedAreas, setAffectedAreas] = useState("");
+  const [recommendations, setRecommendations] = useState("");
+
+  const [contributorName, setContributorName] = useState("");
+  const [contributorCountry, setContributorCountry] = useState("");
+
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [activeReportId, setActiveReportId] = useState(null);
+
+  const [majorityByKey, setMajorityByKey] = useState({});
+  const [districtEdits, setDistrictEdits] = useState({});
+
+  const [mapLoading, setMapLoading] = useState(true);
   const [selectedArea, setSelectedArea] = useState(null);
   const [showEditPanel, setShowEditPanel] = useState(false);
   const [editRisk, setEditRisk] = useState("normal");
   const [editComment, setEditComment] = useState("");
 
-  // Initialize map
+  const selectedCountryCode = useMemo(() => normalizeCountryCode(selectedCountry), [selectedCountry]);
+  const selectedCountryName = useMemo(() => resolveCountryName(selectedCountry), [selectedCountry]);
+
+  const mapCountryFilter = useMemo(() => {
+    if (reportGroup !== "member_state") return "";
+    if (selectedCountryName) return selectedCountryName;
+    return "";
+  }, [reportGroup, selectedCountryName]);
+
+  const mergedRiskByKey = useMemo(() => {
+    const merged = { ...majorityByKey };
+    Object.values(districtEdits).forEach((item) => {
+      const key = districtKey(item);
+      merged[key] = item.risk_level;
+    });
+    return merged;
+  }, [majorityByKey, districtEdits]);
+
+  const districtSummary = useMemo(() => {
+    const summary = {};
+    RISK_LEVELS.forEach((level) => {
+      summary[level.value] = 0;
+    });
+    Object.values(districtEdits).forEach((item) => {
+      if (summary[item.risk_level] !== undefined) {
+        summary[item.risk_level] += 1;
+      }
+    });
+    return summary;
+  }, [districtEdits]);
+
   useEffect(() => {
-    if (map.current) return;
+    districtEditsRef.current = districtEdits;
+  }, [districtEdits]);
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
-      style: DEFAULT_STYLE,
-      bounds: GHA_BOUNDS,
-      fitBoundsOptions: { padding: 20 },
-    });
+  useEffect(() => {
+    mergedRiskByKeyRef.current = mergedRiskByKey;
+  }, [mergedRiskByKey]);
 
-    map.current.addControl(new maplibregl.NavigationControl(), "top-right");
-
-    map.current.on("load", () => {
-      // Add admin2 boundaries source
-      map.current.addSource("admin2", {
-        type: "vector",
-        tiles: [`${window.location.origin}/pg/tileserv/gha.admin2/{z}/{x}/{y}.pbf`],
-        minzoom: 0,
-        maxzoom: 14,
-      });
-
-      // Fill layer - will be colored based on assessments
-      map.current.addLayer({
-        id: "admin2-fill",
-        type: "fill",
-        source: "admin2",
-        "source-layer": "gha.admin2",
-        paint: {
-          "fill-color": "rgba(200, 200, 200, 0.3)",
-          "fill-opacity": 0.7,
-        },
-      });
-
-      // Outline layer
-      map.current.addLayer({
-        id: "admin2-outline",
-        type: "line",
-        source: "admin2",
-        "source-layer": "gha.admin2",
-        paint: { "line-color": "#666", "line-width": 0.5 },
-      });
-
-      // Hover layer
-      map.current.addLayer({
-        id: "admin2-hover",
-        type: "fill",
-        source: "admin2",
-        "source-layer": "gha.admin2",
-        paint: { "fill-color": "#627BC1", "fill-opacity": 0.5 },
-        filter: ["==", "name_2", ""],
-      });
-
-      setLoading(false);
-    });
-
-    // Click handler for setting risk level
-    map.current.on("click", "admin2-fill", (e) => {
-      const feature = e.features[0];
-      if (feature) {
-        const props = feature.properties;
-        setSelectedArea({
-          name_2: props.name_2,
-          name_1: props.name_1,
-          country: props.country,
-          gid_2: props.gid_2,
-        });
-
-        const key = `${props.country}-${props.name_1}-${props.name_2}`;
-        const existing = assessments[key];
-        if (existing) {
-          setEditRisk(existing.risk_level);
-          setEditComment(existing.comment || "");
-        } else {
-          setEditRisk("normal");
-          setEditComment("");
-        }
-        setShowEditPanel(true);
-      }
-    });
-
-    // Hover tooltip popup
-    const hoverPopup = new maplibregl.Popup({
-      closeButton: false,
-      closeOnClick: false,
-      className: "admin-hover-popup",
-      offset: 10,
-    });
-
-    // Hover effects - show admin name tooltip
-    map.current.on("mousemove", "admin2-fill", (e) => {
-      if (e.features.length > 0) {
-        const props = e.features[0].properties;
-        map.current.getCanvas().style.cursor = "pointer";
-        map.current.setFilter("admin2-hover", ["==", "name_2", props.name_2]);
-
-        // Show tooltip with admin hierarchy
-        const key = `${props.country}-${props.name_1}-${props.name_2}`;
-        const existing = assessments[key];
-        const riskLabel = existing
-          ? `<br><span style="font-size:11px;color:${RISK_LEVELS.find(r => r.value === existing.risk_level)?.color || '#666'}">${existing.risk_level.toUpperCase()}</span>`
-          : "";
-
-        hoverPopup
-          .setLngLat(e.lngLat)
-          .setHTML(
-            `<div style="font-size:12px;line-height:1.4">
-              <strong>${props.name_2}</strong><br>
-              <span style="color:#666">${props.name_1}, ${props.country}</span>${riskLabel}
-            </div>`
-          )
-          .addTo(map.current);
-      }
-    });
-
-    map.current.on("mouseleave", "admin2-fill", () => {
-      map.current.getCanvas().style.cursor = "";
-      map.current.setFilter("admin2-hover", ["==", "name_2", ""]);
-      hoverPopup.remove();
-    });
-
-    return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
-    };
+  const clearEditor = useCallback(() => {
+    setActiveReportId(null);
+    setOverallRisk("normal");
+    setOverallComment("");
+    setAffectedAreas("");
+    setRecommendations("");
+    setDistrictEdits({});
+    setStatusMessage("");
   }, []);
 
-  // Update map colors when assessments change
-  useEffect(() => {
-    if (!map.current || !map.current.isStyleLoaded()) return;
+  const loadMajority = useCallback(async () => {
+    if (!forecastDate) return;
 
-    const colorExpression = ["match", ["get", "name_2"]];
-    Object.entries(assessments).forEach(([key, assessment]) => {
-      const name_2 = key.split("-").pop();
-      const riskConfig = RISK_LEVELS.find((r) => r.value === assessment.risk_level);
-      if (riskConfig) {
-        colorExpression.push(name_2, riskConfig.color);
+    try {
+      const query = new URLSearchParams({ date: forecastDate, admin_level: "2" });
+      if (reportGroup === "member_state" && selectedCountryName) {
+        query.set("country", selectedCountryName);
       }
-    });
-    colorExpression.push("rgba(200, 200, 200, 0.3)");
+      const response = await fetch(`/api/v1/risk/risk-majority?${query.toString()}`);
+      if (!response.ok) return;
 
-    try {
-      map.current.setPaintProperty("admin2-fill", "fill-color", colorExpression);
-    } catch (e) {
-      // Layer may not be ready
-    }
-  }, [assessments]);
-
-  // Filter by selected country
-  useEffect(() => {
-    if (!map.current || !map.current.isStyleLoaded()) return;
-
-    const filter = selectedCountry ? ["==", "country", selectedCountry] : null;
-    try {
-      map.current.setFilter("admin2-fill", filter);
-      map.current.setFilter("admin2-outline", filter);
-    } catch (e) {
-      // Layer may not be ready
-    }
-  }, [selectedCountry]);
-
-  // Load existing assessments
-  useEffect(() => {
-    const loadAssessments = async () => {
-      if (!forecastDate) return;
-
-      try {
-        const response = await fetch(
-          `${CMS_API}/risk-assessments/?date=${forecastDate}&expert_type=${expertType}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const assessmentMap = {};
-          (data.assessments || []).forEach((a) => {
-            const key = `${a.country}-${a.admin1}-${a.admin2}`;
-            assessmentMap[key] = {
-              risk_level: a.risk_level,
-              comment: a.comment,
-            };
-          });
-          setAssessments(assessmentMap);
-        }
-      } catch (error) {
-        console.error("Failed to load assessments:", error);
-      }
-    };
-    loadAssessments();
-  }, [forecastDate, expertType]);
-
-  // Save area risk level
-  const handleSaveAreaRisk = useCallback(async () => {
-    if (!selectedArea) return;
-    setSaving(true);
-
-    try {
-      const key = `${selectedArea.country}-${selectedArea.name_1}-${selectedArea.name_2}`;
-      const newAssessments = {
-        ...assessments,
-        [key]: {
-          risk_level: editRisk,
-          comment: editComment,
-        },
-      };
-      setAssessments(newAssessments);
-
-      // Save to backend
-      await fetch(`${CMS_API}/risk-assessments/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          expert_type: expertType,
-          forecast_date: forecastDate || new Date().toISOString().split("T")[0],
-          country: selectedArea.country,
-          admin1: selectedArea.name_1,
-          admin2: selectedArea.name_2,
-          gid_2: selectedArea.gid_2,
-          risk_level: editRisk,
-          comment: editComment,
-        }),
+      const data = await response.json();
+      const map = {};
+      (data.risk_by_admin || []).forEach((item) => {
+        const key = item.key || districtKey(item);
+        map[key] = item.risk_level;
       });
-
-      setShowEditPanel(false);
-      setSelectedArea(null);
+      setMajorityByKey(map);
     } catch (error) {
-      console.error("Error saving:", error);
-    } finally {
-      setSaving(false);
+      console.error("Failed to load majority risk:", error);
+      setMajorityByKey({});
     }
-  }, [selectedArea, editRisk, editComment, assessments, forecastDate, expertType]);
+  }, [forecastDate, reportGroup, selectedCountryName]);
 
-  // Save overall assessment
-  const handleSaveOverall = useCallback(async () => {
-    // Validate comment if required
-    if (requireComment && !overallComment.trim()) {
-      if (onCommentError) onCommentError(true);
+  const loadSingleReport = useCallback(async (assessmentId) => {
+    try {
+      const response = await fetch(`/api/v1/assessments/country-assessments/?id=${assessmentId}&include_districts=true`);
+      if (!response.ok) return;
+      const data = await response.json();
+      const report = (data.assessments || [])[0];
+      if (!report) return;
+
+      setActiveReportId(report.id);
+      setOverallRisk(report.risk_level || "normal");
+      setOverallComment(report.assessment_comment || "");
+      setAffectedAreas(report.affected_areas || "");
+      setRecommendations(report.recommendations || "");
+
+      if (report.contributor_name) {
+        setContributorName(report.contributor_name);
+      }
+      if (report.contributor_country) {
+        setContributorCountry(report.contributor_country);
+      }
+
+      const mappedDistricts = {};
+      (report.district_assessments || []).forEach((item) => {
+        const key = districtKey(item);
+        mappedDistricts[key] = {
+          country: item.country,
+          admin1: item.admin1,
+          admin2: item.admin2,
+          gid_2: item.gid_2 || null,
+          risk_level: item.risk_level || "normal",
+          comment: item.comment || "",
+        };
+      });
+      setDistrictEdits(mappedDistricts);
+
+      setStatusMessage(`Loaded ${report.report_key}`);
+    } catch (error) {
+      console.error("Failed to load report details:", error);
+    }
+  }, []);
+
+  const saveReport = useCallback(async () => {
+    if (!forecastDate) {
+      setStatusMessage("Select a forecast date before saving.");
       return;
     }
-    if (onCommentError) onCommentError(false);
 
-    setSaving(true);
-    try {
-      await fetch(`${CMS_API}/country-assessments/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          expert_type: expertType,
-          forecast_date: forecastDate || new Date().toISOString().split("T")[0],
-          country_code: selectedCountry || "REGION",
-          country_name: selectedCountry || "East Africa Region",
-          risk_level: overallRisk,
-          comment: overallComment,
-        }),
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
-      console.error("Error saving overall assessment:", error);
-    } finally {
-      setSaving(false);
+    if (reportGroup === "member_state" && !selectedCountryCode) {
+      setStatusMessage("Select a country to save a member-state report.");
+      return;
     }
-  }, [overallComment, overallRisk, forecastDate, expertType, selectedCountry, requireComment, onCommentError]);
 
-  const handleCancelEdit = () => {
+    if (reportGroup === "member_state" && !loggedIn) {
+      setStatusMessage("Sign in is required for member-state expert reports.");
+      return;
+    }
+
+    if (!overallComment.trim()) {
+      setStatusMessage("Overall assessment comment is required before saving.");
+      return;
+    }
+
+    if (reportGroup === "general" && !contributorCountry.trim()) {
+      setStatusMessage("Country of origin is required for general reports.");
+      return;
+    }
+
+    const districtPayload = Object.values(districtEdits).map((item) => ({
+      country: item.country,
+      country_name: item.country,
+      country_code: normalizeCountryCode(item.country),
+      admin1: item.admin1,
+      admin2: item.admin2,
+      gid_2: item.gid_2,
+      risk_level: item.risk_level,
+      comment: item.comment || "",
+    }));
+
+    const creatorFromProfile = (userData && (userData.full_name || userData.email || userData.username)) || "";
+
+    const payload = {
+      expert_type: expertType,
+      forecast_date: forecastDate,
+      report_group: reportGroup,
+      country_code: reportGroup === "member_state" ? selectedCountryCode : "REGION",
+      country_name: reportGroup === "member_state"
+        ? (selectedCountryName || selectedCountryCode)
+        : "East Africa Region",
+      risk_level: overallRisk,
+      comment: overallComment,
+      affected_areas: affectedAreas,
+      recommendations,
+      contributor_name: reportGroup === "general" ? contributorName : "",
+      contributor_country: reportGroup === "general" ? contributorCountry : "",
+      created_by: creatorFromProfile || contributorName,
+      save_mode: "draft",
+      is_published: false,
+      logged_in: !!loggedIn,
+      district_assessments: districtPayload,
+      replace_district_assessments: true,
+    };
+
+    setSaveLoading(true);
+    setStatusMessage("Saving full interactive report...");
+
+    try {
+      const response = await fetch(`/api/v1/assessments/country-assessments/`, {
+        method: "POST",
+        headers: requestHeaders(),
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      const body = await response.json();
+      if (!response.ok) {
+        setStatusMessage(body.error || "Failed to save report.");
+        return;
+      }
+
+      if (body.id) {
+        setActiveReportId(body.id);
+      }
+
+      setStatusMessage(`Saved draft report with ${body.district_saved_count || 0} district edits. Pending approval/publishing in CMS.`);
+
+      window.dispatchEvent(new CustomEvent("flood-report-refresh"));
+      if (body.id) {
+        await loadSingleReport(body.id);
+      }
+    } catch (error) {
+      console.error("Failed to save report:", error);
+      setStatusMessage("Failed to save report.");
+    } finally {
+      setSaveLoading(false);
+    }
+  }, [
+    forecastDate,
+    reportGroup,
+    selectedCountryCode,
+    selectedCountryName,
+    loggedIn,
+    overallComment,
+    contributorCountry,
+    districtEdits,
+    userData,
+    contributorName,
+    expertType,
+    overallRisk,
+    affectedAreas,
+    recommendations,
+    loadSingleReport,
+  ]);
+
+  useEffect(() => {
+    if (!forecastDate) return;
+    loadMajority();
+  }, [forecastDate, expertType, reportGroup, selectedCountryCode, loadMajority]);
+
+  useEffect(() => {
+    const handleLoadRequest = (event) => {
+      const reportId = Number(event?.detail?.id);
+      if (!Number.isFinite(reportId)) return;
+      loadSingleReport(reportId);
+    };
+
+    window.addEventListener("flood-report-load-request", handleLoadRequest);
+    return () => window.removeEventListener("flood-report-load-request", handleLoadRequest);
+  }, [loadSingleReport]);
+
+  useEffect(() => {
+    if (!mapRef.current) {
+      mapRef.current = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: DEFAULT_MAP_STYLE,
+        bounds: GHA_BOUNDS,
+        fitBoundsOptions: { padding: 20 },
+      });
+
+      mapRef.current.addControl(new maplibregl.NavigationControl(), "top-right");
+
+      mapRef.current.on("load", () => {
+        mapRef.current.addSource("admin2", {
+          type: "vector",
+          tiles: [`${window.location.origin}/pg/tileserv/gha.admin2/{z}/{x}/{y}.pbf`],
+          minzoom: 0,
+          maxzoom: 14,
+        });
+
+        mapRef.current.addLayer({
+          id: "admin2-fill",
+          type: "fill",
+          source: "admin2",
+          "source-layer": "gha.admin2",
+          paint: {
+            "fill-color": "rgba(220, 220, 220, 0.35)",
+            "fill-opacity": 0.72,
+          },
+        });
+
+        mapRef.current.addLayer({
+          id: "admin2-outline",
+          type: "line",
+          source: "admin2",
+          "source-layer": "gha.admin2",
+          paint: {
+            "line-color": "#5f6368",
+            "line-width": 0.6,
+          },
+        });
+
+        mapRef.current.addLayer({
+          id: "admin2-hover",
+          type: "line",
+          source: "admin2",
+          "source-layer": "gha.admin2",
+          paint: {
+            "line-color": "#1f4e79",
+            "line-width": 1.6,
+          },
+          filter: ["==", "gid_2", ""],
+        });
+
+        setMapLoading(false);
+      });
+
+      const hoverPopup = new maplibregl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 10,
+      });
+
+      mapRef.current.on("click", "admin2-fill", (event) => {
+        const feature = event.features && event.features[0];
+        if (!feature) return;
+        const props = feature.properties || {};
+        const item = {
+          country: pickCountry(props),
+          admin1: pickAdmin1(props),
+          admin2: pickAdmin2(props),
+          gid_2: props.gid_2,
+        };
+        const key = districtKey(item);
+        const existing = districtEditsRef.current[key];
+
+        setSelectedArea(item);
+        setEditRisk(existing ? existing.risk_level : (mergedRiskByKeyRef.current[key] || "normal"));
+        setEditComment(existing ? (existing.comment || "") : "");
+        setShowEditPanel(true);
+      });
+
+      mapRef.current.on("mousemove", "admin2-fill", (event) => {
+        const feature = event.features && event.features[0];
+        if (!feature) return;
+
+        const props = feature.properties || {};
+        const admin1Name = pickAdmin1(props);
+        const admin2Name = pickAdmin2(props);
+        const countryName = pickCountry(props);
+        const key = districtKey({
+          country: countryName,
+          admin1: admin1Name,
+          admin2: admin2Name,
+          gid_2: props.gid_2,
+        });
+        const mergedRisk = mergedRiskByKeyRef.current[key] || "normal";
+
+        mapRef.current.getCanvas().style.cursor = "pointer";
+        mapRef.current.setFilter("admin2-hover", ["==", "gid_2", props.gid_2 || ""]);
+
+        hoverPopup
+          .setLngLat(event.lngLat)
+          .setHTML(
+            `<div style="font-size:12px;line-height:1.35">`
+            + `<strong>${admin2Name || "District"}</strong><br/>`
+            + `<span style="color:#334155">Admin 1: ${admin1Name || "N/A"}</span><br/>`
+            + `<span style="color:#666">${countryName || ""}</span><br/>`
+            + `<span style="color:${getRiskColor(mergedRisk)};font-weight:700">${mergedRisk.toUpperCase()}</span>`
+            + `</div>`
+          )
+          .addTo(mapRef.current);
+      });
+
+      mapRef.current.on("mouseleave", "admin2-fill", () => {
+        mapRef.current.getCanvas().style.cursor = "";
+        mapRef.current.setFilter("admin2-hover", ["==", "gid_2", ""]);
+        hoverPopup.remove();
+      });
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
+
+    const expression = [
+      "match",
+      [
+        "coalesce",
+        ["get", "gid_2"],
+        ["concat", ["get", "country"], "-", ["get", "name_1"], "-", ["get", "name_2"]],
+      ],
+    ];
+
+    Object.entries(mergedRiskByKey).forEach(([key, risk]) => {
+      expression.push(key, getRiskColor(risk));
+    });
+    expression.push("rgba(220, 220, 220, 0.35)");
+
+    try {
+      mapRef.current.setPaintProperty("admin2-fill", "fill-color", expression);
+    } catch (error) {
+      // layer not yet ready
+    }
+  }, [mergedRiskByKey]);
+
+  useEffect(() => {
+    if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
+
+    const filter = mapCountryFilter ? ["==", "country", mapCountryFilter] : null;
+    try {
+      mapRef.current.setFilter("admin2-fill", filter);
+      mapRef.current.setFilter("admin2-outline", filter);
+    } catch (error) {
+      // layer not yet ready
+    }
+  }, [mapCountryFilter]);
+
+  const applyDistrictEdit = useCallback(() => {
+    if (!selectedArea) return;
+    const key = districtKey(selectedArea);
+    setDistrictEdits((prev) => ({
+      ...prev,
+      [key]: {
+        country: selectedArea.country,
+        admin1: selectedArea.admin1,
+        admin2: selectedArea.admin2,
+        gid_2: selectedArea.gid_2 || null,
+        risk_level: editRisk,
+        comment: editComment,
+      },
+    }));
+
     setShowEditPanel(false);
     setSelectedArea(null);
     setEditComment("");
     setEditRisk("normal");
-  };
+  }, [selectedArea, editRisk, editComment]);
 
-  // Summary counts
-  const getSummary = () => {
-    const summary = {};
-    RISK_LEVELS.forEach((l) => { summary[l.value] = 0; });
-    Object.values(assessments).forEach((a) => {
-      if (summary[a.risk_level] !== undefined) summary[a.risk_level]++;
-    });
-    return summary;
-  };
-
-  const summary = getSummary();
-
-  return (
-    <div className="expert-section" style={{ borderTopColor: config.color }}>
-      <div className="section-header">
-        <div className="header-left">
-          <span className="section-icon">{config.icon}</span>
-          <div>
-            <h4>{config.title}</h4>
-            <p>{config.subtitle}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Overall Comment Section - FIRST */}
-      <div className="overall-assessment">
-        <h5>Overall Assessment Comment</h5>
-        <p className="hint">Provide your overall assessment for the region or selected country</p>
-
-        <div className="overall-risk-selector">
-          <label>Overall Risk Level:</label>
-          <div className="risk-buttons">
-            {RISK_LEVELS.map((level) => (
-              <button
-                key={level.value}
-                className={`risk-btn ${overallRisk === level.value ? "selected" : ""}`}
-                style={{
-                  borderColor: level.color,
-                  backgroundColor: overallRisk === level.value ? level.color : "transparent",
-                  color: overallRisk === level.value ? "white" : level.color,
-                }}
-                onClick={() => setOverallRisk(level.value)}
-              >
-                {level.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <textarea
-          value={overallComment}
-          onChange={(e) => {
-            setOverallComment(e.target.value);
-            if (onCommentError && e.target.value.trim()) onCommentError(false);
-          }}
-          placeholder={`Enter your ${expertType} assessment, observations, and recommendations...${requireComment ? " (Required)" : ""}`}
-          rows={4}
-          className={requireComment && !overallComment.trim() ? "required-field" : ""}
-          required={requireComment}
-        />
-
-        <div className="save-row">
-          <Button
-            theme="theme-button-green"
-            onClick={handleSaveOverall}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : saved ? "✓ Saved" : "Save Assessment"}
-          </Button>
-          {saved && <span className="saved-indicator">Assessment saved successfully!</span>}
-        </div>
-      </div>
-
-      {/* Risk Map - SECOND */}
-      <div className="risk-map-section">
-        <h5>District Risk Levels</h5>
-        <p className="hint">Click on districts to set specific risk levels (optional)</p>
-
-        {/* Summary */}
-        <div className="assessment-summary">
-          {RISK_LEVELS.map((level) => (
-            <div key={level.value} className="summary-item">
-              <span className="summary-color" style={{ backgroundColor: level.color }} />
-              <span className="summary-label">{level.label}:</span>
-              <span className="summary-count">{summary[level.value]}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Map */}
-        <div className="map-wrapper">
-          {loading && <div className="map-loader"><Loader /></div>}
-          <div ref={mapContainer} className="map-container" />
-
-          {/* Legend */}
-          <div className="map-legend">
-            <div className="legend-title">Risk Levels</div>
-            {RISK_LEVELS.map((level) => (
-              <div key={level.value} className="legend-item">
-                <span className="legend-color" style={{ backgroundColor: level.color }} />
-                <span className="legend-label">{level.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Edit Panel for individual district */}
-      {showEditPanel && selectedArea && (
-        <div className="edit-panel-overlay" onClick={handleCancelEdit}>
-          <div className="edit-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="panel-header">
-              <h4>Set District Risk Level</h4>
-              <button className="close-btn" onClick={handleCancelEdit}>×</button>
-            </div>
-
-            <div className="panel-content">
-              <div className="area-info">
-                <div className="area-name">{selectedArea.name_2}</div>
-                <div className="area-parents">{selectedArea.name_1}, {selectedArea.country}</div>
-              </div>
-
-              <div className="risk-selector">
-                <label>Risk Level:</label>
-                <div className="risk-options">
-                  {RISK_LEVELS.map((level) => (
-                    <label
-                      key={level.value}
-                      className={`risk-option ${editRisk === level.value ? "selected" : ""}`}
-                      style={{
-                        borderColor: level.color,
-                        backgroundColor: editRisk === level.value ? level.color : "transparent",
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name={`risk-${expertType}`}
-                        value={level.value}
-                        checked={editRisk === level.value}
-                        onChange={(e) => setEditRisk(e.target.value)}
-                      />
-                      <span className="risk-label">{level.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="comment-section">
-                <label>Comment (optional):</label>
-                <textarea
-                  value={editComment}
-                  onChange={(e) => setEditComment(e.target.value)}
-                  placeholder="Add notes about this district..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="panel-actions">
-                <Button theme="theme-button-light" onClick={handleCancelEdit}>Cancel</Button>
-                <Button theme="theme-button-green" onClick={handleSaveAreaRisk} disabled={saving}>
-                  {saving ? "Saving..." : "Save"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Main component - single expert assessment with type selector
-const ExpertAssessmentWidget = ({
-  params,
-  forecastDate,
-  selectedCountry,
-}) => {
-  const [expertType, setExpertType] = useState("hydrologist");
-  const [commentError, setCommentError] = useState(false);
-
-  const handleExpertTypeChange = (type) => {
-    setExpertType(type);
-    setCommentError(false);
-  };
+  const cancelDistrictEdit = useCallback(() => {
+    setShowEditPanel(false);
+    setSelectedArea(null);
+    setEditComment("");
+    setEditRisk("normal");
+  }, []);
 
   return (
     <div className="c-expert-assessment">
       <div className="widget-header">
-        <h3 className="widget-title">Expert Risk Assessment</h3>
+        <h3 className="widget-title">Flood Analysis Report Workspace</h3>
         <p className="widget-subtitle">
-          Provide your expert assessment. Comment is required.
+          Interactive assessment editor. Drafts and published reports are listed in the main page side panels.
         </p>
       </div>
 
-      {/* Expert Type Selector */}
-      <div className="expert-type-selector">
-        <label className="selector-label">I am a:</label>
-        <div className="type-buttons">
-          {Object.entries(EXPERT_TYPES).map(([type, config]) => (
+      <div className="assessment-controls">
+        <div className="expert-switch">
+          {Object.entries(EXPERT_TYPES).map(([value, config]) => (
             <button
-              key={type}
-              className={`type-btn ${expertType === type ? "selected" : ""}`}
-              style={{
-                borderColor: config.color,
-                backgroundColor: expertType === type ? config.color : "transparent",
-                color: expertType === type ? "white" : config.color,
+              key={value}
+              type="button"
+              className={`expert-btn ${expertType === value ? "active" : ""}`}
+              style={{ borderColor: config.color }}
+              onClick={() => {
+                setExpertType(value);
+                clearEditor();
               }}
-              onClick={() => handleExpertTypeChange(type)}
             >
-              <span className="type-icon">{config.icon}</span>
-              <span className="type-label">
-                {type === "hydrologist" ? "Hydrologist" : "Meteorologist"}
-              </span>
+              <span>{config.title}</span>
+              <small>{config.subtitle}</small>
+            </button>
+          ))}
+        </div>
+
+        <div className="group-switch">
+          {REPORT_GROUP_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`group-btn ${reportGroup === option.value ? "active" : ""}`}
+              onClick={() => {
+                setReportGroup(option.value);
+                clearEditor();
+              }}
+            >
+              {option.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Single Expert Section based on selected type */}
-      <ExpertSection
-        expertType={expertType}
-        config={EXPERT_TYPES[expertType]}
-        forecastDate={forecastDate}
-        selectedCountry={selectedCountry}
-        requireComment={true}
-        onCommentError={setCommentError}
-      />
+      <div className="interactive-column">
+        <div className="editor-header">
+          <div>
+            <h4>Current Interactive Report</h4>
+            <p>
+              {reportGroup === "member_state"
+                ? `Country: ${selectedCountryName || "Select a country"}`
+                : "Scope: East Africa Region (General Report)"}
+            </p>
+          </div>
+          {activeReportId && <span className="active-id">Report ID: {activeReportId}</span>}
+        </div>
 
-      {commentError && (
-        <div className="comment-error-message">
-          Please provide an assessment comment before saving.
+        {reportGroup === "member_state" && !loggedIn && (
+          <div className="warning-box">
+            Member-state report publishing/saving requires sign-in for key-point-person workflow.
+          </div>
+        )}
+
+        {reportGroup === "general" && (
+          <div className="general-user-row">
+            <div className="form-group">
+              <label>Your Name</label>
+              <input
+                type="text"
+                value={contributorName}
+                onChange={(event) => setContributorName(event.target.value)}
+                placeholder="Name for this general comment"
+              />
+            </div>
+            <div className="form-group">
+              <label>Country of Origin</label>
+              <input
+                type="text"
+                value={contributorCountry}
+                onChange={(event) => setContributorCountry(event.target.value)}
+                placeholder="e.g. KE or Kenya"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="overall-editor">
+          <div className="form-group">
+            <label>Overall Risk Level</label>
+            <div className="risk-buttons">
+              {RISK_LEVELS.map((level) => (
+                <button
+                  key={level.value}
+                  type="button"
+                  className={`risk-btn ${overallRisk === level.value ? "selected" : ""}`}
+                  style={{
+                    borderColor: level.color,
+                    backgroundColor: overallRisk === level.value ? level.color : "transparent",
+                  }}
+                  onClick={() => setOverallRisk(level.value)}
+                >
+                  {level.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Overall Assessment Comment</label>
+            <textarea
+              value={overallComment}
+              onChange={(event) => setOverallComment(event.target.value)}
+              placeholder="Detailed expert analysis and situation narrative"
+              rows={4}
+            />
+          </div>
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label>Affected Areas</label>
+              <textarea
+                value={affectedAreas}
+                onChange={(event) => setAffectedAreas(event.target.value)}
+                placeholder="Districts/areas of concern"
+                rows={3}
+              />
+            </div>
+            <div className="form-group">
+              <label>Recommendations</label>
+              <textarea
+                value={recommendations}
+                onChange={(event) => setRecommendations(event.target.value)}
+                placeholder="Actions and advisories"
+                rows={3}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="district-summary">
+          {RISK_LEVELS.map((level) => (
+            <div key={level.value} className="summary-item">
+              <span className="dot" style={{ backgroundColor: level.color }} />
+              <span>{level.label}</span>
+              <strong>{districtSummary[level.value] || 0}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div className="map-wrapper">
+          {mapLoading && (
+            <div className="map-loader"><Loader /></div>
+          )}
+          <div ref={mapContainerRef} className="map-container" />
+          <div className="map-note">
+            Baseline map shading comes from forecast majority risk by admin unit.
+            District edits here override baseline and are saved as part of the full interactive report.
+          </div>
+        </div>
+
+        <div className="editor-actions">
+          <Button theme="theme-button-light" onClick={() => clearEditor()}>
+            New Report
+          </Button>
+          <Button
+            theme="theme-button-green"
+            onClick={saveReport}
+            disabled={saveLoading || (reportGroup === "member_state" && !loggedIn)}
+          >
+            {saveLoading ? "Saving..." : "Save Draft (Full Report)"}
+          </Button>
+        </div>
+
+        <div className="approval-note">
+          Publishing and approval are handled in CMS backend workflows.
+        </div>
+
+        {statusMessage && <div className="status-message">{statusMessage}</div>}
+      </div>
+
+      {showEditPanel && selectedArea && (
+        <div className="edit-panel-overlay" onClick={cancelDistrictEdit}>
+          <div className="edit-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="edit-panel-header">
+              <h4>District Risk Edit</h4>
+              <button type="button" className="close-btn" onClick={cancelDistrictEdit}>x</button>
+            </div>
+            <div className="edit-panel-body">
+              <div className="area-title">{selectedArea.admin2}</div>
+              <div className="area-subtitle">{selectedArea.admin1}, {selectedArea.country}</div>
+
+              <div className="risk-options">
+                {RISK_LEVELS.map((level) => (
+                  <button
+                    key={level.value}
+                    type="button"
+                    className={`risk-option ${editRisk === level.value ? "active" : ""}`}
+                    style={{
+                      borderColor: level.color,
+                      backgroundColor: editRisk === level.value ? level.color : "transparent",
+                    }}
+                    onClick={() => setEditRisk(level.value)}
+                  >
+                    {level.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="form-group">
+                <label>District Comment</label>
+                <textarea
+                  value={editComment}
+                  onChange={(event) => setEditComment(event.target.value)}
+                  rows={3}
+                  placeholder="Optional district-level note"
+                />
+              </div>
+
+              <div className="edit-panel-actions">
+                <Button theme="theme-button-light" onClick={cancelDistrictEdit}>Cancel</Button>
+                <Button theme="theme-button-green" onClick={applyDistrictEdit}>Apply</Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -591,9 +850,15 @@ const ExpertAssessmentWidget = ({
 };
 
 ExpertAssessmentWidget.propTypes = {
-  params: PropTypes.object,
   forecastDate: PropTypes.string,
   selectedCountry: PropTypes.string,
+  loggedIn: PropTypes.bool,
+  userData: PropTypes.object,
 };
 
-export default ExpertAssessmentWidget;
+const mapStateToProps = (state) => ({
+  loggedIn: !!(state?.auth?.data?.loggedIn),
+  userData: state?.auth?.data || {},
+});
+
+export default connect(mapStateToProps)(ExpertAssessmentWidget);

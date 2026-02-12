@@ -7,6 +7,7 @@ import {
   getComparing,
   getActiveCompareSide,
 } from "@/components/map/selectors";
+import { buildMultimodalLegendItems } from "@/utils/multimodal-config";
 
 import layersIcon from "@/assets/icons/layers.svg?sprite";
 
@@ -17,6 +18,41 @@ const selectCountryDataLoading = (state) =>
 const selectLayerTimestamps = (state) =>
   state.datasets && state.datasets.timestamps;
 const getLocation = (state) => state.location && state.location.payload;
+
+const MULTIMODAL_LAYER_KEYS = [
+  "multi model",
+  "multi-model",
+  "multimodal",
+  "mike hydro",
+  "geosfm",
+  "floodproof",
+  "google flood",
+  "hype",
+];
+
+const isMultimodalProviderLayer = (group = {}, layer = {}) => {
+  const haystack = [
+    group.name,
+    group.title,
+    layer.name,
+    layer.description,
+    layer.summary,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return MULTIMODAL_LAYER_KEYS.some((key) => haystack.includes(key));
+};
+
+const normalizeMultimodalLegend = (legendConfig = {}) => ({
+  ...(legendConfig || {}),
+  type: "basic",
+  items: buildMultimodalLegendItems().map(({ name, color }) => ({
+    name,
+    color,
+  })),
+});
 
 export const getLoading = createSelector(
   [selectDatasetsLoading, selectCountryDataLoading],
@@ -71,6 +107,10 @@ const getLegendLayerGroups = createSelector(
                 }
               }
             }
+          }
+
+          if (isMultimodalProviderLayer(group, l)) {
+            l.legendConfig = normalizeMultimodalLegend(l.legendConfig);
           }
 
           return { ...l };

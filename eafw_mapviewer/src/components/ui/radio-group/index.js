@@ -14,13 +14,25 @@ class RadioGroup extends PureComponent {
     this.props.onChange(val);
   };
 
+  handleOnClick = (option, e) => {
+    const { value, onChange } = this.props;
+    if (!option?.allowUncheck) return;
+    if (option.value !== value) return;
+
+    e.preventDefault();
+    const uncheckedValue =
+      option.uncheckedValue !== undefined ? String(option.uncheckedValue) : "";
+    onChange(uncheckedValue);
+  };
+
   render() {
     const { className, options, value } = this.props;
+    const visibleOptions = (options || []).filter((option) => !option.hidden);
 
     return (
       <div className={cx("c-radio-group", className)}>
-        {!!options.length &&
-          options.map((option) => {
+        {!!visibleOptions.length &&
+          visibleOptions.map((option) => {
             const id = uniqueId(`radio-${option.value}-`);
             return (
               <div key={option.value} className="radio-option">
@@ -30,6 +42,7 @@ class RadioGroup extends PureComponent {
                   value={option.value}
                   checked={option.value === value}
                   onChange={this.handleOnChange}
+                  onClick={(e) => this.handleOnClick(option, e)}
                   className="radio-input"
                 />
                 <label className="radio-label" htmlFor={id}>

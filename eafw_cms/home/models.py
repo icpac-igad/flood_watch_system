@@ -13,10 +13,12 @@ from wagtailcache.cache import WagtailCacheMixin
 from wagtailmetadata.models import MetadataPageMixin
 from wagtail.contrib.settings.models import BaseGenericSetting, register_setting
 from wagtail_color_panel.edit_handlers import NativeColorPanel
+from wagtailiconchooser.utils import get_svg_sprite_for_icons
 from .blocks import (
     InfoBlock, FeatureBlock, ActionCardBlock, LinkGroupBlock, LinkBlock, SocialLinkBlock,
     LogoItemBlock, CountryBlock
 )
+from .google_translate_languages import GOOGLE_TRANSLATE_LANGUAGE_CHOICES
 
 
 class CategoryDescription(models.Model):
@@ -604,7 +606,7 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
     # Legend Settings
     legend_title = models.CharField(
         max_length=100,
-        default="Flood Alert Level",
+        default="Current Flood Alerts",
         verbose_name=_("Legend Title"),
         help_text=_("Title displayed above the map legend"),
     )
@@ -736,10 +738,103 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
             for cat in categories:
                 cat.homepage_description = descriptions.get(cat.id, "")
                 dataset_categories.append(cat)
+
+            def normalize_menu_key(value):
+                normalized = str(value or "").strip().lower().replace("_", " ")
+                if "multimodal" in normalized:
+                    return "multimodal"
+                if "impact" in normalized:
+                    return "impact"
+                if (
+                    "extreme rainfall" in normalized
+                    or "heavy rainfall" in normalized
+                    or "rainfall" in normalized
+                    or "weather" in normalized
+                ):
+                    return "extreme-rainfall"
+                return None
+
+            menu_label_by_key = {
+                "multimodal": "Multimodal",
+                "extreme-rainfall": "Extreme Rainfall",
+                "impact": "Impact",
+            }
+            preferred_order = ["multimodal", "extreme-rainfall", "impact"]
+
+            geomanager_by_id = {cat.id: cat for cat in categories}
+            geomanager_by_key = {}
+            for cat in categories:
+                key = normalize_menu_key(cat.title)
+                if key and key not in geomanager_by_key:
+                    geomanager_by_key[key] = cat
+
+            mini_map_categories = []
+            seen_keys = set()
+
+            # Primary source: homepage CMS categories (if configured), but use linked geomanager title/icon
+            for map_category in self.map_categories.all():
+                if not map_category.is_active:
+                    continue
+
+                linked_category = geomanager_by_id.get(map_category.geomanager_category_id)
+                source_name = linked_category.title if linked_category else map_category.name
+                key = normalize_menu_key(source_name)
+                if not key or key in seen_keys:
+                    continue
+
+                mini_map_categories.append({
+                    "key": key,
+                    "title": menu_label_by_key.get(key, source_name),
+                    "icon_name": linked_category.icon if linked_category and linked_category.icon else "",
+                    "icon_image": map_category.icon,
+                    "category_id": linked_category.id if linked_category else map_category.geomanager_category_id,
+                    "is_default": map_category.is_default,
+                })
+                seen_keys.add(key)
+
+            # Fallback source: mapviewer categories from geomanager CMS
+            for key in preferred_order:
+                if key in seen_keys:
+                    continue
+                linked_category = geomanager_by_key.get(key)
+                if not linked_category:
+                    continue
+                mini_map_categories.append({
+                    "key": key,
+                    "title": menu_label_by_key.get(key, linked_category.title),
+                    "icon_name": linked_category.icon or "",
+                    "icon_image": None,
+                    "category_id": linked_category.id,
+                    "is_default": key == "multimodal",
+                })
+                seen_keys.add(key)
+
+            mini_map_categories = sorted(
+                mini_map_categories,
+                key=lambda item: preferred_order.index(item["key"]) if item["key"] in preferred_order else len(preferred_order)
+            )
+
+            # Ensure one default tab is set for initial map load
+            if mini_map_categories and not any(item.get("is_default") for item in mini_map_categories):
+                mini_map_categories[0]["is_default"] = True
+
+            icon_names = [item["icon_name"] for item in mini_map_categories if item.get("icon_name")]
+            map_category_svg_sprite = get_svg_sprite_for_icons(icon_names) if icon_names else ""
         except Exception:
             dataset_categories = None
+            mini_map_categories = []
+            map_category_svg_sprite = ""
+
+        if not mini_map_categories:
+            mini_map_categories = [
+                {"key": "multimodal", "title": "Multimodal", "icon_name": "", "icon_image": None, "category_id": "", "is_default": True},
+                {"key": "extreme-rainfall", "title": "Extreme Rainfall", "icon_name": "", "icon_image": None, "category_id": "", "is_default": False},
+                {"key": "impact", "title": "Impact", "icon_name": "", "icon_image": None, "category_id": "", "is_default": False},
+            ]
 
         context.update({"dataset_categories": dataset_categories})
+        context.update({"mini_map_categories": mini_map_categories})
+        context.update({"map_category_svg_sprite": map_category_svg_sprite})
         mapviewer_url = get_full_url(request, reverse("mapview"))
         context.update({"mapviewer_url": mapviewer_url})
 
@@ -1029,19 +1124,8 @@ class MapserverConfig(BaseGenericSetting):
 # LANGUAGE SETTINGS - CMS configurable languages
 # =============================================================================
 
-# Available language choices - these are the languages that CAN be enabled
-LANGUAGE_CHOICES = [
-    ("en", _("English")),
-    ("sw", _("Swahili")),
-    ("ar", _("العربية (Arabic)")),
-    ("am", _("አማርኛ (Amharic)")),
-    ("fr", _("Français (French)")),
-    ("so", _("Soomaali (Somali)")),
-    ("om", _("Oromoo (Oromo)")),
-    ("ti", _("ትግርኛ (Tigrinya)")),
-    ("pt", _("Português (Portuguese)")),
-    ("es", _("Español (Spanish)")),
-]
+# Available language choices - all Google Translate supported languages.
+LANGUAGE_CHOICES = GOOGLE_TRANSLATE_LANGUAGE_CHOICES
 
 
 class EnabledLanguage(Orderable):
@@ -1137,17 +1221,17 @@ class MultimodalClusterSettings(BaseGenericSetting):
 
     # Alert thresholds (discharge in m³/s)
     warning_threshold = models.FloatField(
-        default=150.0,
+        default=300.0,
         verbose_name=_("Warning Threshold (m³/s)"),
         help_text=_("Daily average discharge above this value triggers Warning level"),
     )
     alarm_threshold = models.FloatField(
-        default=300.0,
+        default=500.0,
         verbose_name=_("Alarm Threshold (m³/s)"),
         help_text=_("Daily average discharge above this value triggers Alarm level"),
     )
     emergency_threshold = models.FloatField(
-        default=450.0,
+        default=750.0,
         verbose_name=_("Emergency Threshold (m³/s)"),
         help_text=_("Daily average discharge above this value triggers Emergency level"),
     )
@@ -1155,9 +1239,9 @@ class MultimodalClusterSettings(BaseGenericSetting):
     # Alert colors
     normal_color = models.CharField(
         max_length=7,
-        default="#808080",
+        default="#b0b0b0",
         verbose_name=_("Normal Color"),
-        help_text=_("Color for normal alert level (hex format, e.g., #808080)"),
+        help_text=_("Color for normal alert level (hex format, e.g., #b0b0b0)"),
     )
     warning_color = models.CharField(
         max_length=7,
@@ -1766,3 +1850,81 @@ class MultimodalDataUpload(models.Model):
                 self.matched_count,
                 f'cms_upload_{self.id}'
             ])
+
+
+# =============================================================================
+# UNMANAGED MODELS - Read-only views of gha schema tables
+# =============================================================================
+
+EXPERT_TYPE_CHOICES = [
+    ('hydrologist', _('Hydrologist')),
+    ('meteorologist', _('Meteorologist')),
+]
+
+RISK_LEVEL_CHOICES = [
+    ('normal', _('Normal')),
+    ('watch', _('Watch')),
+    ('warning', _('Warning')),
+    ('alarm', _('Alarm')),
+    ('emergency', _('Emergency')),
+]
+
+
+class ExpertAssessment(models.Model):
+    """Read-only view of gha.expert_assessments table."""
+
+    expert_type = models.CharField(max_length=20, choices=EXPERT_TYPE_CHOICES)
+    assessment_date = models.DateField()
+    valid_from = models.DateField(null=True, blank=True)
+    valid_to = models.DateField(null=True, blank=True)
+    country_code = models.CharField(max_length=10, default='REGION')
+    country_name = models.CharField(max_length=100, null=True, blank=True)
+    risk_level = models.CharField(max_length=20, choices=RISK_LEVEL_CHOICES, default='normal')
+    assessment_comment = models.TextField()
+    affected_areas = models.TextField(null=True, blank=True)
+    recommendations = models.TextField(null=True, blank=True)
+    created_by = models.CharField(max_length=200, null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+    is_published = models.BooleanField(null=True, blank=True, default=False)
+
+    class Meta:
+        managed = False
+        db_table = 'expert_assessments'
+        verbose_name = _('Expert Assessment')
+        verbose_name_plural = _('Expert Assessments')
+        ordering = ['-assessment_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.get_expert_type_display()} - {self.country_name or 'Region'} ({self.assessment_date})"
+
+    @property
+    def flag_url(self):
+        if self.country_code and self.country_code != 'REGION':
+            return f"https://flagcdn.com/w40/{self.country_code.lower()}.png"
+        return None
+
+
+class DistrictRiskLevel(models.Model):
+    """Read-only view of gha.district_risk_levels table."""
+
+    expert_type = models.CharField(max_length=20, choices=EXPERT_TYPE_CHOICES)
+    assessment_date = models.DateField()
+    country = models.CharField(max_length=100)
+    admin1 = models.CharField(max_length=100, verbose_name=_('Admin Level 1'))
+    admin2 = models.CharField(max_length=100, verbose_name=_('Admin Level 2'))
+    gid_2 = models.CharField(max_length=50, null=True, blank=True, verbose_name=_('GID 2'))
+    risk_level = models.CharField(max_length=20, choices=RISK_LEVEL_CHOICES, default='normal')
+    comment = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'district_risk_levels'
+        verbose_name = _('District Risk Level')
+        verbose_name_plural = _('District Risk Levels')
+        ordering = ['-assessment_date', 'country', 'admin1']
+
+    def __str__(self):
+        return f"{self.country} - {self.admin1}/{self.admin2} ({self.risk_level})"

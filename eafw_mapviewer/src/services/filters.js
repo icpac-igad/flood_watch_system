@@ -214,14 +214,27 @@ class ProjectFilterContainerComponent extends React.Component {
           }
         });
 
-        this.props.setMapSettings({
-          canBound: true,
-          bbox: [minLeft, minBottom, maxRight, maxTop]
-        });
+        // WHCA uses dedicated pg_tileserv function (whca_selected=true)
+        // Other projects use generic project filter with country boundaries
+        // Set param interactions FIRST so layer changes settle before zoom
+        if (projectKey === 'WHCA') {
+          this.props.setParamInteractions({
+            whca_filter: true,
+          });
+        } else {
+          this.props.setParamInteractions({
+            project_filter: true,
+            project_countries: project.countries.join(',')
+          });
+        }
 
-        this.props.setParamInteractions({
-          project_filter: true,
-          project_countries: project.countries.join(',')
+        // Zoom to combined project bbox after filter state is applied
+        // Use requestAnimationFrame to ensure the map processes the filter
+        // change before fitting bounds (prevents bbox from being cleared
+        // during the layer re-render cycle).
+        const bbox = [minLeft, minBottom, maxRight, maxTop];
+        requestAnimationFrame(() => {
+          this.props.setMapSettings({ canBound: true, bbox });
         });
       }
 
@@ -261,10 +274,13 @@ class ProjectFilterContainerComponent extends React.Component {
       country, '0', '0', 'Admin',
       { country_name: country.name, region_name: '' }
     );
+    // WHCA uses whca_filter; other projects use project_filter
+    const projectParams = this.state.selectedProject === 'WHCA'
+      ? { whca_filter: true }
+      : { project_filter: true, project_countries: project.countries.join(',') };
     this.props.setParamInteractions({
       ...paramInteractions,
-      project_filter: true,
-      project_countries: project.countries.join(',')
+      ...projectParams,
     });
 
     if (country.bbox) {
@@ -292,10 +308,12 @@ class ProjectFilterContainerComponent extends React.Component {
       region, '1', '1', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: region.name }
     );
+    const projectParams = this.state.selectedProject === 'WHCA'
+      ? { whca_filter: true }
+      : { project_filter: true, project_countries: project.countries.join(',') };
     this.props.setParamInteractions({
       ...paramInteractions,
-      project_filter: true,
-      project_countries: project.countries.join(',')
+      ...projectParams,
     });
 
     if (region.bbox) {
@@ -316,10 +334,12 @@ class ProjectFilterContainerComponent extends React.Component {
       district, '2', '2', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: this.state.selectedRegion.name }
     );
+    const projectParams = this.state.selectedProject === 'WHCA'
+      ? { whca_filter: true }
+      : { project_filter: true, project_countries: project.countries.join(',') };
     this.props.setParamInteractions({
       ...paramInteractions,
-      project_filter: true,
-      project_countries: project.countries.join(','),
+      ...projectParams,
       district_name: district.name
     });
 
@@ -333,10 +353,11 @@ class ProjectFilterContainerComponent extends React.Component {
 
   clearCountry = () => {
     this.setState({ selectedCountry: null, selectedRegion: null, selectedDistrict: null, regions: [], districts: [] });
-    const project = PROJECTS[this.state.selectedProject];
+    const projectParams = this.state.selectedProject === 'WHCA'
+      ? { whca_filter: true }
+      : { project_filter: true, project_countries: PROJECTS[this.state.selectedProject].countries.join(',') };
     this.props.setParamInteractions({
-      project_filter: true,
-      project_countries: project.countries.join(','),
+      ...projectParams,
       country_name: '',
       region_name: '',
       district_name: '',
@@ -347,15 +368,16 @@ class ProjectFilterContainerComponent extends React.Component {
 
   clearRegion = () => {
     this.setState({ selectedRegion: null, selectedDistrict: null, districts: [] });
-    const project = PROJECTS[this.state.selectedProject];
     const paramInteractions = buildParamInteractionsFromBoundary(
       this.state.selectedCountry, '0', '0', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: '' }
     );
+    const projectParams = this.state.selectedProject === 'WHCA'
+      ? { whca_filter: true }
+      : { project_filter: true, project_countries: PROJECTS[this.state.selectedProject].countries.join(',') };
     this.props.setParamInteractions({
       ...paramInteractions,
-      project_filter: true,
-      project_countries: project.countries.join(',')
+      ...projectParams,
     });
     if (this.state.selectedCountry?.bbox) {
       this.props.setMapSettings({
@@ -373,10 +395,12 @@ class ProjectFilterContainerComponent extends React.Component {
       this.state.selectedRegion, '1', '1', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: this.state.selectedRegion.name }
     );
+    const projectParams = this.state.selectedProject === 'WHCA'
+      ? { whca_filter: true }
+      : { project_filter: true, project_countries: project.countries.join(',') };
     this.props.setParamInteractions({
       ...paramInteractions,
-      project_filter: true,
-      project_countries: project.countries.join(',')
+      ...projectParams,
     });
     if (this.state.selectedRegion?.bbox) {
       this.props.setMapSettings({
@@ -709,7 +733,7 @@ class GridFilterContainerComponent extends React.Component {
     // Fetch grid cells for this region from the API
     try {
       const response = await fetch(
-        `/api/grid-cells/?country=${encodeURIComponent(this.state.selectedCountry.name)}&region=${encodeURIComponent(region.name)}`
+        `/api/v1/multimodal/grid-cells/?country=${encodeURIComponent(this.state.selectedCountry.name)}&region=${encodeURIComponent(region.name)}`
       );
       if (response.ok) {
         const gridCells = await response.json();
