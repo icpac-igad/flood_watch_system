@@ -1,9 +1,17 @@
+/* ICPAC brand colors: green (#2E7D32), yellow (#FFC107), white */
+:root {
+    --icpac-green: #2E7D32;
+    --icpac-green-light: #4CAF50;
+    --icpac-yellow: #FFC107;
+    --icpac-yellow-light: #FFF8E1;
+}
+
 /* Wider content area */
 .md-grid {
     max-width: 1400px;
 }
 
-/* Better table styling */
+/* Better table styling with ICPAC green headers */
 .md-typeset table:not([class]) {
     font-size: 0.85rem;
     border: 1px solid var(--md-typeset-table-color);
@@ -12,8 +20,8 @@
 }
 
 .md-typeset table:not([class]) th {
-    background-color: var(--md-primary-fg-color);
-    color: var(--md-primary-bg-color);
+    background-color: var(--icpac-green);
+    color: #fff;
     font-weight: 600;
     padding: 0.8rem 1rem;
 }
@@ -24,7 +32,7 @@
 }
 
 .md-typeset table:not([class]) tbody tr:hover {
-    background-color: var(--md-accent-fg-color--transparent);
+    background-color: var(--icpac-yellow-light);
 }
 
 /* Mermaid diagram sizing */
@@ -41,4 +49,23 @@
 /* Admonition refinements */
 .md-typeset .admonition {
     border-radius: 6px;
+}
+
+/* Funder banner */
+.funder-banner {
+    background: linear-gradient(135deg, var(--icpac-green), #1B5E20);
+    color: #fff;
+    padding: 1.2rem 1.5rem;
+    border-radius: 8px;
+    margin: 2rem 0;
+    text-align: center;
+}
+
+.funder-banner a {
+    color: var(--icpac-yellow);
+    font-weight: 600;
+}
+
+.funder-banner a:hover {
+    color: #FFD54F;
 }

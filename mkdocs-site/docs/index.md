@@ -8,37 +8,46 @@ An operational flood early warning platform for the Greater Horn of Africa
 
 ## What is FloodWatch?
 
-FloodWatch is a real-time flood monitoring and early warning system developed by the [IGAD Climate Prediction and Applications Centre (ICPAC)](https://www.icpac.net/). It provides actionable intelligence to disaster management agencies, humanitarian organizations, and communities across **11 countries** in the Greater Horn of Africa.
+FloodWatch is a real-time flood monitoring and early warning system developed by [ICPAC](https://www.icpac.net/) (IGAD Climate Prediction and Applications Centre). It monitors **3,199+ river control points** across **11 countries**, providing discharge forecasts, flood alerts, and impact assessments to support disaster preparedness.
 
-The platform integrates hydrological forecast models, satellite-derived observations, weather prediction data, and community-reported impacts into a unified decision-support system.
+## Forecast Models
 
-## Key Capabilities
+FloodWatch integrates multiple hydrological and weather forecast models:
 
-| Capability | Description |
-|:-----------|:------------|
-| :material-map: **Real-Time Flood Monitoring** | Interactive map with 3,199+ river monitoring points, real-time discharge forecasts, and multi-threshold alert classification (Warning, Alarm, Emergency). |
-| :material-chart-line: **Forecast Analytics** | 7-day ensemble discharge forecasts with uncertainty bands, historical comparison, and return period analysis for flood risk assessment. |
-| :material-layers: **Multi-Source Data Fusion** | Combines GloFAS hydrological models, WRF weather predictions, satellite flood extent mapping, and ground-based observations. |
-| :material-alert: **Automated Alerting** | Threshold-based alert generation with three severity levels. Supports CAP (Common Alerting Protocol) for interoperability with national warning systems. |
-| :material-file-document: **Impact Assessment** | Expert-driven flood impact assessments with population exposure estimates, infrastructure damage reports, and situational analysis. |
-| :material-earth: **Geospatial Data Management** | Powered by GeoManager, an open-source Wagtail-based package for managing raster, vector, WMS, and tile layers with full admin interface. |
+| Model | Type | Description |
+|-------|------|-------------|
+| **GeoSFM** | Hydrological | Satellite-driven streamflow model for Africa |
+| **MIKE** | Hydrological | Danish Hydraulic Institute river basin model |
+| **FloodPROOFS** | Hydrological | CIMA Foundation deterministic flood forecasting |
+| **Google Flood Forecasts** | Hydrological | Google AI-based flood prediction |
+| **HYPE** | Hydrological | Swedish SMHI large-scale hydrological model *(coming soon)* |
+| **WRF** | Weather | High-resolution rainfall forecasts |
 
-## Platform Architecture
+## Key Features
 
-FloodWatch is built as a modern, containerized microservices stack:
+| Feature | Description |
+|:--------|:------------|
+| :material-map: **Real-Time Monitoring** | Interactive map with discharge forecasts and alert classification (Warning, Alarm, Emergency) |
+| :material-chart-line: **Ensemble Forecasts** | 7-day ensemble discharge forecasts with uncertainty bands |
+| :material-layers: **Satellite Flood Extent** | Flood extent mapping from satellite imagery with return period analysis |
+| :material-alert: **CAP Alerts** | Common Alerting Protocol integration for national warning systems |
+| :material-file-document: **Impact Assessment** | Expert-driven flood impact reports with population exposure estimates |
+| :material-earth: **GeoManager CMS** | Open-source geospatial layer management (raster, vector, WMS, tiles) |
+
+## Architecture
 
 ```mermaid
 graph TB
-    subgraph External Data Sources
-        A[GloFAS Forecasts]
+    subgraph Data Sources
+        A[GeoSFM / MIKE / FloodPROOFS]
         B[WRF Rainfall]
-        C[Satellite Imagery]
-        D[SFTP / FTP Feeds]
+        C[Google Flood Forecasts]
+        D[Satellite Imagery]
     end
 
     subgraph FloodWatch Platform
         E[Ingestion Jobs] --> F[(PostgreSQL / PostGIS)]
-        F --> G[FastAPI Service]
+        F --> G[FastAPI]
         F --> H[Map Services]
         I[GeoManager CMS] --> F
         G --> J[Map Viewer]
@@ -47,24 +56,22 @@ graph TB
 
     A --> E
     B --> E
-    C --> I
-    D --> E
+    C --> E
+    D --> I
 
     J --> K[End Users]
 ```
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Frontend** | Next.js, MapLibre GL | Interactive map viewer and flood analysis dashboard |
-| **API** | FastAPI | RESTful endpoints for forecasts, summaries, and risk data |
-| **CMS** | Django, Wagtail, GeoManager | Content management and geospatial layer administration |
-| **Map Services** | MapServer, MapCache, pg_tileserv | OGC-compliant raster and vector tile serving |
-| **Database** | PostgreSQL, PostGIS | Spatial data storage with advanced geospatial queries |
-| **Ingestion** | Scheduled Python jobs | Automated data sync from FTP, SFTP, and cloud sources |
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Frontend** | Next.js, MapLibre GL | Map viewer and flood analysis dashboard |
+| **API** | FastAPI | Forecast data, summaries, and alerts |
+| **CMS** | Django, Wagtail, GeoManager | Layer management and content admin |
+| **Map Services** | MapServer, MapCache, pg_tileserv | Raster and vector tile serving |
+| **Database** | PostgreSQL, PostGIS | Spatial data storage |
+| **Ingestion** | Scheduled Python jobs | Automated data sync from FTP/SFTP sources |
 
 ## Coverage
-
-FloodWatch covers the **Greater Horn of Africa** region:
 
 | | | |
 |---|---|---|
@@ -75,13 +82,33 @@ FloodWatch covers the **Greater Horn of Africa** region:
 
 ## Quick Links
 
-- [Getting Started](getting-started/quickstart.md) — Set up a local development environment
-- [API Reference](api/swagger.md) — Interactive Swagger documentation
-- [Architecture](architecture/overview.md) — System design and data flow
-- [GeoManager](geomanager/index.md) — Geospatial data management package
+- [Getting Started](getting-started/quickstart.md) — Local development setup
+- [API Reference](api/swagger.md) — Interactive Swagger docs
+- [Architecture](architecture/overview.md) — System design
+- [Deployment](getting-started/deployment.md) — CI/CD pipeline
 
 ---
 
+## Funding & Partners
+
+<div class="funder-banner">
+    <p style="margin: 0 0 0.5rem 0; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px;">Funded by</p>
+    <p style="margin: 0; font-size: 1.2em;"><strong><a href="https://www.crafd.org/">CrafD</a></strong> — Climate Risk Adaptation and Finance in the Drylands</p>
+    <p style="margin: 0.8rem 0 0 0; font-size: 0.85em; line-height: 1.6;">
+        Funded by the <strong>Netherlands Ministry of Foreign Affairs</strong> through the <strong>Netherlands Red Cross</strong>,<br/>
+        channelled via <strong>WMO</strong> to <strong>ICPAC</strong> as the implementing agency for IGAD member states.
+    </p>
+</div>
+
+| Partner | Role |
+|---------|------|
+| **[ICPAC](https://www.icpac.net/)** | Implementing agency — system development and operations |
+| **[Netherlands Red Cross](https://www.rodekruis.nl/)** | Funding partner via Netherlands Ministry of Foreign Affairs |
+| **[WMO](https://wmo.int/)** | Programme coordination |
+| **[UNDRR](https://www.undrr.org/)** | Disaster risk reduction framework |
+| **[CIMA Foundation](https://www.cimafoundation.org/)** | FloodPROOFS hydrological model |
+| **[SMHI](https://www.smhi.se/)** | HYPE hydrological model |
+
 <p style="text-align: center; color: #888; font-size: 0.9em;">
-Built with dedication by <strong>Hillary Koros</strong> at <a href="https://www.icpac.net/">ICPAC</a> — IGAD Climate Prediction and Applications Centre
+Developed by <strong>Hillary Koros</strong> at <a href="https://www.icpac.net/">ICPAC</a> — IGAD Climate Prediction and Applications Centre
 </p>

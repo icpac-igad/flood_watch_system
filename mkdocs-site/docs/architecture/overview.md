@@ -16,7 +16,7 @@ FloodWatch follows a **microservices architecture** where each component is inde
 ```mermaid
 graph TB
     subgraph External Sources
-        GloFAS[GloFAS<br/>Hydrological Forecasts]
+        HYDRO[GeoSFM / MIKE / FloodPROOFS<br/>Hydrological Forecasts]
         WRF[WRF Model<br/>Rainfall Predictions]
         SAT[Satellite<br/>Flood Extent]
         FTP[SFTP / FTP<br/>Data Feeds]
@@ -50,7 +50,7 @@ graph TB
         NGINX[Nginx<br/><i>Reverse proxy</i>]
     end
 
-    GloFAS --> JOBS
+    HYDRO --> JOBS
     WRF --> JOBS
     FTP --> JOBS
     SAT --> CMS
@@ -85,7 +85,7 @@ sequenceDiagram
     participant DB as PostGIS Database
     participant CMS as GeoManager CMS
 
-    Source->>Jobs: GloFAS forecasts (FTP)
+    Source->>Jobs: Hydrological forecasts (FTP/SFTP)
     Source->>Jobs: WRF rainfall (SFTP)
     Source->>CMS: Satellite imagery (upload)
 
@@ -151,10 +151,10 @@ Central data store with two primary schemas:
 ### Ingestion — Scheduled Jobs
 Python-based cron jobs that synchronize data from external sources:
 
-- GloFAS ensemble discharge forecasts
+- GeoSFM, MIKE, FloodPROOFS discharge forecasts
 - WRF weather model rainfall predictions
-- FloodPROOFS satellite-derived flood observations
-- Google Drive shared datasets
+- Google Flood Forecasts
+- Satellite-derived flood extent observations
 
 ## Alert Classification
 
