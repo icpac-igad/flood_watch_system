@@ -69,3 +69,24 @@
 .funder-banner a:hover {
     color: #FFD54F;
 }
+
+/* Hide "Made with Material for MkDocs" footer label */
+.md-footer-meta__inner {
+    display: flex;
+    justify-content: center;
+}
+
+.md-footer-meta__inner .md-copyright {
+    width: 100%;
+    text-align: center;
+}
+
+.md-footer-meta__inner .md-social {
+    display: none;
+}
+
+/* Hide the MkDocs generator notice */
+.md-footer-copyright__highlight,
+a[href="https://squidfunk.github.io/mkdocs-material/"] {
+    display: none;
+}
