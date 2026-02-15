@@ -1,17 +1,18 @@
-# EAFW FloodWatch - Build & Deploy to Staging
-# Triggers on push to eafw branch
-# Only builds images when their source files change
+# EAFW FloodWatch - Build & Deploy to Production
+# Manual trigger only (workflow_dispatch) for safety
+# Includes checksum-based backup verification and smart secret detection
 
-name: Build & Deploy to Staging
+name: Build & Deploy to Production
 
 on:
-  push:
-    branches:
-      - eafw
   workflow_dispatch:
     inputs:
       force_build:
         description: 'Force rebuild all images'
+        type: boolean
+        default: false
+      skip_backup:
+        description: 'Skip database backup (use with caution)'
         type: boolean
         default: false
 
@@ -30,7 +31,6 @@ jobs:
       mapserver: ${{ steps.changes.outputs.mapserver }}
       mapcache: ${{ steps.changes.outputs.mapcache }}
       jobs: ${{ steps.changes.outputs.jobs }}
-      deploy_only: ${{ steps.changes.outputs.deploy_only }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,11 +39,9 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          # Get changed files
           CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
           echo "Changed files: $CHANGED"
 
-          # Check each component
           if echo "$CHANGED" | grep -qE "^eafw_api/"; then
             echo "api=true" >> $GITHUB_OUTPUT
           else
@@ -78,13 +76,6 @@ jobs:
             echo "jobs=true" >> $GITHUB_OUTPUT
           else
             echo "jobs=false" >> $GITHUB_OUTPUT
-          fi
-
-          # Check if only config/deploy files changed (no build needed)
-          if echo "$CHANGED" | grep -qvE "^eafw_api/|^eafw_cms/|^eafw_docker/cms/|^eafw_mapviewer/|^eafw_docker/mapviewer/|^eafw_docker/mapserver/|^eafw_docker/mapcache/|^eafw_jobs/|^eafw_docker/jobs/"; then
-            echo "deploy_only=true" >> $GITHUB_OUTPUT
-          else
-            echo "deploy_only=false" >> $GITHUB_OUTPUT
           fi
 
   build-api:
@@ -149,7 +140,7 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.mapviewer == 'true' || github.event.inputs.force_build == 'true'
     env:
-      ANALYTICS_PROPERTY_ID: ${{ secrets.STAGING_ANALYTICS_PROPERTY_ID }}
+      ANALYTICS_PROPERTY_ID: ${{ secrets.ANALYTICS_PROPERTY_ID }}
     permissions:
       contents: read
       packages: write
@@ -172,7 +163,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/eafw-mapviewer:${{ github.sha }}
           build-args: |
             CMS_API=/api
-            BASE_PATH=/ 
+            BASE_PATH=/
             ASSET_PREFIX=
             ADMIN_BOUNDARY_API=/api/v1/boundaries/admin-boundaries/
             ANALYTICS_PROPERTY_ID=${{ env.ANALYTICS_PROPERTY_ID }}
@@ -264,13 +255,13 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
-    name: Deploy to Staging
+    name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [detect-changes, build-api, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs]
     if: always() && !cancelled()
-    environment: staging
+    environment: production
     steps:
-      - name: Deploy to staging server
+      - name: Deploy to production server
         uses: appleboy/ssh-action@v1.0.3
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
@@ -292,46 +283,47 @@ jobs:
           SMTP_EMAIL_HOST: ${{ secrets.SMTP_EMAIL_HOST }}
           SMTP_EMAIL_HOST_USER: ${{ secrets.SMTP_EMAIL_HOST_USER }}
           SMTP_EMAIL_HOST_PASSWORD: ${{ secrets.SMTP_EMAIL_HOST_PASSWORD }}
+          SKIP_BACKUP: ${{ github.event.inputs.skip_backup }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: 22
           command_timeout: 60m
-          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,SFTP_HOST,SFTP_USERNAME,SFTP_PASSWORD,FLOODPROOFS_SFTP_HOST,FLOODPROOFS_SFTP_USER,FLOODPROOFS_SFTP_PASSWORD,ENSEMBLE_FTP_HOST,ENSEMBLE_FTP_USER,ENSEMBLE_FTP_PASSWORD,WRF_FTP_HOST,WRF_FTP_USER,WRF_FTP_PASSWORD,FLOODS_API_KEY,SMTP_EMAIL_HOST,SMTP_EMAIL_HOST_USER,SMTP_EMAIL_HOST_PASSWORD
+          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,SFTP_HOST,SFTP_USERNAME,SFTP_PASSWORD,FLOODPROOFS_SFTP_HOST,FLOODPROOFS_SFTP_USER,FLOODPROOFS_SFTP_PASSWORD,ENSEMBLE_FTP_HOST,ENSEMBLE_FTP_USER,ENSEMBLE_FTP_PASSWORD,WRF_FTP_HOST,WRF_FTP_USER,WRF_FTP_PASSWORD,FLOODS_API_KEY,SMTP_EMAIL_HOST,SMTP_EMAIL_HOST_USER,SMTP_EMAIL_HOST_PASSWORD,SKIP_BACKUP
           script: |
             set -e
             cd ~
 
             echo "========================================="
-            echo "  STAGING DEPLOYMENT"
+            echo "  PRODUCTION DEPLOYMENT"
             echo "  $(date '+%Y-%m-%d %H:%M:%S UTC')"
             echo "========================================="
 
             # Login to GitHub Container Registry
             echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
 
-            # Safe repo update
+            # Safe repo update — production uses main branch
             if [ -d "eafw/.git" ]; then
               echo "Updating existing repo..."
               cd eafw
               git fetch origin
-              git reset --hard origin/eafw
+              git reset --hard origin/main
             elif [ -d "eafw" ]; then
               echo "Directory eafw/ exists but is not a git repo. Renaming and cloning fresh..."
               mv eafw eafw_old_$(date +%Y%m%d%H%M%S)
-              git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
+              git clone -b main https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
             else
               echo "Cloning repo..."
-              git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
+              git clone -b main https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
             fi
 
             echo "Current directory: $(pwd)"
             echo "Git SHA: $(git rev-parse --short HEAD)"
 
-            # ─── CHECKSUM-BASED SECRET DETECTION ─────────────────
+            # ─── CHECKSUM-BASED BACKUP ───────────────────────────
             # Compute checksum of current .env before any changes
             ENV_CHECKSUM_BEFORE=""
             if [ -f .env ]; then
@@ -339,7 +331,8 @@ jobs:
               echo "Current .env checksum: ${ENV_CHECKSUM_BEFORE:0:16}..."
             fi
 
-            # Smart .env — create from template only on first deploy
+            # ─── SMART .ENV MANAGEMENT ───────────────────────────
+            # Create from template only on first deploy
             if [ ! -f .env ]; then
               cp staging.env.example .env
               echo "FIRST DEPLOY: created .env from template"
@@ -364,7 +357,7 @@ jobs:
             sed -i "s|^SMTP_EMAIL_HOST=.*|SMTP_EMAIL_HOST=${SMTP_EMAIL_HOST}|" .env
             sed -i "s|^SMTP_EMAIL_HOST_USER=.*|SMTP_EMAIL_HOST_USER=${SMTP_EMAIL_HOST_USER}|" .env
             sed -i "s|^SMTP_EMAIL_HOST_PASSWORD=.*|SMTP_EMAIL_HOST_PASSWORD=${SMTP_EMAIL_HOST_PASSWORD}|" .env
-            # Force DEBUG off on staging
+            # Force DEBUG off in production
             sed -i "s|^CMS_DEBUG=.*|CMS_DEBUG=False|" .env
 
             # Compare checksums to detect secret changes
@@ -385,12 +378,17 @@ jobs:
             DB_STATUS=$(docker inspect --format='{{.State.Status}}' eafw-pgdb 2>/dev/null || echo "none")
             DB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' eafw-pgdb 2>/dev/null || echo "none")
 
-            if [ "$DB_STATUS" = "running" ] && [ "$DB_HEALTH" != "unhealthy" ]; then
-              echo "Backing up database..."
-              BACKUP="$HOME/eafw-backups/staging_db_$(date +%Y%m%d_%H%M%S).dump"
+            if [ "$SKIP_BACKUP" = "true" ]; then
+              echo "SKIP_BACKUP=true — skipping database backup"
+            elif [ "$DB_STATUS" = "running" ] && [ "$DB_HEALTH" != "unhealthy" ]; then
+              echo "Backing up production database..."
+              BACKUP="$HOME/eafw-backups/prod_db_$(date +%Y%m%d_%H%M%S).dump"
 
               # Create backup
-              docker exec eafw-pgdb pg_dump -U eafw_user -Fc eafw_db > "$BACKUP" || echo "WARN: backup failed, continuing deploy"
+              docker exec eafw-pgdb pg_dump -U eafw_user -Fc eafw_db > "$BACKUP" || {
+                echo "FATAL: Database backup failed — aborting production deploy"
+                exit 1
+              }
 
               # Verify backup with checksum
               if [ -f "$BACKUP" ] && [ -s "$BACKUP" ]; then
@@ -400,34 +398,43 @@ jobs:
                 echo "  Size: $BACKUP_SIZE"
                 echo "  SHA256: ${BACKUP_CHECKSUM:0:16}..."
 
+                # Verify backup is not corrupt (pg_restore --list should work)
+                if docker exec -i eafw-pgdb pg_restore --list < "$BACKUP" > /dev/null 2>&1; then
+                  echo "  Integrity: VERIFIED (pg_restore --list OK)"
+                else
+                  echo "FATAL: Backup integrity check failed — aborting production deploy"
+                  exit 1
+                fi
+
                 # Save checksum alongside backup
                 echo "$BACKUP_CHECKSUM  $(basename $BACKUP)" > "${BACKUP}.sha256"
+              else
+                echo "FATAL: Backup file empty or missing — aborting production deploy"
+                exit 1
               fi
 
-              # Keep last 5 staging backups
-              ls -t ~/eafw-backups/staging_db_*.dump 2>/dev/null | tail -n +6 | while read f; do
+              # Keep last 10 production backups
+              ls -t ~/eafw-backups/prod_db_*.dump 2>/dev/null | tail -n +11 | while read f; do
                 rm -f "$f" "${f}.sha256"
               done
             else
-              echo "DB not healthy ($DB_STATUS/$DB_HEALTH), skipping backup"
-            fi
-
-            # If DB is crash-looping, reset corrupt pgdata volume
-            if [ "$DB_STATUS" = "restarting" ] || [ "$DB_STATUS" = "exited" ]; then
-              echo "DB is in failed state ($DB_STATUS), resetting pgdata volume..."
-              docker compose -f docker-compose.staging.yml --env-file .env down 2>/dev/null || true
-              docker volume rm eafw_pgdata 2>/dev/null || true
-              echo "pgdata volume removed. Fresh init will run on next start."
+              echo "FATAL: DB not healthy ($DB_STATUS/$DB_HEALTH) — cannot backup before production deploy"
+              # Allow first deploy (no DB container yet)
+              if [ "$DB_STATUS" = "none" ]; then
+                echo "No existing DB container — proceeding with first deploy"
+              else
+                exit 1
+              fi
             fi
 
             # ─── DEPLOY ──────────────────────────────────────────
             # Pull latest images
             docker compose -f docker-compose.staging.yml --env-file .env pull --ignore-pull-failures
 
-            # Deploy services
+            # Restart containers
             docker compose -f docker-compose.staging.yml --env-file .env up -d || true
 
-            # Wait for DB to be ready (init loads 60MB+ on first deploy)
+            # Wait for DB to be ready
             echo "Waiting for database to be ready..."
             DB_READY=0
             for i in $(seq 1 60); do
@@ -523,4 +530,4 @@ jobs:
             echo "========================================="
 
             [ $FAILED -eq 1 ] && echo "SOME SERVICES NOT HEALTHY" && exit 1
-            echo "Staging deploy successful!"
+            echo "Production deploy successful!"

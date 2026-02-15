@@ -150,6 +150,16 @@ curl http://localhost:8095/collections
 curl http://localhost:8094/
 ```
 
+### Visitor Traffic
+
+```
+docker compose logs --tail 40 eafw-nginx | tail -n 20
+docker exec eafw-nginx tail -n 20 /var/log/nginx/access.log
+docker exec eafw-nginx awk '{print $1}' /var/log/nginx/access.log | sort | uniq -c | sort -nr | head -n 10
+```
+
+Confirm `ANALYTICS_PROPERTY_ID` in the staging `.env` matches `secrets.STAGING_ANALYTICS_PROPERTY_ID` so the GA property baked into the build is consistent with runtime env values.
+
 ---
 
 ## Access Points

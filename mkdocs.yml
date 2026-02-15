@@ -68,6 +68,7 @@ nav:
       - Quick Start: getting-started/quickstart.md
       - Deployment Guide: getting-started/deployment.md
       - Staging Deployment: getting-started/staging-deployment.md
+      - Secrets Management: getting-started/secrets-management.md
   - Architecture:
       - System Overview: architecture/overview.md
       - Frontend: architecture/frontend.md
