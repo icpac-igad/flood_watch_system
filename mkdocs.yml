@@ -30,6 +30,10 @@ theme:
     - content.code.copy
   icon:
     repo: fontawesome/brands/github
+  custom_dir: mkdocs-site/docs/overrides
+
+extra_css:
+  - stylesheets/extra.css
 
 plugins:
   - search

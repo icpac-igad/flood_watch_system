@@ -14,33 +14,14 @@ The platform integrates hydrological forecast models, satellite-derived observat
 
 ## Key Capabilities
 
-<div class="grid cards" markdown>
-
-- :material-map: **Real-Time Flood Monitoring**
-
-    Interactive map with 3,199+ river monitoring points, real-time discharge forecasts, and multi-threshold alert classification (Warning, Alarm, Emergency).
-
-- :material-chart-line: **Forecast Analytics**
-
-    7-day ensemble discharge forecasts with uncertainty bands, historical comparison, and return period analysis for flood risk assessment.
-
-- :material-layers: **Multi-Source Data Fusion**
-
-    Combines GloFAS hydrological models, WRF weather predictions, satellite flood extent mapping, and ground-based observations.
-
-- :material-alert: **Automated Alerting**
-
-    Threshold-based alert generation with three severity levels. Supports CAP (Common Alerting Protocol) for interoperability with national warning systems.
-
-- :material-file-document: **Impact Assessment**
-
-    Expert-driven flood impact assessments with population exposure estimates, infrastructure damage reports, and situational analysis.
-
-- :material-earth: **Geospatial Data Management**
-
-    Powered by GeoManager, an open-source Wagtail-based package for managing raster, vector, WMS, and tile layers with full admin interface.
-
-</div>
+| Capability | Description |
+|:-----------|:------------|
+| :material-map: **Real-Time Flood Monitoring** | Interactive map with 3,199+ river monitoring points, real-time discharge forecasts, and multi-threshold alert classification (Warning, Alarm, Emergency). |
+| :material-chart-line: **Forecast Analytics** | 7-day ensemble discharge forecasts with uncertainty bands, historical comparison, and return period analysis for flood risk assessment. |
+| :material-layers: **Multi-Source Data Fusion** | Combines GloFAS hydrological models, WRF weather predictions, satellite flood extent mapping, and ground-based observations. |
+| :material-alert: **Automated Alerting** | Threshold-based alert generation with three severity levels. Supports CAP (Common Alerting Protocol) for interoperability with national warning systems. |
+| :material-file-document: **Impact Assessment** | Expert-driven flood impact assessments with population exposure estimates, infrastructure damage reports, and situational analysis. |
+| :material-earth: **Geospatial Data Management** | Powered by GeoManager, an open-source Wagtail-based package for managing raster, vector, WMS, and tile layers with full admin interface. |
 
 ## Platform Architecture
 

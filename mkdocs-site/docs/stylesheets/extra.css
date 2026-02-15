@@ -1,0 +1,44 @@
+/* Wider content area */
+.md-grid {
+    max-width: 1400px;
+}
+
+/* Better table styling */
+.md-typeset table:not([class]) {
+    font-size: 0.85rem;
+    border: 1px solid var(--md-typeset-table-color);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.md-typeset table:not([class]) th {
+    background-color: var(--md-primary-fg-color);
+    color: var(--md-primary-bg-color);
+    font-weight: 600;
+    padding: 0.8rem 1rem;
+}
+
+.md-typeset table:not([class]) td {
+    padding: 0.7rem 1rem;
+    vertical-align: top;
+}
+
+.md-typeset table:not([class]) tbody tr:hover {
+    background-color: var(--md-accent-fg-color--transparent);
+}
+
+/* Mermaid diagram sizing */
+.mermaid {
+    text-align: center;
+    margin: 1.5rem 0;
+}
+
+/* Hero subtitle styling */
+.md-typeset p:first-of-type {
+    font-size: 1.1em;
+}
+
+/* Admonition refinements */
+.md-typeset .admonition {
+    border-radius: 6px;
+}
