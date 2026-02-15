@@ -30,7 +30,11 @@ MAP
         TRANSPARENT ON
     END
 
+    INCLUDE "layers/admin-extent-mask.map"
     INCLUDE "layers/daily-hmc-alert.map"
     INCLUDE "layers/flood-hazard.map"
+    INCLUDE "layers/flood-extent-return-periods.map"
     INCLUDE "layers/wrf-streamflow.map"
+    INCLUDE "layers/wrf-daily-rainfall.map"
+    INCLUDE "layers/wrf-extreme-rainfall.map"
 END

@@ -1,0 +1,31 @@
+LAYER
+    NAME "flood_extent_rp25"
+    TYPE RASTER
+    STATUS ON
+    DATA "data/return_periods/M6_25y_clipped.tif"
+    PROCESSING "NODATA=0"
+    INCLUDE "shared/common-layer-properties.map"
+    TYPE RASTER
+    INCLUDE "classifications/flood-extent-rp25.classes.map"
+    METADATA
+        "wms_title" "Flood Extent / Hazard - 25 Year Return Period"
+        "wms_abstract" "Aggregated fluvial flood hazard model-consensus raster (1-in-25 years)"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+END
+
+LAYER
+    NAME "flood_extent_rp100"
+    TYPE RASTER
+    STATUS ON
+    DATA "data/return_periods/M6_100y_clipped.tif"
+    PROCESSING "NODATA=0"
+    INCLUDE "shared/common-layer-properties.map"
+    TYPE RASTER
+    INCLUDE "classifications/flood-extent-rp100.classes.map"
+    METADATA
+        "wms_title" "Flood Extent / Hazard - 100 Year Return Period"
+        "wms_abstract" "Aggregated fluvial flood hazard model-consensus raster (1-in-100 years)"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+END

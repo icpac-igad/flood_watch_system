@@ -1,0 +1,65 @@
+# Aggregated flood model-consensus classes for return-period rasters
+# Values represent number of models (0..6) agreeing inundation occurs.
+
+CLASS
+    NAME "No data / dry"
+    EXPRESSION ([pixel] = 0)
+    STYLE
+        COLOR 0 0 0
+        OPACITY 0
+    END
+END
+
+CLASS
+    NAME "Consensus 1/6"
+    EXPRESSION ([pixel] = 1)
+    STYLE
+        COLOR 254 240 217
+        OPACITY 90
+    END
+END
+
+CLASS
+    NAME "Consensus 2/6"
+    EXPRESSION ([pixel] = 2)
+    STYLE
+        COLOR 253 204 138
+        OPACITY 90
+    END
+END
+
+CLASS
+    NAME "Consensus 3/6"
+    EXPRESSION ([pixel] = 3)
+    STYLE
+        COLOR 252 141 89
+        OPACITY 90
+    END
+END
+
+CLASS
+    NAME "Consensus 4/6"
+    EXPRESSION ([pixel] = 4)
+    STYLE
+        COLOR 227 74 51
+        OPACITY 90
+    END
+END
+
+CLASS
+    NAME "Consensus 5/6"
+    EXPRESSION ([pixel] = 5)
+    STYLE
+        COLOR 179 0 0
+        OPACITY 90
+    END
+END
+
+CLASS
+    NAME "Consensus 6/6"
+    EXPRESSION ([pixel] = 6)
+    STYLE
+        COLOR 127 0 0
+        OPACITY 90
+    END
+END

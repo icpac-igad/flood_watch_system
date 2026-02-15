@@ -1,0 +1,14 @@
+LAYER
+    INCLUDE "config/database.map"
+    NAME "gha_admin_extent_mask"
+    TYPE POLYGON
+    STATUS ON
+    DATA "geom from (select 1 as id, gha.resolve_admin_extent_geom(NULL, NULL, NULL) as geom) as subq using unique id using srid=4326"
+    CLASS
+        STYLE
+            OPACITY 0
+            COLOR 255 255 255
+            OUTLINECOLOR 255 255 255
+        END
+    END
+END

@@ -53,6 +53,7 @@ COPY --chown=${USER_NAME}:root eafw_docker/mapcache/docker-entrypoint.sh /entryp
 
 RUN ln --symbolic ${HOME_DIR} /etc/mapcache && \
     ln --symbolic /etc/nginx/sbin/nginx /usr/local/bin && \
+    mkdir -p /opt/tiles && chown -R ${USER_NAME}:${USER_NAME} /opt/tiles && \
     chown -Rf ${USER_NAME}:root /etc/nginx && ldconfig && chmod 0755 /entrypoint.sh
 
 USER ${USER_NAME}

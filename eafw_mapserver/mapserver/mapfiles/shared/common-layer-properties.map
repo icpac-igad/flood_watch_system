@@ -1,6 +1,7 @@
 # Common layer properties for all EAFW layers
 TYPE POLYGON
 STATUS ON
+MASK "gha_admin_extent_mask"
 PROJECTION
     "init=epsg:4326"
 END

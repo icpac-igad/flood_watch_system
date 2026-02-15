@@ -30,8 +30,6 @@
       "layout": "template",
       "options": {
         "template": "${TILES_DIR}/{tileset}/{grid}/{dim}/{z}/{x}/{y}.{ext}",
-        "detect_blank": null,
-        "symlink_blank": null,
         "max_usage": "20G"
       }
     }
@@ -76,6 +74,26 @@
       "transparent": "true",
       "connection_timeout": 30,
       "timeout": 300
+    },
+    {
+      "name": "flood_extent_rp25_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "flood_extent_rp25",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    },
+    {
+      "name": "flood_extent_rp100_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "flood_extent_rp100",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
     }
   ],
   "tileset_attrs": {
@@ -111,6 +129,22 @@
       "format_ref": "png_fast",
       "metadata": {
         "title": "Daily HMC Flood Alert Tiles"
+      }
+    },
+    {
+      "name": "flood_extent_rp25",
+      "source": "flood_extent_rp25_source",
+      "format_ref": "png_fast",
+      "metadata": {
+        "title": "Flood Extent 25-Year Return Period Tiles"
+      }
+    },
+    {
+      "name": "flood_extent_rp100",
+      "source": "flood_extent_rp100_source",
+      "format_ref": "png_fast",
+      "metadata": {
+        "title": "Flood Extent 100-Year Return Period Tiles"
       }
     }
   ],
