@@ -15,9 +15,7 @@ description = "Wagtail based Geospatial Data Manager"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0" }
 authors = [
-    { name = "Erick Otenyo", email = "otenyo.erick@gmail.com" },
-    { name = "Jason Kinyua", email = "jaysnmury@gmail.com" },
-    { name = "ICPAC Developers", email = "developer@icapc.net" },
+    { name = "Hillary Koros", email = "hkoros@icpac.net" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -68,15 +66,16 @@ dependencies = [
 
 [project.readme]
 text = """\
-GeoManager is a wagtail based Geospatial Data Manager and backend CMS for [EAHW](https://eahazardswatch.icpac.net/mapviewer/)
+GeoManager is a wagtail based Geospatial Data Manager and backend CMS for [FloodWatch](https://floodwatch.icpac.net/)
 
-.. Home: https://eahazardswatch.icpac.net/
+.. Home: https://floodwatch.icpac.net/
 .. Org: https://www.icpac.net/
 """
 content-type = "text/x-rst"
 
 [project.urls]
-Home = "https://eahazardswatch.icpac.net/"
+Home = "https://floodwatch.icpac.net/"
+Documentation = "https://icpac-igad.github.io/flood_watch_system/"
 Organization = "https://www.icpac.net/"
 
 
