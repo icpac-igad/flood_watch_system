@@ -129,10 +129,10 @@ class Command(BaseCommand):
 
         # FTP configuration from environment
         self.ftp_config = {
-            'host': os.getenv('MULTIMODAL_FTP_HOST', os.getenv('ENSEMBLE_FTP_HOST', '41.215.21.156')),
+            'host': os.getenv('MULTIMODAL_FTP_HOST', os.getenv('ENSEMBLE_FTP_HOST')),
             'port': int(os.getenv('MULTIMODAL_FTP_PORT', os.getenv('ENSEMBLE_FTP_PORT', 21))),
-            'user': os.getenv('MULTIMODAL_FTP_USER', os.getenv('ENSEMBLE_FTP_USER', 'geosfm')),
-            'password': os.getenv('MULTIMODAL_FTP_PASSWORD', os.getenv('ENSEMBLE_FTP_PASSWORD', 'icpac#254')),
+            'user': os.getenv('MULTIMODAL_FTP_USER', os.getenv('ENSEMBLE_FTP_USER')),
+            'password': os.getenv('MULTIMODAL_FTP_PASSWORD', os.getenv('ENSEMBLE_FTP_PASSWORD')),
             'remote_dir': os.getenv('MULTIMODAL_FTP_DIR', os.getenv('ENSEMBLE_FTP_DIR', '/ftproot/output/Combined'))
         }
 

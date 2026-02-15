@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     database_port: int = 6432
     database_name: str = "geomanager_web"
     database_user: str = "geomanager"
-    database_password: str = "localdevpassword"
+    database_password: str = ""
 
     # Direct DB connection (for admin operations if needed)
     database_direct_host: str = "eafw_db"

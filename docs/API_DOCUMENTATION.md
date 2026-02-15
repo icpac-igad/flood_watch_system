@@ -449,7 +449,7 @@ DB_HOST=postgis              # Database host
 DB_PORT=5432                 # Database port
 DB_NAME=floodwatch          # Database name
 DB_USER=postgres            # Database user
-DB_PASSWORD=floodwatch_pass # Database password
+DB_PASSWORD=<set-in-env> # Database password
 ```
 
 ### TiPg Service
@@ -458,7 +458,7 @@ POSTGRES_HOST=postgis              # Database host
 POSTGRES_PORT=5432                 # Database port
 POSTGRES_DBNAME=floodwatch        # Database name
 POSTGRES_USER=postgres            # Database user
-POSTGRES_PASS=floodwatch_pass     # Database password
+POSTGRES_PASS=<set-in-env>     # Database password
 TIPG_DB_SCHEMAS=["pgstac"]        # Schemas to serve
 TIPG_TILE_RESOLUTION=4096         # Tile resolution
 TIPG_TILE_BUFFER=256              # Tile buffer size

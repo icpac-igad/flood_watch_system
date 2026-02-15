@@ -40,7 +40,7 @@ DB_CONFIG = {
     'port': int(os.getenv('DB_PORT', 8091)),
     'database': os.getenv('DB_NAME', 'floodwatch'),
     'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD', 'floodwatch_pass')
+    'password': os.getenv('DB_PASSWORD')
 }
 
 # FTP configuration

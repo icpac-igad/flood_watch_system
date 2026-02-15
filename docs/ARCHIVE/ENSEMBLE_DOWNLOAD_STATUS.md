@@ -2,19 +2,19 @@
 
 ## Summary
 
-Tested multiple methods to automatically download ensemble forecast data from the Windows server (41.215.21.156). All automated methods failed due to credential/access limitations.
+Tested multiple methods to automatically download ensemble forecast data from the Windows server (<FTP_HOST>). All automated methods failed due to credential/access limitations.
 
 ## Server Information
 
-- **Host**: 41.215.21.156
+- **Host**: <FTP_HOST>
 - **OS**: Windows
 - **Data Location**: `D:\ftproot\output\Combined`
 - **File Pattern**: `Zone1_YYYYMMDD.csv`, `Zone2_YYYYMMDD.csv`, etc. (6 zones per date)
 
 ## Available Credentials
 
-- **Username**: geosfm
-- **Password**: icpac#254
+- **Username**: <set-in-env>
+- **Password**: <set-in-env>
 - **Access Level**: RDP/VM login only (not FTP or SMB admin access)
 
 ## Methods Tested
@@ -26,7 +26,7 @@ Tested multiple methods to automatically download ensemble forecast data from th
 - **Reason**: Server doesn't run SSH/SFTP service
 
 ```bash
-nmap -p 22 41.215.21.156
+nmap -p 22 <FTP_HOST>
 # Output: 22/tcp closed ssh
 ```
 
@@ -34,10 +34,10 @@ nmap -p 22 41.215.21.156
 - **Port**: 21
 - **Status**: OPEN
 - **Result**: 530 Login incorrect
-- **Reason**: geosfm/icpac#254 credentials don't work for FTP
+- **Reason**: credentials don't work for FTP
 
 ```bash
-ftp 41.215.21.156
+ftp <FTP_HOST>
 # Connected, but login fails with "530 Login incorrect"
 ```
 
@@ -45,7 +45,7 @@ ftp 41.215.21.156
 ```
 ftp> user geosfm
 331 Password required for geosfm.
-Password: [icpac#254]
+Password: [<set-in-env>]
 530 Login incorrect.
 ftp: Login failed
 ```
@@ -57,10 +57,10 @@ ftp: Login failed
 - **Reason**: Current credentials don't have administrative access
 
 ```bash
-smbclient -L //41.215.21.156 -U "geosfm%icpac#254"
+smbclient -L //<FTP_HOST> -U "<user>%<password>"
 # Shows shares: C$, D$, E$, F$
 
-smbclient //41.215.21.156/D$ -U "geosfm%icpac#254" -c "ls"
+smbclient //<FTP_HOST>/D$ -U "<user>%<password>" -c "ls"
 # Error: NT_STATUS_ACCESS_DENIED
 ```
 
@@ -106,10 +106,10 @@ smbclient //41.215.21.156/D$ -U "geosfm%icpac#254" -c "ls"
 
 **Steps**:
 1. Connect to Windows server via Remmina:
-   - Host: 41.215.21.156
+   - Host: <FTP_HOST>
    - Protocol: RDP
-   - Username: geosfm
-   - Password: icpac#254
+   - Username: <set-in-env>
+   - Password: <set-in-env>
 
 2. Navigate to: `D:\ftproot\output\Combined`
 
@@ -131,7 +131,7 @@ Contact the GeoSFM team or server administrator to obtain:
 **For SMB Access**:
 - Either:
   - Administrative credentials for D$ share access, OR
-  - Set up a regular SMB share (e.g., `//41.215.21.156/ensemble`) that geosfm can access
+  - Set up a regular SMB share (e.g., `//<FTP_HOST>/ensemble`) that geosfm can access
 
 ### Option 3: Set Up Automated Sync from Windows VM
 
@@ -165,7 +165,7 @@ foreach ($file in $files) {
 
 Use **Option 1 (Manual RDP Download)**:
 
-1. Connect via Remmina to 41.215.21.156
+1. Connect via Remmina to <FTP_HOST>
 2. Set up shared folder in Remmina settings pointing to `./data/ensemble/`
 3. Copy today's Zone CSV files (Zone1_20251105.csv through Zone6_20251105.csv)
 4. Verify files locally:

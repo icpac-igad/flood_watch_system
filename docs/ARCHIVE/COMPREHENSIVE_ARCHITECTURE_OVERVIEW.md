@@ -44,7 +44,7 @@ GET  /health                - Health check (port 8081)
 
 ### Database Setup
 - **Schema:** pgstac schema automatically created in floodwatch database
-- **Connection:** `postgresql://postgres:floodwatch_pass@postgis:5432/floodwatch`
+- **Connection:** `postgresql://postgres:<set-in-env>@postgis:5432/floodwatch`
 - **Initialization:** init_pgstac.py uses pypgstac.db.PgstacDB for setup
 
 ### Current Limitations
@@ -149,7 +149,7 @@ Impact_mergeddeterministicgeojson
 - psycopg[binary,pool]==3.2.3
 
 # Database
-DATABASE_URL = "postgresql://postgres:floodwatch_pass@postgis:5432/floodwatch"
+DATABASE_URL = "postgresql://postgres:<set-in-env>@postgis:5432/floodwatch"
 db_min_conn_size = 1
 db_max_conn_size = 10
 ```
@@ -301,10 +301,10 @@ CORS_ALLOWED_ORIGINS = [
 
 #### FTP Connection Details
 ```env
-ENSEMBLE_SFTP_HOST=41.215.21.156
+ENSEMBLE_SFTP_HOST=<FTP_HOST>
 ENSEMBLE_FTP_PORT=21
 ENSEMBLE_SFTP_USERNAME=geosfm
-ENSEMBLE_SFTP_PASSWORD="icpac#254"
+ENSEMBLE_SFTP_PASSWORD="<set-in-env>"
 ENSEMBLE_REMOTE_PATH=/ftproot/output/Combined
 ENSEMBLE_LOCAL_CACHE=/app/ensemble_cache
 ```
@@ -543,19 +543,19 @@ NOT YET INTEGRATED:
 ### Environment File (.env)
 ```
 # SFTP (Floodproofs Data)
-SFTP_HOST=197.254.113.173
+SFTP_HOST=<SFTP_HOST>
 SFTP_USERNAME=floodproofs
 REMOTE_FOLDER_BASE=fp-eastafrica/storage/impact_assessment/...
 
 # Ensemble (GeoSFM/EAOPI)
-ENSEMBLE_SFTP_HOST=41.215.21.156
+ENSEMBLE_SFTP_HOST=<FTP_HOST>
 ENSEMBLE_SFTP_USERNAME=geosfm
 ENSEMBLE_REMOTE_PATH=/ftproot/output/Combined
 
 # Database
 DB_NAME=floodwatch
 DB_USER=postgres
-DB_PASSWORD=floodwatch_pass
+DB_PASSWORD=<set-in-env>
 
 # Google Cloud Storage (optional)
 GCS_PROJECT_ID=

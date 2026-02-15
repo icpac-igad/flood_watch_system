@@ -57,7 +57,7 @@ tipg:
     - "8083:8080"
   environment:
     - POSTGRES_USER=postgres
-    - POSTGRES_PASS=floodwatch_pass
+    - POSTGRES_PASS=${POSTGRES_PASS}
     - POSTGRES_DBNAME=floodwatch
     - POSTGRES_HOST=postgis
     - POSTGRES_PORT=5432

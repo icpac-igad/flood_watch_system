@@ -3,19 +3,19 @@
 ---
 
 **To:** IT Team, Supervisor
-**Subject:** Request for FTP/SMB Credentials - Ensemble Forecast Data Access (41.215.21.156)
+**Subject:** Request for FTP/SMB Credentials - Ensemble Forecast Data Access (<FTP_HOST>)
 
 ---
 
 Dear IT Team and Supervisor,
 
-I am working on integrating ensemble forecast data from the GeoSFM server into our FloodWatch application. The data is located on the Windows server at **41.215.21.156** in the directory `D:\ftproot\output\Combined`.
+I am working on integrating ensemble forecast data from the GeoSFM server into our FloodWatch application. The data is located on the Windows server at **<FTP_HOST>** in the directory `D:\ftproot\output\Combined`.
 
 ## Current Situation
 
 I have RDP access to the server using the credentials:
-- **Username:** geosfm
-- **Password:** icpac#254
+- **Username:** <set-in-env>
+- **Password:** <set-in-env>
 - **Access:** Windows desktop via Remmina (working)
 
 However, I need automated access to download Zone CSV files (Zone1_YYYYMMDD.csv through Zone6_YYYYMMDD.csv) daily for our production system. I have tested multiple methods, and here are the results:
@@ -25,12 +25,12 @@ However, I need automated access to download Zone CSV files (Zone1_YYYYMMDD.csv 
 ### 1. FTP (Port 21) - ❌ Failed
 - **Status:** FTP service is running and accessible
 - **Issue:** Current credentials fail with "530 Login incorrect"
-- **Test Command:** `ftp 41.215.21.156` (connection succeeds, login fails)
+- **Test Command:** `ftp <FTP_HOST>` (connection succeeds, login fails)
 
 ### 2. SMB/CIFS File Shares - ❌ Failed
 - **Status:** Administrative shares (C$, D$, E$) are visible
 - **Issue:** "NT_STATUS_ACCESS_DENIED" with current credentials
-- **Test Command:** `smbclient //41.215.21.156/D$ -U geosfm` (access denied)
+- **Test Command:** `smbclient //<FTP_HOST>/D$ -U <user>` (access denied)
 
 ### 3. SFTP/SSH (Port 22) - ❌ Not Available
 - **Status:** Port 22 is closed
@@ -52,7 +52,7 @@ To implement automated daily downloads for our production FloodWatch system, I n
 ### Option B: SMB Share Access (Alternative)
 Either:
 - Administrative credentials that can access the D$ share, **OR**
-- A regular SMB share configured (e.g., `//41.215.21.156/ensemble`) that the `geosfm` user can access
+- A regular SMB share configured (e.g., `//<FTP_HOST>/ensemble`) that the configured user can access
 
 ### Option C: IP Whitelisting
 If different credentials are required, please also ensure that our production server **197.254.1.10** is whitelisted/allowed to access the Windows server.
@@ -103,7 +103,7 @@ Best regards,
 ## Technical Details (for IT Team)
 
 **Server Information:**
-- Host: 41.215.21.156
+- Host: <FTP_HOST>
 - OS: Windows
 - Data Location: `D:\ftproot\output\Combined`
 - File Pattern: `Zone1_YYYYMMDD.csv`, `Zone2_YYYYMMDD.csv`, etc.
@@ -112,24 +112,24 @@ Best regards,
 **Current Test Results:**
 ```bash
 # FTP Test
-$ ftp 41.215.21.156
-Connected to 41.215.21.156.
+$ ftp <FTP_HOST>
+Connected to <FTP_HOST>.
 220 Microsoft FTP Service
-Name: geosfm
+Name: <set-in-env>
 331 Password required for geosfm.
-Password: [icpac#254]
+Password: [<set-in-env>]
 530 Login incorrect.
 ftp: Login failed
 
 # SMB Test
-$ smbclient -L //41.215.21.156 -U geosfm
+$ smbclient -L //<FTP_HOST> -U geosfm
 # Shows: ADMIN$, C$, D$, E$, F$, IPC$
 
-$ smbclient //41.215.21.156/D$ -U geosfm
+$ smbclient //<FTP_HOST>/D$ -U geosfm
 tree connect failed: NT_STATUS_ACCESS_DENIED
 
 # SFTP Test
-$ nmap -p 22 41.215.21.156
+$ nmap -p 22 <FTP_HOST>
 22/tcp closed ssh
 ```
 

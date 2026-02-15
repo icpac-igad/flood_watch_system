@@ -63,7 +63,7 @@ EAOPI ENSEMBLE DATA STATUS
 
 PRESENT:
 - Sync scripts: download_ensemble_data.py, sync_ensemble_to_db.py
-- FTP Connection: ENSEMBLE_SFTP_HOST=41.215.21.156 (GeoSFM server)
+- FTP Connection: ENSEMBLE_SFTP_HOST=<FTP_HOST> (GeoSFM server)
 - Control Points: EnsembleControlPoint model for spatial reference
 - Management Command: sync_ensemble_to_db (downloads + merges data)
 
@@ -219,7 +219,7 @@ DATABASE CREDENTIALS (from .env)
 PostgreSQL:
   Host: postgis (Docker) or localhost:8091 (external)
   User: postgres
-  Password: floodwatch_pass
+  Password: <set in .env>
   Database: floodwatch
 
 Redis:
@@ -227,15 +227,15 @@ Redis:
   Port: 6379
 
 SFTP (Floodproofs Data):
-  Host: 197.254.113.173
-  User: floodproofs
-  Password: IcpaC#254
+  Host: <set in .env>
+  User: <set in .env>
+  Password: <set in .env>
 
 ENSEMBLE (GeoSFM):
-  Host: 41.215.21.156
+  Host: <set in .env>
   Port: 21 (FTP)
-  User: geosfm
-  Password: "icpac#254"
+  User: <set in .env>
+  Password: <set in .env>
   Path: /ftproot/output/Combined
 
 ================================================================================

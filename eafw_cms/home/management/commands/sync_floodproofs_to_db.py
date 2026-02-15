@@ -56,11 +56,10 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Starting FloodProofs SFTP to DB sync...'))
 
         # Get SFTP credentials from environment
-        SFTP_HOST = os.environ.get('SFTP_HOST', '197.254.113.173')
+        SFTP_HOST = os.environ.get('SFTP_HOST')
         SFTP_PORT = int(os.environ.get('SFTP_PORT', 22))
-        SFTP_USERNAME = os.environ.get('SFTP_USERNAME', 'floodproofs')
-        # Hardcoded password as fallback (python-decouple has issues with # in .env)
-        SFTP_PASSWORD = os.environ.get('SFTP_PASSWORD') or 'IcpaC#254'
+        SFTP_USERNAME = os.environ.get('SFTP_USERNAME')
+        SFTP_PASSWORD = os.environ.get('SFTP_PASSWORD')
         REMOTE_DIR = "/home/floodproofs/merged_forecasts"
 
         use_sftp = not options['local'] and all([SFTP_HOST, SFTP_USERNAME, SFTP_PASSWORD])

@@ -21,7 +21,7 @@ ssh root@197.254.1.10
 
 ```bash
 # Quick port check
-timeout 5 bash -c "echo > /dev/tcp/41.215.21.156/22" && echo "✓ Port 22 reachable" || echo "✗ Port blocked"
+timeout 5 bash -c "echo > /dev/tcp/<FTP_HOST>/22" && echo "✓ Port 22 reachable" || echo "✗ Port blocked"
 ```
 
 ### 4. Install dependencies (if needed)
@@ -176,7 +176,7 @@ You'll know it's working when you see:
 ============================================================
 🌊 Ensemble Forecast Data Downloader
 ============================================================
-SFTP Server: 41.215.21.156:22
+SFTP Server: <FTP_HOST>:22
 Remote Path: /ftproot/output/Combined
 Local Path:  ./data/ensemble
 ============================================================
@@ -184,7 +184,7 @@ Local Path:  ./data/ensemble
 📅 Will download 1 date(s):
    - 2025-11-05 (20251105)
 
-🔌 Connecting to SFTP server 41.215.21.156:22...
+🔌 Connecting to SFTP server <FTP_HOST>:22...
 ✅ Connected successfully!
 
 ============================================================

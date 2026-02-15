@@ -6,10 +6,10 @@ Since FTP credentials are not available, here's how to download ensemble data ma
 
 ### Step 1: Connect to the Server
 1. Open Remmina
-2. Connect to `41.215.21.156` using RDP
+2. Connect to `<FTP_HOST>` using RDP
 3. Login with:
    - Username: (your Windows username)
-   - Password: `icpac#254`
+   - Password: `<set-in-env>`
 
 ### Step 2: Navigate to Data Directory
 1. Once connected, open File Explorer
@@ -46,7 +46,7 @@ If the production server can reach the Windows VM, use SCP/rsync:
 sudo apt-get install sshpass
 
 # Download files (if SSH is enabled on Windows VM)
-sshpass -p 'icpac#254' scp -r username@41.215.21.156:/ftproot/output/Combined/*.csv ./data/ensemble/
+sshpass -p '<set-in-env>' scp -r username@<FTP_HOST>:/ftproot/output/Combined/*.csv ./data/ensemble/
 ```
 
 ## Option 3: Mount SMB Share
@@ -61,8 +61,8 @@ sudo apt-get install cifs-utils
 mkdir -p ~/ensemble_mount
 
 # Mount the Windows share
-sudo mount -t cifs //41.215.21.156/ftproot/output/Combined ~/ensemble_mount \
-  -o username=geosfm,password=icpac#254
+sudo mount -t cifs //<FTP_HOST>/ftproot/output/Combined ~/ensemble_mount \
+  -o username=geosfm,password=<set-in-env>
 
 # Copy files
 cp ~/ensemble_mount/Zone*.csv ./data/ensemble/20251105/

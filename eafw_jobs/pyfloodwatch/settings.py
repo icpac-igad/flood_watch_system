@@ -18,9 +18,9 @@ DB_CONFIG = {
 
 # FloodProofs SFTP configuration
 FLOODPROOFS_CONFIG = {
-    'host': os.getenv('FLOODPROOFS_SFTP_HOST', '197.254.113.173'),
+    'host': os.getenv('FLOODPROOFS_SFTP_HOST'),
     'port': int(os.getenv('FLOODPROOFS_SFTP_PORT', 22)),
-    'username': os.getenv('FLOODPROOFS_SFTP_USER', 'floodproofs'),
+    'username': os.getenv('FLOODPROOFS_SFTP_USER'),
     'password': os.getenv('FLOODPROOFS_SFTP_PASSWORD'),
     'remote_dir': os.getenv('FLOODPROOFS_REMOTE_DIR', '/home/floodproofs/merged_forecasts'),
     'file_pattern': 'merged_data_{date}.geojson',

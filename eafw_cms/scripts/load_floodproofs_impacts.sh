@@ -10,7 +10,7 @@ DB_HOST="127.0.0.1"
 DB_PORT="5431"
 DB_NAME="geomanager_web"
 DB_USER="geomanager"
-DB_PASS="cZn4yBskecQrvv6n"
+DB_PASS="${DB_PASSWORD:?DB_PASSWORD env var required}"
 
 PG_CONN="PG:host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASS"
 

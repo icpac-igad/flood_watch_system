@@ -260,7 +260,7 @@ HAZARD_COLORMAP = {
 Host: postgis (Docker) / localhost:5432 (Local)
 Database: floodwatch
 User: postgres
-Password: floodwatch_pass
+Password: <set-in-env>
 Schema: pgstac
 Tables:
   - Impact_admin0

@@ -4,7 +4,7 @@ This guide explains how to download and work with ensemble forecast data from th
 
 ## Overview
 
-- **Data Source**: GeoSFM SFTP Server at `41.215.21.156`
+- **Data Source**: GeoSFM SFTP Server at `<FTP_HOST>`
 - **Remote Path**: `/ftproot/output/Combined` (appears as `D:\ftproot\output\Combined` in Windows)
 - **File Format**: CSV files named `Zone1_YYYYMMDD.csv`, `Zone2_YYYYMMDD.csv`, etc.
 - **Data Type**: Ensemble hydrological forecast (river depth and streamflow)
@@ -15,10 +15,10 @@ The SFTP credentials are configured in your `.env` file:
 
 ```bash
 # Ensemble Data Configuration (GeoSFM) - via SFTP
-ENSEMBLE_SFTP_HOST=41.215.21.156
+ENSEMBLE_SFTP_HOST=<FTP_HOST>
 ENSEMBLE_SFTP_PORT=22
 ENSEMBLE_SFTP_USERNAME=geosfm
-ENSEMBLE_SFTP_PASSWORD=icpac#254
+ENSEMBLE_SFTP_PASSWORD=<set-in-env>
 # Remote path on SFTP server (shown as D:\ftproot\output\Combined in Windows explorer)
 ENSEMBLE_REMOTE_PATH=/ftproot/output/Combined
 # Local cache directory for downloaded ensemble files

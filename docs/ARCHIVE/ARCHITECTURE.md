@@ -132,7 +132,7 @@ Preferred communication style: Simple, everyday language.
 ### Third-Party Services
 
 **ICPAC Flood Forecasting System:**
-- **Connection:** SFTP server at 197.254.113.173
+- **Connection:** SFTP server (see .env for host)
 - **Data Products:** Hydrological model outputs (Continuum HMC), inundation maps, discharge forecasts
 - **Update Frequency:** Daily operational forecasts
 

@@ -14,7 +14,7 @@ from starlette.middleware import Middleware
 
 # Build database URL from environment
 POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
-POSTGRES_PASS = os.getenv("POSTGRES_PASS", "floodwatch_pass")
+POSTGRES_PASS = os.getenv("POSTGRES_PASS")
 POSTGRES_DBNAME = os.getenv("POSTGRES_DBNAME", "floodwatch")
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgis")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")

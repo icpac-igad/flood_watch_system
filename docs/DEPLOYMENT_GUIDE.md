@@ -147,7 +147,7 @@ Create `.env` in project root:
 # Database
 DB_NAME=floodwatch
 DB_USER=postgres
-DB_PASSWORD=floodwatch_pass
+DB_PASSWORD=<set-in-env>
 DB_HOST=postgis
 DB_PORT=5432
 
@@ -157,13 +157,13 @@ DEBUG=False
 DJANGO_ALLOWED_HOSTS=localhost,your-domain.com
 
 # SFTP (Floodproofs data)
-SFTP_HOST=197.254.113.173
+SFTP_HOST=<SFTP_HOST>
 SFTP_PORT=22
 SFTP_USERNAME=floodproofs
-SFTP_PASSWORD=IcpaC#254
+SFTP_PASSWORD=<set-in-env>
 
 # FTP (Ensemble data)
-FTP_HOST=41.215.21.156
+FTP_HOST=<FTP_HOST>
 FTP_PORT=21
 FTP_USER=your-ftp-user
 FTP_PASSWORD=your-ftp-password
@@ -232,7 +232,7 @@ Host: localhost
 Port: 8091
 Database: floodwatch
 User: postgres
-Password: floodwatch_pass
+Password: <set-in-env>
 ```
 
 #### Key Tables

@@ -19,7 +19,7 @@
 - PGHOST=postgis
 - PGPORT=5432
 - PGUSER=postgres
-- PGPASSWORD=floodwatch_pass
+- PGPASSWORD=${POSTGRES_PASS}
 - PGDATABASE=floodwatch
 ```
 
