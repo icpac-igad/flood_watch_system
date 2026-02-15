@@ -1,9 +1,22 @@
-/* ICPAC brand colors: green (#2E7D32), yellow (#FFC107), white */
+/* ICPAC brand colors: navbar green (#034930), yellow (#FFC107), white */
 :root {
-    --icpac-green: #2E7D32;
-    --icpac-green-light: #4CAF50;
+    --icpac-green: #034930;
+    --icpac-green-light: #065f3e;
     --icpac-yellow: #FFC107;
     --icpac-yellow-light: #FFF8E1;
+}
+
+/* Override Material theme primary color to match ICPAC navbar */
+[data-md-color-scheme="default"] {
+    --md-primary-fg-color: #034930;
+    --md-primary-fg-color--light: #065f3e;
+    --md-primary-fg-color--dark: #022a1c;
+}
+
+[data-md-color-scheme="slate"] {
+    --md-primary-fg-color: #034930;
+    --md-primary-fg-color--light: #065f3e;
+    --md-primary-fg-color--dark: #022a1c;
 }
 
 /* Wider content area */
@@ -53,7 +66,7 @@
 
 /* Funder banner */
 .funder-banner {
-    background: linear-gradient(135deg, var(--icpac-green), #1B5E20);
+    background: linear-gradient(135deg, var(--icpac-green), #022a1c);
     color: #fff;
     padding: 1.2rem 1.5rem;
     border-radius: 8px;

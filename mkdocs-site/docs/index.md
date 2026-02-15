@@ -93,10 +93,10 @@ graph TB
 
 <div class="funder-banner">
     <p style="margin: 0 0 0.5rem 0; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px;">Funded by</p>
-    <p style="margin: 0; font-size: 1.2em;"><strong><a href="https://www.crafd.org/">CrafD</a></strong> — Climate Risk Adaptation and Finance in the Drylands</p>
+    <p style="margin: 0; font-size: 1.2em;"><strong>CrafD</strong> — Complex Risk Analytics Fund</p>
     <p style="margin: 0.8rem 0 0 0; font-size: 0.85em; line-height: 1.6;">
-        Funded by the <strong>Netherlands Ministry of Foreign Affairs</strong> through the <strong>Netherlands Red Cross</strong>,<br/>
-        channelled via <strong>WMO</strong> to <strong>ICPAC</strong> as the implementing agency for IGAD member states.
+        Under the <strong>E4DRR project</strong> at ICPAC, funded by the <strong>Netherlands Ministry of Foreign Affairs</strong><br/>
+        through the <strong>Netherlands Red Cross</strong>, channelled via <strong>WMO</strong> to <strong>ICPAC</strong> as the implementing agency.
     </p>
 </div>
 
@@ -109,6 +109,3 @@ graph TB
 | **[CIMA Foundation](https://www.cimafoundation.org/)** | FloodPROOFS hydrological model |
 | **[SMHI](https://www.smhi.se/)** | HYPE hydrological model |
 
-<p style="text-align: center; color: #888; font-size: 0.9em;">
-Developed by <strong>Hillary Koros</strong> at <a href="https://www.icpac.net/">ICPAC</a> — IGAD Climate Prediction and Applications Centre
-</p>
