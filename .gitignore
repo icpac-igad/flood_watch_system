@@ -93,3 +93,6 @@ backup-*.sh
 
 # MapServer generated files
 eafw_docker/mapserver/mapfiles/symbols/
+
+# MkDocs build output
+site/

@@ -1,0 +1,46 @@
+name: Release Geomanager Package
+
+on:
+  push:
+    tags:
+      - 'geomanager-v*'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/geomanager-v}" >> $GITHUB_OUTPUT
+
+      - name: Build package
+        working-directory: eafw_cms/geomanager
+        run: python -m build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Geomanager v${{ steps.version.outputs.version }}"
+          generate_release_notes: true
+          files: |
+            eafw_cms/geomanager/dist/*.whl
+            eafw_cms/geomanager/dist/*.tar.gz
+
+      - name: Publish to PyPI
+        if: false  # Set to true when ready to publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: eafw_cms/geomanager/dist/

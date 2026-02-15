@@ -1,0 +1,69 @@
+site_name: FloodWatch System
+site_description: Greater Horn of Africa Flood Early Warning System - Documentation
+site_url: https://icpac-igad.github.io/flood_watch_system/
+repo_url: https://github.com/icpac-igad/flood_watch_system
+repo_name: icpac-igad/flood_watch_system
+docs_dir: mkdocs-site/docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: light blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Quick Start: getting-started/quickstart.md
+      - Deployment Guide: getting-started/deployment.md
+      - Staging Deployment: getting-started/staging-deployment.md
+  - Architecture:
+      - System Overview: architecture/overview.md
+      - Frontend: architecture/frontend.md
+      - Services: architecture/services.md
+  - API Reference:
+      - FloodWatch API: api/floodwatch-api.md
+      - API Documentation: api/api-docs.md
+      - EOAPI Services: api/eoapi.md
+  - Geomanager:
+      - Overview: geomanager/index.md
+      - Releases: geomanager/releases.md
+  - Integrations:
+      - CAP Composer: integrations/cap-composer.md
+      - Flood Impact Layers: integrations/flood-impact-layers.md
