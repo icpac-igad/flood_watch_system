@@ -28,7 +28,7 @@
     "@wmo-raf/layer-manager": "^1.0.0",
     "@xmldom/xmldom": "^0.9.5",
     "array-move": "2.1.0",
-    "axios": "^1.8.0",
+    "axios": "1.13.5",
     "chroma-js": "^2.4.2",
     "classnames": "^2.3.2",
     "comlink": "^4.4.1",
@@ -122,7 +122,7 @@
     "sass": "^1.60.0"
   },
   "resolutions": {
-    "axios": "^1.8.0",
+    "axios": "^1.13.5",
     "follow-redirects": "^1.15.6",
     "postcss": "^8.4.31",
     "micromatch": "^4.0.8",
