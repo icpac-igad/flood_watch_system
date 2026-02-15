@@ -2,7 +2,7 @@ import { ALERT_COLORS, DEFAULT_THRESHOLDS } from './multimodal-config';
 
 // FloodWatch Custom: Params that should be passed to backend for filtering
 // These are the ONLY params we want to add to pg_tileserv URLs
-const BACKEND_FILTER_PARAMS = ['country_name', 'region_name', 'district_name', 'project_countries', 'admin_level', 'risk_level', 'basin_id'];
+const BACKEND_FILTER_PARAMS = ['country_name', 'region_name', 'district_name', 'project_countries', 'scope', 'admin_level', 'risk_level', 'basin_id'];
 
 // Params that control frontend behavior but shouldn't be in URLs
 const FRONTEND_ONLY_PARAMS = ['admin_filter', 'whca_filter', 'project_filter', 'basin_filter'];
@@ -207,6 +207,8 @@ const appendGeojsonParamsToUrl = (url, params = {}) => {
   const query = searchParams.toString();
   return query ? `${baseUrl}?${query}` : baseUrl;
 };
+
+const isWmsTileUrl = (url = '') => /SERVICE=WMS/i.test(url) || url.includes('/mapserver/');
 
 // =============================================================================
 // FloodWatch Custom: WHCA Countries Filter - Tile source swapping
@@ -528,6 +530,33 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
           }
         };
       }
+    }
+
+    // Ensure MapServer WMS raster requests receive clipping scope params as well.
+    const resolvedTiles = newLayer.layerConfig?.source?.tiles?.[0] || tiles || originalTiles;
+    if (isWmsTileUrl(resolvedTiles) && isFilteringActive) {
+      const wmsParams = {
+        country_name: paramInteractions?.country_name || '',
+        region_name: paramInteractions?.region_name || '',
+        district_name: paramInteractions?.district_name || '',
+        project_countries: paramInteractions?.project_countries || '',
+      };
+
+      if (isWHCAFilterActive) {
+        wmsParams.scope = 'whca';
+      } else if (isProjectFilterActive) {
+        wmsParams.scope = 'project';
+      } else {
+        wmsParams.scope = 'all';
+      }
+
+      newLayer.layerConfig = {
+        ...newLayer.layerConfig,
+        source: {
+          ...newLayer.layerConfig.source,
+          tiles: [appendParamsToUrl(resolvedTiles, wmsParams, true)],
+        },
+      };
     }
 
     if (newLayer.layerConfig) {

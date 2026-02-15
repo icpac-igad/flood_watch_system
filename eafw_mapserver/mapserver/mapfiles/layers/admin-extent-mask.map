@@ -2,11 +2,22 @@ LAYER
     INCLUDE "config/database.map"
     NAME "gha_admin_extent_mask"
     TYPE POLYGON
-    STATUS ON
-    DATA "geom from (select 1 as id, gha.resolve_admin_extent_geom(NULL, NULL, NULL) as geom) as subq using unique id using srid=4326"
+    STATUS DEFAULT
+    DATA "geom from (select 1 as id, gha.resolve_scope_extent_geom('%scope%', '%project_countries%', '%country_name%', '%region_name%', '%district_name%') as geom) as subq using unique id using srid=4326"
+    VALIDATION
+        "scope" "^(|all|project|whca)$"
+        "default_scope" "all"
+        "project_countries" "^[A-Za-z ,'-]*$"
+        "default_project_countries" ""
+        "country_name" "^[A-Za-z .,'-]*$"
+        "default_country_name" ""
+        "region_name" "^[A-Za-z .,'-]*$"
+        "default_region_name" ""
+        "district_name" "^[A-Za-z .,'-]*$"
+        "default_district_name" ""
+    END
     CLASS
         STYLE
-            OPACITY 0
             COLOR 255 255 255
             OUTLINECOLOR 255 255 255
         END
