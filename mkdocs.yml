@@ -58,6 +58,7 @@ nav:
       - Frontend: architecture/frontend.md
       - Services: architecture/services.md
   - API Reference:
+      - Interactive API (Swagger): api/swagger.md
       - FloodWatch API: api/floodwatch-api.md
       - API Documentation: api/api-docs.md
       - EOAPI Services: api/eoapi.md
