@@ -171,6 +171,12 @@ async def get_multimodal_geojson(
                     f.data_date,
                     f.forecast_date,
                     COALESCE(f.daily_avg, 0) as daily_avg,
+                    CASE
+                        WHEN COALESCE(f.daily_avg, 0) >= {DEFAULT_EMERGENCY_THRESHOLD} THEN 'emergency'
+                        WHEN COALESCE(f.daily_avg, 0) >= {DEFAULT_ALARM_THRESHOLD} THEN 'alarm'
+                        WHEN COALESCE(f.daily_avg, 0) >= {DEFAULT_WARNING_THRESHOLD} THEN 'warning'
+                        ELSE 'normal'
+                    END as alert_level,
                     f.daily_max,
                     f.daily_min,
                     f.geosfm,
@@ -220,6 +226,7 @@ async def get_multimodal_geojson(
                             'data_date', data_date::text,
                             'forecast_date', forecast_date::text,
                             'daily_avg', daily_avg,
+                            'alert_level', alert_level,
                             'daily_max', daily_max,
                             'daily_min', daily_min,
                             'geosfm', geosfm,

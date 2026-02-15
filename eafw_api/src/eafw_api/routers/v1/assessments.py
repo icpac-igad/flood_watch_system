@@ -3,6 +3,7 @@ Expert Assessments API - FloodWatch specific
 For hydrologists and meteorologists risk assessments
 """
 import json
+import logging
 from typing import Optional, Literal
 from datetime import date, datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
@@ -15,6 +16,7 @@ from ._helpers import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _parse_assessment_date_or_400(raw_value, field_name="assessment_date"):
@@ -521,20 +523,23 @@ async def legacy_country_assessments_get(
             assessment_ids = [int(item["id"]) for item in assessments if item.get("id")]
             snapshot_map = {}
             if assessment_ids:
-                snapshot_rows = await conn.fetch(
-                    """
-                    SELECT assessment_id, snapshot_json, created_at, updated_at
-                    FROM gha.report_snapshots
-                    WHERE assessment_id = ANY($1::int[])
-                    """,
-                    assessment_ids,
-                )
-                for s_row in snapshot_rows:
-                    snapshot_map[int(s_row["assessment_id"])] = {
-                        "snapshot": s_row["snapshot_json"],
-                        "created_at": s_row["created_at"],
-                        "updated_at": s_row["updated_at"],
-                    }
+                try:
+                    snapshot_rows = await conn.fetch(
+                        """
+                        SELECT assessment_id, snapshot_json, created_at, updated_at
+                        FROM gha.report_snapshots
+                        WHERE assessment_id = ANY($1::int[])
+                        """,
+                        assessment_ids,
+                    )
+                    for s_row in snapshot_rows:
+                        snapshot_map[int(s_row["assessment_id"])] = {
+                            "snapshot": s_row["snapshot_json"],
+                            "created_at": s_row["created_at"],
+                            "updated_at": s_row["updated_at"],
+                        }
+                except Exception:
+                    logger.exception("Failed to load report snapshots")
 
             for item in assessments:
                 aid = int(item["id"]) if item.get("id") else None
@@ -545,7 +550,14 @@ async def legacy_country_assessments_get(
                     item["snapshot_updated_at"] = None
                     continue
 
-                item["full_report_snapshot"] = snapshot_data["snapshot"]
+                snapshot_payload = snapshot_data["snapshot"]
+                if isinstance(snapshot_payload, str):
+                    try:
+                        snapshot_payload = json.loads(snapshot_payload)
+                    except json.JSONDecodeError:
+                        pass
+
+                item["full_report_snapshot"] = snapshot_payload
                 created_at = snapshot_data["created_at"]
                 updated_at = snapshot_data["updated_at"]
                 item["snapshot_created_at"] = created_at.isoformat() if created_at and hasattr(created_at, "isoformat") else str(created_at) if created_at else None
@@ -654,6 +666,7 @@ async def legacy_country_assessments_post(request: Request):
         }
 
     district_saved_count = 0
+    snapshot_saved = False
     async with get_connection() as conn:
         async with conn.transaction():
             result = await conn.fetchrow("""
@@ -732,18 +745,22 @@ async def legacy_country_assessments_post(request: Request):
                     district_saved_count += 1
 
             if assessment_id:
-                await conn.execute(
-                    """
-                    INSERT INTO gha.report_snapshots (assessment_id, snapshot_json, updated_at)
-                    VALUES ($1, $2::jsonb, CURRENT_TIMESTAMP)
-                    ON CONFLICT (assessment_id)
-                    DO UPDATE SET
-                        snapshot_json = EXCLUDED.snapshot_json,
-                        updated_at = CURRENT_TIMESTAMP
-                    """,
-                    assessment_id,
-                    json.dumps(report_snapshot),
-                )
+                try:
+                    await conn.execute(
+                        """
+                        INSERT INTO gha.report_snapshots (assessment_id, snapshot_json, updated_at)
+                        VALUES ($1, $2::jsonb, CURRENT_TIMESTAMP)
+                        ON CONFLICT (assessment_id)
+                        DO UPDATE SET
+                            snapshot_json = EXCLUDED.snapshot_json,
+                            updated_at = CURRENT_TIMESTAMP
+                        """,
+                        assessment_id,
+                        json.dumps(report_snapshot),
+                    )
+                    snapshot_saved = True
+                except Exception:
+                    logger.exception("Failed to persist full report snapshot for assessment %s", assessment_id)
 
     return {
         "success": True,
@@ -754,7 +771,7 @@ async def legacy_country_assessments_post(request: Request):
         "country_name": country_name,
         "district_saved_count": district_saved_count,
         "replace_district_assessments": replace_district,
-        "snapshot_saved": True,
+        "snapshot_saved": snapshot_saved,
         "full_saved": True,
         "message": "Expert assessment saved successfully",
     }
