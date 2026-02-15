@@ -1,48 +1,106 @@
 # FloodWatch System
 
-**Greater Horn of Africa Flood Early Warning System**
+<p style="font-size: 1.2em; color: #555;">
+An operational flood early warning platform for the Greater Horn of Africa
+</p>
 
-The FloodWatch System is an operational platform for flood early warning across the Greater Horn of Africa, developed by [ICPAC](https://www.icpac.net/).
+---
 
-## System Components
+## What is FloodWatch?
 
-| Component | Description |
-|-----------|-------------|
-| **CMS** (`eafw_cms`) | Content and geodata management (GeoManager/Wagtail) |
-| **API** (`eafw_api`) | Public and internal flood data endpoints (FastAPI) |
-| **Jobs** (`eafw_jobs`) | Scheduled ingestion/sync from FTP, SFTP, Drive, and WRF sources |
-| **Map Services** | MapServer, MapCache, pg_tileserv for raster/vector tiles |
-| **Map Viewer** (`eafw_mapviewer`) | Next.js frontend for interactive flood maps |
-| **Geomanager** | Wagtail-based geospatial data manager package |
+FloodWatch is a real-time flood monitoring and early warning system developed by the [IGAD Climate Prediction and Applications Centre (ICPAC)](https://www.icpac.net/). It provides actionable intelligence to disaster management agencies, humanitarian organizations, and communities across **11 countries** in the Greater Horn of Africa.
 
-## Service Endpoints (Local)
+The platform integrates hydrological forecast models, satellite-derived observations, weather prediction data, and community-reported impacts into a unified decision-support system.
 
-| Service | URL | Notes |
-|---------|-----|-------|
-| Nginx entrypoint | `http://127.0.0.1:9068` | Main public gateway |
-| CMS admin | `http://127.0.0.1:9068/cms-admin` | Wagtail admin |
-| FastAPI docs | `http://127.0.0.1:9068/api/docs` | Swagger UI |
-| FastAPI ReDoc | `http://127.0.0.1:9068/api/redoc` | ReDoc UI |
-| MapServer | `http://127.0.0.1:9065/mapserver/` | Direct MapServer |
-| MapCache | `http://127.0.0.1:9066/mapcache/` | Direct MapCache |
-| pg_tileserv | `http://127.0.0.1:9067/pg/tileserv/` | Vector tiles |
+## Key Capabilities
 
-## Maintainer
+<div class="grid cards" markdown>
 
-Made with love and enthusiasm by:
+- :material-map: **Real-Time Flood Monitoring**
 
-- **Hillary Koros** — [hkoros@icpac.net](mailto:hkoros@icpac.net) / [hillary.koros@igad.int](mailto:hillary.koros@igad.int)
+    Interactive map with 3,199+ river monitoring points, real-time discharge forecasts, and multi-threshold alert classification (Warning, Alarm, Emergency).
 
-## Repository Layout
+- :material-chart-line: **Forecast Analytics**
 
+    7-day ensemble discharge forecasts with uncertainty bands, historical comparison, and return period analysis for flood risk assessment.
+
+- :material-layers: **Multi-Source Data Fusion**
+
+    Combines GloFAS hydrological models, WRF weather predictions, satellite flood extent mapping, and ground-based observations.
+
+- :material-alert: **Automated Alerting**
+
+    Threshold-based alert generation with three severity levels. Supports CAP (Common Alerting Protocol) for interoperability with national warning systems.
+
+- :material-file-document: **Impact Assessment**
+
+    Expert-driven flood impact assessments with population exposure estimates, infrastructure damage reports, and situational analysis.
+
+- :material-earth: **Geospatial Data Management**
+
+    Powered by GeoManager, an open-source Wagtail-based package for managing raster, vector, WMS, and tile layers with full admin interface.
+
+</div>
+
+## Platform Architecture
+
+FloodWatch is built as a modern, containerized microservices stack:
+
+```mermaid
+graph TB
+    subgraph External Data Sources
+        A[GloFAS Forecasts]
+        B[WRF Rainfall]
+        C[Satellite Imagery]
+        D[SFTP / FTP Feeds]
+    end
+
+    subgraph FloodWatch Platform
+        E[Ingestion Jobs] --> F[(PostgreSQL / PostGIS)]
+        F --> G[FastAPI Service]
+        F --> H[Map Services]
+        I[GeoManager CMS] --> F
+        G --> J[Map Viewer]
+        H --> J
+    end
+
+    A --> E
+    B --> E
+    C --> I
+    D --> E
+
+    J --> K[End Users]
 ```
-flood_watch_system/
-├── eafw_cms/        # CMS application and GeoManager package
-├── eafw_api/        # FastAPI service
-├── eafw_jobs/       # Scheduled ingestion/sync jobs
-├── eafw_docker/     # Dockerfiles, init SQL, nginx config
-├── eafw_mapserver/  # MapServer resources
-├── eafw_mapviewer/  # Frontend map viewer (Next.js)
-├── scripts/         # Operational scripts
-└── docs/            # Documentation
-```
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Frontend** | Next.js, MapLibre GL | Interactive map viewer and flood analysis dashboard |
+| **API** | FastAPI | RESTful endpoints for forecasts, summaries, and risk data |
+| **CMS** | Django, Wagtail, GeoManager | Content management and geospatial layer administration |
+| **Map Services** | MapServer, MapCache, pg_tileserv | OGC-compliant raster and vector tile serving |
+| **Database** | PostgreSQL, PostGIS | Spatial data storage with advanced geospatial queries |
+| **Ingestion** | Scheduled Python jobs | Automated data sync from FTP, SFTP, and cloud sources |
+
+## Coverage
+
+FloodWatch covers the **Greater Horn of Africa** region:
+
+| | | |
+|---|---|---|
+| Burundi | Djibouti | Eritrea |
+| Ethiopia | Kenya | Rwanda |
+| Somalia | South Sudan | Sudan |
+| Tanzania | Uganda | |
+
+## Quick Links
+
+- [Getting Started](getting-started/quickstart.md) — Set up a local development environment
+- [API Reference](api/swagger.md) — Interactive Swagger documentation
+- [Architecture](architecture/overview.md) — System design and data flow
+- [GeoManager](geomanager/index.md) — Geospatial data management package
+
+---
+
+<p style="text-align: center; color: #888; font-size: 0.9em;">
+Built with dedication by <strong>Hillary Koros</strong> at <a href="https://www.icpac.net/">ICPAC</a> — IGAD Climate Prediction and Applications Centre
+</p>
