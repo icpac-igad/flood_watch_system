@@ -1928,3 +1928,22 @@ class DistrictRiskLevel(models.Model):
 
     def __str__(self):
         return f"{self.country} - {self.admin1}/{self.admin2} ({self.risk_level})"
+
+
+class ReportSnapshot(models.Model):
+    """Read-only view of gha.report_snapshots table."""
+
+    assessment_id = models.IntegerField(unique=True)
+    snapshot_json = models.JSONField(default=dict)
+    created_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'report_snapshots'
+        verbose_name = _('Report Snapshot')
+        verbose_name_plural = _('Report Snapshots')
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"Snapshot for assessment #{self.assessment_id}"

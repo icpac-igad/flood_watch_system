@@ -1,3 +1,6 @@
+import os
+from copy import deepcopy
+
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse
 from wagtail.api.v2.utils import get_full_url
@@ -11,6 +14,7 @@ DEFAULT_ZOOM = 13
 DEFAULT_MINZOOM = 7
 DEFAULT_MAXZOOM = 15
 WORLD_BOUNDS = [-180, -85.05112877980659, 180, 85.0511287798066]
+FALLBACK_OPENMAPTILES_TILEJSON_URL = "https://eahazardswatch.icpac.net/tileserver-gl/data/v3.json"
 
 
 @cache_page
@@ -88,11 +92,40 @@ def style_json_gl(request, source_slug):
     source = MBTSource.objects.get(slug=source_slug)
     tilejson_url = get_full_url(request, reverse("tile_json_gl", args=[source.slug]))
 
-    style_config = source.json_style
+    # Copy before mutating to avoid altering cached/default style objects.
+    style_config = deepcopy(source.json_style or {})
 
     style_config["id"] = source.pk
     style_config["name"] = source.name
     style_config["glyphs"] = "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf"
-    style_config["sources"] = {"openmaptiles": {"type": "vector", "url": tilejson_url}}
+
+    # Preserve custom raster/vector sources (e.g. external basemaps) and only
+    # enforce the openmaptiles source URL for this MBTiles source.
+    existing_sources = style_config.get("sources") or {}
+    if not isinstance(existing_sources, dict):
+        existing_sources = {}
+
+    openmaptiles_source = existing_sources.get("openmaptiles") or {}
+    if not isinstance(openmaptiles_source, dict):
+        openmaptiles_source = {}
+
+    mbtiles_exists = False
+    try:
+        mbtiles_path = source.file.path
+        mbtiles_exists = bool(mbtiles_path and os.path.exists(mbtiles_path))
+    except Exception:
+        mbtiles_exists = False
+
+    # If local MBTiles exists, serve local tile-json. Otherwise keep any
+    # configured external URL and fallback to ICPAC's hosted OpenMapTiles.
+    if mbtiles_exists:
+        openmaptiles_source.update({"type": "vector", "url": tilejson_url})
+    else:
+        openmaptiles_source["type"] = "vector"
+        if not openmaptiles_source.get("url"):
+            openmaptiles_source["url"] = FALLBACK_OPENMAPTILES_TILEJSON_URL
+
+    existing_sources["openmaptiles"] = openmaptiles_source
+    style_config["sources"] = existing_sources
 
     return JsonResponse(style_config)

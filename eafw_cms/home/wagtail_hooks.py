@@ -14,7 +14,7 @@ from django.db import connection
 
 from .models import (
     SiteTheme, MultimodalDataUpload, CategoryDescription,
-    ExpertAssessment, DistrictRiskLevel,
+    ExpertAssessment, DistrictRiskLevel, ReportSnapshot,
 )
 
 
@@ -290,11 +290,41 @@ class DistrictRiskLevelAdmin(ModelAdmin):
     preview_actions.short_description = "Preview"
 
 
+class ReportSnapshotAdmin(ModelAdmin):
+    model = ReportSnapshot
+    permission_helper_class = ReadOnlyPermissionHelper
+    inspect_view_enabled = True
+    menu_label = "Report Snapshots"
+    menu_icon = "doc-full"
+    list_display = ("assessment_id", "snapshot_scope", "snapshot_sections", "updated_at")
+    search_fields = ("assessment_id",)
+    ordering = ["-updated_at"]
+    inspect_view_fields = ["assessment_id", "snapshot_json", "created_at", "updated_at"]
+
+    def snapshot_scope(self, obj):
+        snapshot = obj.snapshot_json if isinstance(obj.snapshot_json, dict) else {}
+        context = snapshot.get("context", {}) if isinstance(snapshot, dict) else {}
+        report_group = context.get("report_group") or "-"
+        placename = context.get("placename") or context.get("country_name") or "-"
+        return f"{report_group} | {placename}"
+
+    snapshot_scope.short_description = "Scope"
+
+    def snapshot_sections(self, obj):
+        snapshot = obj.snapshot_json if isinstance(obj.snapshot_json, dict) else {}
+        sections = snapshot.get("sections", {}) if isinstance(snapshot, dict) else {}
+        if not isinstance(sections, dict) or not sections:
+            return "-"
+        return ", ".join(sorted(sections.keys()))
+
+    snapshot_sections.short_description = "Saved Sections"
+
+
 class ReportsGroup(ModelAdminGroup):
     menu_label = "Flood Reports"
     menu_icon = "doc-full-inverse"
     menu_order = 260
-    items = (ExpertAssessmentAdmin, DistrictRiskLevelAdmin)
+    items = (ExpertAssessmentAdmin, DistrictRiskLevelAdmin, ReportSnapshotAdmin)
 
 
 modeladmin_register(ReportsGroup)

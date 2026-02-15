@@ -12,7 +12,7 @@ import pytz
 from adminboundarymanager.models import AdminBoundarySettings, AdminBoundary
 from dateutil.parser import isoparse
 from django.core.files import File
-from django.db import transaction
+from django.db import transaction, connection
 from shapely import wkb
 from wagtail.models import Site
 
@@ -73,6 +73,13 @@ def clip_raster_upload_to_boundary(upload, request=None):
     if not abm_extents:
         return upload
 
+    boundary_table_exists = AdminBoundary._meta.db_table in connection.introspection.table_names()
+    if not boundary_table_exists:
+        logger.warning(
+            "AdminBoundary table '%s' not found. Falling back to country bbox clipping where available.",
+            AdminBoundary._meta.db_table,
+        )
+
     raster_metadata = read_raster_info(upload.file.path)
     raster_bounds = raster_metadata.get("bounds")
     if not raster_bounds:
@@ -91,12 +98,14 @@ def clip_raster_upload_to_boundary(upload, request=None):
         code = country.get("code")
         alpha3 = country.get("alpha3")
 
-        # query using code (2-letter code)
-        country_boundary = AdminBoundary.objects.filter(level=0, gid_0=code).first()
+        country_boundary = None
+        if boundary_table_exists:
+            # query using code (2-letter code)
+            country_boundary = AdminBoundary.objects.filter(level=0, gid_0=code).first()
 
-        # query using alpha 3 (3-letter code)
-        if not country_boundary:
-            country_boundary = AdminBoundary.objects.filter(level=0, gid_0=alpha3).first()
+            # query using alpha 3 (3-letter code)
+            if not country_boundary:
+                country_boundary = AdminBoundary.objects.filter(level=0, gid_0=alpha3).first()
 
         if country_boundary:
             shapely_geom = wkb.loads(country_boundary.geom.hex)
@@ -107,6 +116,10 @@ def clip_raster_upload_to_boundary(upload, request=None):
             if bbox:
                 bounds_geom = bounds_to_polygon(bbox)
                 country_geoms.append(bounds_geom)
+
+    if not country_geoms:
+        logger.warning("No admin boundaries or fallback bboxes found for clipping. Returning original upload.")
+        return upload
 
     union_polygon = country_geoms[0]
     for polygon in country_geoms[1:]:
