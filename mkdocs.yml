@@ -28,6 +28,8 @@ theme:
     - search.suggest
     - search.highlight
     - content.code.copy
+  favicon: favicon.png
+  logo: logo.png
   icon:
     repo: fontawesome/brands/github
   custom_dir: mkdocs-site/docs/overrides
