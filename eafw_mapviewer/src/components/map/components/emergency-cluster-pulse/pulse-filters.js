@@ -1,4 +1,5 @@
 import { DEFAULT_BASE_RADIUS } from "./constants";
+import { DEFAULT_THRESHOLDS } from "@/utils/multimodal-config";
 
 export const buildEmergencyFilter = () => [
   "any",
@@ -7,7 +8,11 @@ export const buildEmergencyFilter = () => [
     ["downcase", ["to-string", ["coalesce", ["get", "alert_level"], ""]]],
     "emergency",
   ],
-  [">", ["to-number", ["coalesce", ["get", "emergency_count"], 0]], 0],
+  [
+    ">=",
+    ["to-number", ["coalesce", ["get", "daily_avg"], 0]],
+    DEFAULT_THRESHOLDS.emergency,
+  ],
 ];
 
 export const buildPulseFilter = (baseFilter) => {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 
 import Loader from "@/components/ui/loader";
+import { REPORTS_API } from "@/utils/constants";
 
 import "./styles.scss";
 
@@ -50,12 +51,51 @@ const toIsoDate = (value) => {
   return text.includes("T") ? text.split("T")[0] : text;
 };
 
+const COMPACT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+const formatCompactDate = (value) => {
+  if (!value) return "--";
+  try {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return "--";
+    const day = d.getDate().toString().padStart(2, "0");
+    return `${day} ${COMPACT_MONTHS[d.getMonth()]}`;
+  } catch {
+    return "--";
+  }
+};
+
+const formatFullDate = (value) => {
+  if (!value) return "";
+  try {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return String(value);
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    return String(value);
+  }
+};
+
+const draftStatusInfo = (completionState) => {
+  if (completionState === "unapproved") {
+    return { label: "Closed", className: "status-closed" };
+  }
+  return { label: "Open", className: "status-open" };
+};
+
+const expertTypeLabel = (expertType) => {
+  if (expertType === "hydrologist") return "Hydro";
+  if (expertType === "meteorologist") return "Meteo";
+  return expertType || "--";
+};
+
 const statusLabel = (mode) => (mode === "published" ? "Approved / Published" : "Draft / Unapproved");
 const emptyLabel = (mode) => (mode === "published" ? "No published reports" : "No draft reports");
 
 const ReportSidePanel = ({ mode, params }) => {
   const [loading, setLoading] = useState(false);
   const [reports, setReports] = useState([]);
+  const [pdfLoadingId, setPdfLoadingId] = useState(null);
 
   const selectedCountryCode = useMemo(
     () => normalizeCountryCode(params?.admin0_code),
@@ -66,8 +106,6 @@ const ReportSidePanel = ({ mode, params }) => {
   const loadReports = useCallback(async () => {
     const status = mode === "published" ? "published" : "draft";
     const query = new URLSearchParams({ status });
-    // Keep side panels useful at page level by listing all available records by status.
-    // Date-specific filtering made columns appear empty for most working sessions.
 
     setLoading(true);
     try {
@@ -130,6 +168,45 @@ const ReportSidePanel = ({ mode, params }) => {
     );
   };
 
+  const handleDownloadPdf = useCallback(async (report) => {
+    const reportId = Number(report?.id);
+    if (!Number.isFinite(reportId)) return;
+
+    setPdfLoadingId(reportId);
+    try {
+      const payload = {
+        forecast_date: toIsoDate(report.assessment_date) || new Date().toISOString().split("T")[0],
+        placename: report.country_name || "East Africa Region",
+        unit_id: null,
+        admin_level: null,
+        map_image: null,
+        chart_image: null,
+      };
+
+      const response = await fetch(`${REPORTS_API}/flood-analysis/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `FloodReport_${(report.report_key || "report").replace(/\s+/g, "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("PDF download error:", error);
+    } finally {
+      setPdfLoadingId(null);
+    }
+  }, []);
+
   return (
     <div className="c-report-side-panel">
       <div className="panel-header">{statusLabel(mode)}</div>
@@ -144,34 +221,95 @@ const ReportSidePanel = ({ mode, params }) => {
           <div className="empty-list">{emptyLabel(mode)}</div>
         )}
 
-        {!loading && reports.map((report) => {
-          const reportId = Number(report?.id);
-          const canLoad = Number.isFinite(reportId);
-          return (
-            <button
-              type="button"
-              key={report.id || report.report_key}
-              className={`report-card ${report.completion_state || ""}`}
-              onClick={() => handleLoadReport(report)}
-              disabled={!canLoad}
-            >
-              <div className="report-card-top">
-                <span className="report-key">{report.report_key}</span>
-                <span className={`report-status ${report.status}`}>{report.status}</span>
-              </div>
+        {!loading && reports.length > 0 && (
+          <div className="table-scroll-wrapper">
+            <table className="report-table">
+              <thead>
+                {mode === "draft" ? (
+                  <tr>
+                    <th>ID</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Modified</th>
+                    <th>Task</th>
+                    <th>Actions</th>
+                  </tr>
+                ) : (
+                  <tr>
+                    <th>ID</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                )}
+              </thead>
+              <tbody>
+                {reports.map((report) => {
+                  const reportId = Number(report?.id);
+                  const canLoad = Number.isFinite(reportId);
 
-              <div className="report-card-meta">
-                <span>{report.country_name || report.country_code}</span>
-                <span>{toIsoDate(report.assessment_date)}</span>
-              </div>
+                  if (mode === "draft") {
+                    const statusInfo = draftStatusInfo(report.completion_state);
+                    return (
+                      <tr key={report.id || report.report_key}>
+                        <td className="col-id" title={report.report_key}>
+                          {report.report_key}
+                        </td>
+                        <td>
+                          <span className={`status-badge ${statusInfo.className}`}>
+                            {statusInfo.label}
+                          </span>
+                        </td>
+                        <td className="col-date" title={formatFullDate(report.created_at)}>
+                          {formatCompactDate(report.created_at)}
+                        </td>
+                        <td className="col-date" title={formatFullDate(report.updated_at)}>
+                          {formatCompactDate(report.updated_at)}
+                        </td>
+                        <td className="col-task" title={report.expert_type}>
+                          {expertTypeLabel(report.expert_type)}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="action-edit-btn"
+                            onClick={() => handleLoadReport(report)}
+                            disabled={!canLoad}
+                            title="Load this report for editing"
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  }
 
-              <div className="report-card-meta">
-                <span>{report.expert_type}</span>
-                <span>{report.completion_state || "draft"}</span>
-              </div>
-            </button>
-          );
-        })}
+                  // Published mode
+                  return (
+                    <tr key={report.id || report.report_key}>
+                      <td className="col-id" title={report.report_key}>
+                        {report.report_key}
+                      </td>
+                      <td>
+                        <span className="status-badge status-published">Published</span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="action-pdf-btn"
+                          onClick={() => handleDownloadPdf(report)}
+                          disabled={pdfLoadingId === reportId}
+                          title="Download PDF"
+                        >
+                          {pdfLoadingId === reportId ? "..." : "PDF"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

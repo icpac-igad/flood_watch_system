@@ -11,9 +11,9 @@
     position: relative;
 
     @media screen and (min-width: $screen-m) {
-      width: calc(100% - 76px);
+      width: calc(100% - 82px);
       height: 100%;
-      margin-left: 76px;
+      margin-left: 82px;
     }
 
     .main-map {
@@ -70,13 +70,13 @@
 
   .data-analysis-menu {
     position: absolute;
-    left: rem(91px);
+    left: rem(97px);
     top: rem(75px);
     z-index: 6;
     transition: left 0.3s ease;
 
     &.menu-open {
-      left: calc(76px + 15px + var(--menu-panel-width, 300px));
+      left: calc(82px + 15px + var(--menu-panel-width, 300px));
     }
 
     &.embed {

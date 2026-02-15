@@ -4,6 +4,7 @@ import isEmpty from "lodash/isEmpty";
 import flatMap from "lodash/flatMap";
 import sortBy from "lodash/sortBy";
 import uniqBy from "lodash/unionBy";
+import uniq from "lodash/uniq";
 
 import { defined } from "@/utils/core";
 import { selectActiveLang, getMapboxLang } from "@/utils/lang";
@@ -317,6 +318,26 @@ export const getDatasetsWithConfig = createSelector(
         ? normalizeLayerOpacity(opacity)
         : 1;
 
+      let activeLayerIds = layers && layers.length ? [...layers] : [];
+      const firstLayer = d.layers && d.layers[0];
+      const isShowAllMultiLayer =
+        firstLayer &&
+        firstLayer.isMultiLayer &&
+        firstLayer.showAllMultiLayer;
+
+      // Backward compatibility for old map URLs:
+      // if a multi-layer dataset is restored with a single selected sub-layer,
+      // expand selection to include its linked layers.
+      if (isShowAllMultiLayer && activeLayerIds.length === 1) {
+        const selectedLayer = d.layers.find((l) => l.id === activeLayerIds[0]);
+        if (selectedLayer && selectedLayer.linkedLayers?.length) {
+          activeLayerIds = uniq([
+            ...activeLayerIds,
+            ...selectedLayer.linkedLayers,
+          ]);
+        }
+      }
+
       return {
         ...d,
         ...layerConfig,
@@ -341,7 +362,10 @@ export const getDatasetsWithConfig = createSelector(
             summary,
             mapSide,
             color: d.color,
-            active: layers && layers.length && layers.includes(l.id),
+            active:
+              activeLayerIds &&
+              activeLayerIds.length &&
+              activeLayerIds.includes(l.id),
             ...(!isEmpty(layerParams) && {
               params: {
                 ...layerParams,

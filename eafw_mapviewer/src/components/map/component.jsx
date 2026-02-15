@@ -33,6 +33,9 @@ import mapStyleForNoStyle from "./style";
 // Styles
 import "./styles.scss";
 
+const EXTERNAL_BASEMAP_SOURCE_ID = "__external-basemap-source";
+const EXTERNAL_BASEMAP_LAYER_ID = "__external-basemap-layer";
+
 class RenderMap extends PureComponent {
   render() {
     const {
@@ -654,28 +657,28 @@ class MapComponent extends Component {
     const { basemap } = this.props;
     const BASEMAP_GROUPS = ["basemap"];
 
+    const removeExternalBasemap = () => {
+      if (map.getLayer(EXTERNAL_BASEMAP_LAYER_ID)) {
+        map.removeLayer(EXTERNAL_BASEMAP_LAYER_ID);
+      }
+      if (map.getSource(EXTERNAL_BASEMAP_SOURCE_ID)) {
+        map.removeSource(EXTERNAL_BASEMAP_SOURCE_ID);
+      }
+    };
+
     if (map && map.getStyle()) {
-      const { layers, metadata } = map.getStyle();
+      const { layers = [], metadata = {} } = map.getStyle() || {};
+      const mapboxGroups = metadata["mapbox:groups"] || {};
 
-      const basemapGroups = Object.keys(metadata["mapbox:groups"]).filter(
-        (k) => {
-          const { name } = metadata["mapbox:groups"][k];
+      const basemapGroups = Object.keys(mapboxGroups).filter((k) => {
+        const { name } = mapboxGroups[k] || {};
 
-          const matchedGroups = BASEMAP_GROUPS.map((rgr) =>
-            name?.toLowerCase()?.includes(rgr)
-          );
+        const matchedGroups = BASEMAP_GROUPS.map((rgr) =>
+          name?.toLowerCase()?.includes(rgr)
+        );
 
-          return matchedGroups.some((bool) => bool);
-        }
-      );
-
-      const basemapsWithMeta = basemapGroups.map((_groupId) => ({
-        ...metadata["mapbox:groups"][_groupId],
-        id: _groupId,
-      }));
-      const basemapToDisplay = basemapsWithMeta.find((_basemap) =>
-        _basemap.name.includes(basemap.basemapGroup)
-      );
+        return matchedGroups.some((bool) => bool);
+      });
 
       const basemapLayers = layers.filter((l) => {
         const { metadata: layerMetadata } = l;
@@ -685,15 +688,57 @@ class MapComponent extends Component {
         return basemapGroups.includes(gr);
       });
 
-      if (!basemapToDisplay) return false;
+      // URL basemaps are injected as a raster layer at the bottom of the style.
+      // This allows providers like Google/ESRI/OSM while preserving all data overlays.
+      if (basemap?.url) {
+        basemapLayers.forEach((_layer) => {
+          if (map.getLayer(_layer.id)) {
+            map.setLayoutProperty(_layer.id, "visibility", "none");
+          }
+        });
+
+        removeExternalBasemap();
+        map.addSource(EXTERNAL_BASEMAP_SOURCE_ID, {
+          type: "raster",
+          tiles: [basemap.url],
+          tileSize: 256,
+        });
+
+        const externalLayer = {
+          id: EXTERNAL_BASEMAP_LAYER_ID,
+          type: "raster",
+          source: EXTERNAL_BASEMAP_SOURCE_ID,
+          paint: {
+            "raster-opacity": 1,
+          },
+        };
+
+        const firstLayerId = layers?.[0]?.id;
+        if (firstLayerId && map.getLayer(firstLayerId)) {
+          map.addLayer(externalLayer, firstLayerId);
+        } else {
+          map.addLayer(externalLayer);
+        }
+
+        return true;
+      }
+
+      removeExternalBasemap();
+
+      const basemapsWithMeta = basemapGroups.map((_groupId) => ({
+        ...mapboxGroups[_groupId],
+        id: _groupId,
+      }));
+      const basemapToDisplay = basemapsWithMeta.find((_basemap) =>
+        _basemap?.name?.includes(basemap?.basemapGroup)
+      );
+
+      if (!basemapToDisplay) return true;
 
       basemapLayers.forEach((_layer) => {
         const match = _layer.metadata["mapbox:group"] === basemapToDisplay.id;
-
-        if (!match) {
-          map.setLayoutProperty(_layer.id, "visibility", "none");
-        } else {
-          map.setLayoutProperty(_layer.id, "visibility", "visible");
+        if (map.getLayer(_layer.id)) {
+          map.setLayoutProperty(_layer.id, "visibility", match ? "visible" : "none");
         }
       });
     }
@@ -860,7 +905,7 @@ class MapComponent extends Component {
     return (
       <div
         className={cx("c-map", { "no-pointer-events": drawing }, className)}
-        style={{ backgroundColor: basemap && basemap.color }}
+        style={{ backgroundColor: basemap?.color || basemap?.backgroundColor }}
       >
         {comparing ? (
           <div

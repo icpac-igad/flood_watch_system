@@ -22,6 +22,7 @@ import labelsIcon from "@/assets/icons/labels.svg?sprite";
 import roadsIcon from "@/assets/icons/roads.svg?sprite";
 
 import BasemapsMenu from "./basemaps-menu";
+import defaultBasemapThumb from "@/components/map/images/default.png";
 
 import "./styles.scss";
 
@@ -90,7 +91,7 @@ const Basemaps = ({
                   onClick={() => setShowBasemaps(!showBasemaps)}
                 >
                   <img
-                    src={activeBasemap.image}
+                    src={activeBasemap?.image || defaultBasemapThumb}
                     alt={activeBasemap.label}
                     className="basemap-img"
                   />

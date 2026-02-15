@@ -1,3 +1,5 @@
+import { ALERT_COLORS, DEFAULT_THRESHOLDS } from './multimodal-config';
+
 // FloodWatch Custom: Params that should be passed to backend for filtering
 // These are the ONLY params we want to add to pg_tileserv URLs
 const BACKEND_FILTER_PARAMS = ['country_name', 'region_name', 'district_name', 'project_countries', 'admin_level', 'risk_level', 'basin_id'];
@@ -22,6 +24,60 @@ const MODULAR_GEOJSON_PATHS = [
 ];
 const GOOGLE_FLOOD_PARAM_KEYS = ['confidence', 'extended_coverage', 'date', 'scope', 'filter'];
 const GEOJSON_FILTER_PARAM_KEYS = ['country_name', 'region_name', 'district_name', 'project_countries', 'basin_id', 'date', 'filter'];
+const MULTIMODAL_ALERT_LEVEL_EXPR = [
+  'downcase',
+  ['to-string', ['coalesce', ['get', 'alert_level'], '']],
+];
+const MULTIMODAL_DAILY_AVG_EXPR = ['to-number', ['coalesce', ['get', 'daily_avg'], 0]];
+
+const buildMultimodalCircleColorExpression = () => ([
+  'case',
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'emergency'], ALERT_COLORS.emergency,
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'alarm'], ALERT_COLORS.alarm,
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'warning'], ALERT_COLORS.warning,
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'normal'], ALERT_COLORS.normal,
+  ['>=', MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.emergency], ALERT_COLORS.emergency,
+  ['>=', MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.alarm], ALERT_COLORS.alarm,
+  ['>=', MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.warning], ALERT_COLORS.warning,
+  ALERT_COLORS.normal,
+]);
+
+const isMultimodalRenderLayer = (renderLayer = {}, tileUrl = '') => {
+  const sourceLayer = String(renderLayer['source-layer'] || '');
+  const layerId = String(renderLayer.id || '');
+  const haystack = `${sourceLayer} ${layerId} ${tileUrl}`.toLowerCase();
+  return haystack.includes('multimodal_points') || haystack.includes('multimodal');
+};
+
+const normalizeMultimodalPointStyling = (layerConfig, tileUrl = '') => {
+  const renderLayers = layerConfig?.render?.layers;
+  if (!Array.isArray(renderLayers) || renderLayers.length === 0) return layerConfig;
+
+  let changed = false;
+  const nextRenderLayers = renderLayers.map((renderLayer) => {
+    if (renderLayer?.type !== 'circle') return renderLayer;
+    if (!isMultimodalRenderLayer(renderLayer, tileUrl)) return renderLayer;
+
+    changed = true;
+    return {
+      ...renderLayer,
+      paint: {
+        ...(renderLayer.paint || {}),
+        'circle-color': buildMultimodalCircleColorExpression(),
+      },
+    };
+  });
+
+  if (!changed) return layerConfig;
+
+  return {
+    ...layerConfig,
+    render: {
+      ...layerConfig.render,
+      layers: nextRenderLayers,
+    },
+  };
+};
 
 const sanitizeTemplateParams = (url) => {
   let sanitized = url;
@@ -389,6 +445,9 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
     }
 
     if (!tiles) {
+      if (newLayer.layerConfig) {
+        newLayer.layerConfig = normalizeMultimodalPointStyling(newLayer.layerConfig);
+      }
       return newLayer;
     }
 
@@ -469,6 +528,11 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
           }
         };
       }
+    }
+
+    if (newLayer.layerConfig) {
+      const finalTiles = newLayer.layerConfig?.source?.tiles?.[0] || tiles || originalTiles;
+      newLayer.layerConfig = normalizeMultimodalPointStyling(newLayer.layerConfig, finalTiles);
     }
 
     return newLayer;

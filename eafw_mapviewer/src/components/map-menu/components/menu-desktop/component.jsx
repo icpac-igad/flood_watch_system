@@ -17,6 +17,29 @@ class MenuDesktop extends PureComponent {
       searchSections,
       setMenuSettings,
     } = this.props;
+    const searchSection =
+      searchSections && searchSections.find((s) => s.slug === "search");
+    const otherSearchSections = searchSections
+      ? searchSections.filter((s) => s.slug !== "search")
+      : [];
+    const visibleDatasetSections = datasetSections
+      ? datasetSections.filter((s) => !s.hiddenMobile)
+      : [];
+
+    let orderedMainTiles = [...visibleDatasetSections];
+    if (searchSection) {
+      const boundaryLayersIndex = orderedMainTiles.findIndex(
+        (s) => s.category === "Boundary Layers"
+      );
+      const searchInsertIndex =
+        boundaryLayersIndex >= 0
+          ? boundaryLayersIndex + 1
+          : orderedMainTiles.length;
+      orderedMainTiles.splice(searchInsertIndex, 0, {
+        ...searchSection,
+        isSearchShortcut: true,
+      });
+    }
 
     // Filter out Boundary Layers category for counting
     const nonBoundarySections = datasetSections
@@ -55,20 +78,24 @@ class MenuDesktop extends PureComponent {
             </div>
           )}
           {shouldShowCategoryTiles &&
-            datasetSections &&
-            datasetSections
-              .filter((s) => !s.hiddenMobile)
-              .map((s) => (
+            orderedMainTiles.map((s) => (
                 <MenuTile
-                  className="datasets-tile"
-                  key={`${s.slug}_${s.category}`}
+                  className={s.isSearchShortcut ? "search-tile" : "datasets-tile"}
+                  key={`${s.slug}_${s.category || "search"}`}
                   {...s}
-                  label={s.category}
+                  label={s.isSearchShortcut ? s.label : s.category}
                   onClick={() => {
-                    setMenuSettings({
-                      datasetCategory: s.active ? "" : s.category,
-                      menuSection: s.active ? "" : s.slug,
-                    });
+                    if (s.isSearchShortcut) {
+                      setMenuSettings({
+                        menuSection: s.active ? "" : s.slug,
+                        datasetCategory: "",
+                      });
+                    } else {
+                      setMenuSettings({
+                        datasetCategory: s.active ? "" : s.category,
+                        menuSection: s.active ? "" : s.slug,
+                      });
+                    }
                     if (!s.active) {
                       trackEvent({
                         category: "Map menu",
@@ -80,9 +107,9 @@ class MenuDesktop extends PureComponent {
                 />
               ))}
         </ul>
-        <ul className="datasets-menu">
-          {searchSections &&
-            searchSections.map((s) => (
+        {!!otherSearchSections.length && (
+          <ul className="datasets-menu">
+            {otherSearchSections.map((s) => (
               <MenuTile
                 className="search-tile"
                 key={s.slug}
@@ -102,7 +129,8 @@ class MenuDesktop extends PureComponent {
                 {...s}
               />
             ))}
-        </ul>
+          </ul>
+        )}
       </div>
     );
   }

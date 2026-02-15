@@ -211,6 +211,44 @@ const TimeseriesChartWidget = ({
     };
   }, [currentForecastData, selectedModelConfigs]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.dispatchEvent(
+      new CustomEvent("flood-report-timeseries-snapshot", {
+        detail: {
+          reference_date: forecastDate || null,
+          selected_country: selectedCountry || null,
+          selected_point: selectedPoint || null,
+          controls: {
+            history_window: historyWindow,
+            lead_time_days: leadTime,
+            forecast_horizon_days: forecastHorizon,
+            selected_models: selectedModels,
+            show_thresholds: showThresholds,
+            show_trend: showTrend,
+          },
+          thresholds,
+          historical_behavior: historicalData,
+          current_forecast: currentForecastData,
+        },
+      })
+    );
+  }, [
+    forecastDate,
+    selectedCountry,
+    selectedPoint,
+    historyWindow,
+    leadTime,
+    forecastHorizon,
+    selectedModels,
+    showThresholds,
+    showTrend,
+    thresholds,
+    historicalData,
+    currentForecastData,
+  ]);
+
   const renderChart = (data, emptyMessage) => {
     if (loading) {
       return <div className="chart-loader"><Loader /></div>;

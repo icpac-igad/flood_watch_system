@@ -1,7 +1,5 @@
-import gfsTemperature from "./gfs-temperature";
+const datasets = [];
 
-const datasets = [...gfsTemperature.datasets];
-
-const updates = [...gfsTemperature.updates];
+const updates = [];
 
 export default { datasets, updates };

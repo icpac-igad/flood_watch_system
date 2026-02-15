@@ -80,6 +80,7 @@ const FloodWidgets = ({ params, settings, forecastData, loading, updateParams })
         {/* Expert Assessment - Hydrologists & Meteorologists with comments */}
         <ExpertAssessmentWidget
           params={params}
+          forecastData={forecastData}
           forecastDate={params?.forecast_date}
           selectedCountry={selectedCountry?.code || params?.admin0_code}
         />

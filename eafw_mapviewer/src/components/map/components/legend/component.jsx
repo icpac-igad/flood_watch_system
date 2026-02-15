@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import PropTypes from "prop-types";
 import cx from "classnames";
+import { dFormatter } from "@/utils/date-format";
 
 import Legend, {
   LegendListItem,
@@ -117,6 +118,36 @@ const MapLegendContent = ({
           activeLayer &&
           activeLayers.find(l => l.id === activeLayer.id && l.isUpdating);
 
+        const dateParamConfig =
+          paramsSelectorConfig &&
+          paramsSelectorConfig.find(
+            param =>
+              param.type === "datetime" &&
+              param.availableDates &&
+              param.availableDates.length
+          );
+        const availableDates =
+          (dateParamConfig && dateParamConfig.availableDates) || [];
+        const initializedDate = availableDates[0];
+        const latestDate = availableDates[availableDates.length - 1];
+        const selectedDate =
+          dateParamConfig && params && params[dateParamConfig.key];
+
+        let latestDateText = null;
+        if (initializedDate && latestDate) {
+          const initializedLabel = dFormatter(initializedDate, "dd MMM yyyy");
+          const latestLabel = dFormatter(latestDate, "dd MMM yyyy");
+          if (initializedDate === latestDate) {
+            latestDateText = `Latest: ${latestLabel} (Initialized ${initializedLabel})`;
+          } else {
+            latestDateText = `Latest: ${initializedLabel} To ${latestLabel} (Initialized ${initializedLabel})`;
+          }
+        }
+
+        const selectedDateText = selectedDate
+          ? dFormatter(selectedDate, "dd MMM yyyy")
+          : null;
+
         const moveTo =
           activeCompareSide &&
           (activeCompareSide === "left" ? "Right" : "Left");
@@ -180,6 +211,14 @@ const MapLegendContent = ({
             {summary &&
               <div>
                 {summary}
+              </div>}
+            {latestDateText &&
+              <div className="layer-latest-date">
+                {latestDateText}
+              </div>}
+            {selectedDateText &&
+              <div className="layer-selected-date">
+                {selectedDateText}
               </div>}
             {disclaimer &&
               <div className="disclaimer">
