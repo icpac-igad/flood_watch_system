@@ -94,16 +94,15 @@ graph TB
 <div class="funder-banner">
     <p style="margin: 0 0 0.5rem 0; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px;">Funded by</p>
     <p style="margin: 0; font-size: 1.2em;"><strong>CrafD</strong> — Complex Risk Analytics Fund</p>
-    <p style="margin: 0.8rem 0 0 0; font-size: 0.85em; line-height: 1.6;">
-        Under the <strong>E4DRR project</strong> at ICPAC, funded by the <strong>Netherlands Ministry of Foreign Affairs</strong><br/>
-        through the <strong>Netherlands Red Cross</strong>, channelled via <strong>WMO</strong> to <strong>ICPAC</strong> as the implementing agency.
-    </p>
+    <p style="margin: 0.5rem 0 0 0; font-size: 0.85em;">Under the <strong>E4DRR project</strong> at ICPAC</p>
 </div>
+
+The **WHCA (Water at Heart in Central Africa)** project is funded by the **Netherlands Red Cross** through the **Netherlands Ministry of Foreign Affairs**, channelled via **WMO** to **ICPAC** as the implementing agency for IGAD member states.
 
 | Partner | Role |
 |---------|------|
 | **[ICPAC](https://www.icpac.net/)** | Implementing agency — system development and operations |
-| **[Netherlands Red Cross](https://www.rodekruis.nl/)** | Funding partner via Netherlands Ministry of Foreign Affairs |
+| **[Netherlands Red Cross](https://www.rodekruis.nl/)** | WHCA funding via Netherlands Ministry of Foreign Affairs |
 | **[WMO](https://wmo.int/)** | Programme coordination |
 | **[UNDRR](https://www.undrr.org/)** | Disaster risk reduction framework |
 | **[CIMA Foundation](https://www.cimafoundation.org/)** | FloodPROOFS hydrological model |

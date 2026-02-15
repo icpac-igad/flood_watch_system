@@ -4,7 +4,7 @@ site_url: https://icpac-igad.github.io/flood_watch_system/
 repo_url: https://github.com/icpac-igad/flood_watch_system
 repo_name: icpac-igad/flood_watch_system
 docs_dir: mkdocs-site/docs
-copyright: "&copy; 2025 ICPAC — IGAD Climate Prediction and Applications Centre | Developed by Hillary Koros | Funded by CrafD"
+copyright: "&copy; 2026 ICPAC — IGAD Climate Prediction and Applications Centre | Developed by Hillary Koros | Funded by CrafD"
 
 theme:
   name: material
