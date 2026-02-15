@@ -504,8 +504,8 @@ jobs:
             echo "Reloading nginx config..."
             docker exec eafw-nginx nginx -s reload 2>&1 || docker restart eafw-nginx 2>&1 || echo "WARN: nginx reload/restart failed"
 
-            # Cleanup dangling images
-            docker image prune -f
+            # Cleanup dangling images (non-fatal if another prune is running)
+            docker image prune -f 2>/dev/null || true
 
             # ─── HEALTH CHECK ────────────────────────────────────
             echo "Waiting 30s for services to stabilize..."
