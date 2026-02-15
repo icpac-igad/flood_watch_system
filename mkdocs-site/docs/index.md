@@ -97,7 +97,7 @@ graph TB
     <p style="margin: 0.5rem 0 0 0; font-size: 0.85em;">Under the <strong>E4DRR project</strong> at ICPAC</p>
 </div>
 
-The **WHCA (Water at Heart in Central Africa)** project is funded by the **Netherlands Red Cross** through the **Netherlands Ministry of Foreign Affairs**, channelled via **WMO** to **ICPAC** as the implementing agency for IGAD member states.
+The **WHCA (Water at Heart)** project covers Nile basin countries (Uganda, Rwanda, South Sudan, Ethiopia, Sudan), funded by the **Netherlands Red Cross** through the **Netherlands Ministry of Foreign Affairs**, channelled via **WMO** to **ICPAC** as the implementing agency.
 
 | Partner | Role |
 |---------|------|
