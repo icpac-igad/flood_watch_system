@@ -13,7 +13,7 @@
     "@mapbox/geojson-rewind": "^0.5.2",
     "@mapbox/mapbox-gl-draw": "^1.4.1",
     "@mapbox/mapbox-gl-sync-move": "^0.3.1",
-    "@next/bundle-analyzer": "^14.2.35",
+    "@next/bundle-analyzer": "^15.5.12",
     "@react-spring/web": "^9.7.1",
     "@reduxjs/toolkit": "^1.9.3",
     "@turf/area": "^6.5.0",
@@ -61,7 +61,7 @@
     "mapbox-gl-draw-rectangle-mode": "^1.0.4",
     "maplibre-gl": "^2.4.0",
     "moment": "^2.29.4",
-    "next": "^14.2.35",
+    "next": "^15.5.12",
     "polylabel": "^1.1.0",
     "proj4": "^2.9.0",
     "promise.prototype.finally": "^3.1.4",
@@ -118,7 +118,7 @@
   },
   "devDependencies": {
     "eslint": "8.37.0",
-    "eslint-config-next": "^14.2.35",
+    "eslint-config-next": "^15.5.12",
     "sass": "^1.60.0"
   },
   "resolutions": {
