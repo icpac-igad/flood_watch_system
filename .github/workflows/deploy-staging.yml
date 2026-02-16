@@ -378,25 +378,28 @@ jobs:
 
             # Login to GitHub Container Registry
             echo "[$(log_ts)] Logging into GHCR"
-            echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
+            if ! timeout 90 bash -lc "echo \"${GH_TOKEN}\" | docker login ghcr.io -u icpac-igad --password-stdin"; then
+              echo "FATAL: docker login failed or timed out after 90s"
+              exit 1
+            fi
 
             # Safe repo update
             if [ -d "eafw/.git" ]; then
               echo "[$(log_ts)] Updating existing repo..."
               echo "Updating existing repo..."
               cd eafw
-              git fetch origin
-              git reset --hard origin/eafw
+              timeout 180 git fetch origin
+              timeout 60 git reset --hard origin/eafw
             elif [ -d "eafw" ]; then
               echo "[$(log_ts)] Existing eafw directory is not a git repo; replacing"
               echo "Directory eafw/ exists but is not a git repo. Renaming and cloning fresh..."
               mv eafw eafw_old_$(date +%Y%m%d%H%M%S)
-              git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
+              timeout 300 git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
             else
               echo "[$(log_ts)] Cloning repo..."
               echo "Cloning repo..."
-              git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
+              timeout 300 git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
             fi
 
