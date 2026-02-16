@@ -92,6 +92,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            eafw_api
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -107,8 +110,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-api:latest
             ${{ env.IMAGE_PREFIX }}/eafw-api:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=eafw-api
+          cache-to: type=gha,scope=eafw-api,mode=max
 
   build-cms:
     name: Build CMS
@@ -120,6 +123,10 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            eafw_cms
+            eafw_docker/cms
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -135,8 +142,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-cms:latest
             ${{ env.IMAGE_PREFIX }}/eafw-cms:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=eafw-cms
+          cache-to: type=gha,scope=eafw-cms,mode=max
 
   build-mapviewer:
     name: Build Mapviewer
@@ -150,6 +157,10 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            eafw_mapviewer
+            eafw_docker/mapviewer
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -171,8 +182,8 @@ jobs:
             ASSET_PREFIX=
             ADMIN_BOUNDARY_API=/api/v1/boundaries/admin-boundaries/
             ANALYTICS_PROPERTY_ID=${{ env.ANALYTICS_PROPERTY_ID }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=eafw-mapviewer
+          cache-to: type=gha,scope=eafw-mapviewer,mode=max
 
   build-mapserver:
     name: Build Mapserver
@@ -184,6 +195,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            eafw_docker/mapserver
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -199,8 +213,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapserver:latest
             ${{ env.IMAGE_PREFIX }}/eafw-mapserver:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=eafw-mapserver
+          cache-to: type=gha,scope=eafw-mapserver,mode=max
 
   build-mapcache:
     name: Build Mapcache
@@ -212,6 +226,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            eafw_docker/mapcache
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -227,8 +244,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapcache:latest
             ${{ env.IMAGE_PREFIX }}/eafw-mapcache:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=eafw-mapcache
+          cache-to: type=gha,scope=eafw-mapcache,mode=max
 
   build-jobs:
     name: Build Jobs
@@ -240,6 +257,10 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            eafw_jobs
+            eafw_docker/jobs
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -255,8 +276,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-jobs:latest
             ${{ env.IMAGE_PREFIX }}/eafw-jobs:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=eafw-jobs
+          cache-to: type=gha,scope=eafw-jobs,mode=max
 
   deploy:
     name: Deploy to Production
@@ -566,8 +587,9 @@ jobs:
             # Wait for CMS to be ready
             echo "Waiting for CMS to be ready..."
             CMS_READY=0
+            CMS_PROBE_TIMEOUT_SECONDS=8
             for i in $(seq 1 30); do
-              if docker exec eafw-cms curl -sf http://localhost:8000/ >/dev/null 2>&1; then
+              if timeout "${CMS_PROBE_TIMEOUT_SECONDS}" docker exec eafw-cms curl -fsS --connect-timeout 2 --max-time 4 http://localhost:8000/ >/dev/null 2>&1; then
                 CMS_READY=1
                 echo "CMS ready after $((i*5))s"
                 break
