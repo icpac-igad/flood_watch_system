@@ -55,7 +55,7 @@ Either:
 - A regular SMB share configured (e.g., `//<FTP_HOST>/ensemble`) that the configured user can access
 
 ### Option C: IP Whitelisting
-If different credentials are required, please also ensure that our production server **197.254.1.10** is whitelisted/allowed to access the Windows server.
+If different credentials are required, please also ensure that our production server **41.139.151.242** is whitelisted/allowed to access the Windows server.
 
 ## Use Case
 
@@ -80,7 +80,7 @@ I have created and tested the following scripts (ready to deploy):
 **Please provide:**
 1. Valid FTP credentials for automated access to `/ftproot/output/Combined`, **OR**
 2. SMB share credentials/configuration for file access
-3. Confirmation that production server IP (197.254.1.10) is whitelisted
+3. Confirmation that production server IP (41.139.151.242) is whitelisted
 
 ## Timeline
 
@@ -134,7 +134,7 @@ $ nmap -p 22 <FTP_HOST>
 ```
 
 **Our Production Environment:**
-- Server: 197.254.1.10
+- Server: 41.139.151.242
 - OS: Linux (Ubuntu/Debian)
 - Application: FloodWatch (Django + PostgreSQL + PostGIS)
 - Download Schedule: Daily at 6 AM (via cron)

@@ -22,11 +22,11 @@ docker push hkoros/floodwatch-redis:v1.1-staging
 
 ====================================================
 
-PART 2: DEPLOY ON STAGING SERVER (197.254.1.10)
+PART 2: DEPLOY ON STAGING SERVER (41.139.151.242)
 ====================================================
 
 Step 1: SSH into Staging Server
-ssh user@197.254.1.10
+ssh user@41.139.151.242
 
 Step 2: Stop Current FloodWatch Containers (if running)
 docker-compose down
@@ -36,8 +36,8 @@ mkdir -p /opt/floodwatch-staging
 cd /opt/floodwatch-staging
 
 Step 4: Copy docker-compose.staging.yml and .env.staging to Server
-scp docker-compose.staging.yml user@197.254.1.10:/opt/floodwatch-staging/
-scp .env.staging user@197.254.1.10:/opt/floodwatch-staging/.env
+scp docker-compose.staging.yml user@41.139.151.242:/opt/floodwatch-staging/
+scp .env.staging user@41.139.151.242:/opt/floodwatch-staging/.env
 
 Step 5: Login to Docker Hub on Server
 docker login --username hkoros
@@ -75,7 +75,7 @@ LOCAL (Build & Push):
 docker login --username hkoros && docker build -t hkoros/floodwatch-backend:v1.1-staging ./backend && docker build --target production -t hkoros/floodwatch-frontend:v1.1-staging ./frontend && docker tag postgis/postgis:16-3.4 hkoros/floodwatch-postgis:v1.1-staging && docker tag redis:7-alpine hkoros/floodwatch-redis:v1.1-staging && docker push hkoros/floodwatch-backend:v1.1-staging && docker push hkoros/floodwatch-frontend:v1.1-staging && docker push hkoros/floodwatch-postgis:v1.1-staging && docker push hkoros/floodwatch-redis:v1.1-staging
 
 STAGING SERVER (Deploy):
-ssh user@197.254.1.10
+ssh user@41.139.151.242
 docker-compose down
 mkdir -p /opt/floodwatch-staging && cd /opt/floodwatch-staging
 docker login --username hkoros
@@ -88,7 +88,7 @@ docker-compose exec backend python manage.py sync_floodproofs_to_db
 ====================================================
 
 SERVER IPs:
-- External: 197.254.1.10
+- External: 41.139.151.242
 - Internal: 10.10.1.13
 
 ====================================================

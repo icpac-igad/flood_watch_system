@@ -1,5 +1,5 @@
 # EAFW FloodWatch - Staging
-# Hosts: 197.254.1.10, 10.10.1.13, 0.0.0.0, 127.0.0.1
+# Hosts: 41.139.151.242, floodwatch.icpac.net, 10.10.1.13, 0.0.0.0, 127.0.0.1
 # Ports: 9060-9069 (nginx entry: 9068)
 # Usage: docker compose -f docker-compose.staging.yml up -d
 
@@ -114,13 +114,13 @@ services:
       - ADMIN_URL_PATH=${ADMIN_URL_PATH:-cms-admin}
       - TIME_ZONE=${TIME_ZONE:-Africa/Nairobi}
       - SECRET_KEY=${SECRET_KEY}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-197.254.1.10,10.10.1.13,0.0.0.0,127.0.0.1,localhost}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://197.254.1.10,http://10.10.1.13,http://127.0.0.1,http://localhost,http://197.254.1.10:9068,http://10.10.1.13:9068}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-41.139.151.242,floodwatch.icpac.net,10.10.1.13,0.0.0.0,127.0.0.1,localhost}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://41.139.151.242,http://41.139.151.242:9068,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net}
       - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@${PGB_HOST:-eafw_pgbouncer}:${PGB_PORT:-6432}/${CMS_DB_NAME}
       - MEMCACHED_URI=${MEMCACHED_URI:-eafw_memcached:11211}
       - MAPVIEWER_SERVER_URL=${MAPVIEWER_SERVER_URL:-http://eafw_mapviewer:3000}
-      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://197.254.1.10:9068}
-      - CMS_BASE_URL=${CMS_BASE_URL:-http://197.254.1.10:9068}
+      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://41.139.151.242:9068}
+      - CMS_BASE_URL=${CMS_BASE_URL:-http://41.139.151.242:9068}
       - LANGUAGE_CODE=${CMS_DEFAULT_LANGUAGE_CODE:-en}
       - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
       - GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
@@ -186,7 +186,7 @@ services:
       - MAPSERVER_CONFIG_FILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.conf
       - MAX_PROCESSES=${MS_MAX_PROCESSES:-10}
       - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
-      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://197.254.1.10:9065/mapserver/}
+      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://41.139.151.242:9065/mapserver/}
       - DB_HOST=${PGB_HOST:-eafw_pgbouncer}
       - DB_MAP_USER=${CMS_DB_USER}
       - DB_MAP_USER_PASSWORD=${CMS_DB_PASSWORD}
@@ -208,7 +208,7 @@ services:
     volumes:
       - eafw_mapcache_tiles:/opt/tiles
     environment:
-      - SERVICE_URL=${MC_SERVICE_URL:-http://197.254.1.10:9066/mapcache/}
+      - SERVICE_URL=${MC_SERVICE_URL:-http://41.139.151.242:9066/mapcache/}
       - SOURCE_URL=${MC_SOURCE_URL:-http://eafw_mapserver/mapserver/?}
       - MAPCACHE_CONFIG_FILE=${MC_CONFIG_FILE:-/opt/mapcache/mapcache.xml}
       - WEB_GRID_EXTENTS=${WEB_GRID_EXTENTS:-2337709 -1329087 5792092 2632018}

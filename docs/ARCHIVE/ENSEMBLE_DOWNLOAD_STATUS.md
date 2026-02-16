@@ -141,7 +141,7 @@ Create a PowerShell script on the Windows VM to push files to the production ser
 ```powershell
 # Install PuTTY's pscp.exe first
 $sourcePath = "D:\ftproot\output\Combined"
-$destServer = "197.254.1.10"
+$destServer = "41.139.151.242"
 $destPath = "/root/data/ensemble"
 
 # Get today's files
@@ -179,7 +179,7 @@ Use **Option 1 (Manual RDP Download)**:
 Contact GeoSFM team to:
 1. Verify FTP credentials or get new ones
 2. OR configure a regular SMB share accessible by geosfm user
-3. Confirm the production server (197.254.1.10) is IP whitelisted
+3. Confirm the production server (41.139.151.242) is IP whitelisted
 
 ### Long-term Solution (Production)
 

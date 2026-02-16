@@ -41,7 +41,7 @@ Select the Zone files you need and copy them to your local machine:
 If the production server can reach the Windows VM, use SCP/rsync:
 
 ```bash
-# On production server (197.254.1.10)
+# On production server (41.139.151.242)
 # Install sshpass if needed
 sudo apt-get install sshpass
 
@@ -80,7 +80,7 @@ Create this script on the Windows VM to copy files automatically:
 # Run this on the Windows VM
 
 $sourcePath = "D:\ftproot\output\Combined"
-$destinationServer = "197.254.1.10"
+$destinationServer = "41.139.151.242"
 $destinationPath = "/root/data/ensemble"
 
 # Get today's files
