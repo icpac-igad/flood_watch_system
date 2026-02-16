@@ -20,6 +20,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
 
+concurrency:
+  group: production-${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   detect-changes:
     name: Detect Changes
@@ -261,7 +265,33 @@ jobs:
     if: always() && !cancelled()
     environment: production
     steps:
+      - name: Preflight - check SSH reachability
+        id: ssh_preflight
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -z "${DEPLOY_HOST}" ]; then
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+            echo "::error::DEPLOY_HOST is not configured."
+            exit 0
+          fi
+
+          if timeout 8 bash -lc "cat < /dev/null > /dev/tcp/${DEPLOY_HOST}/22" 2>/dev/null; then
+            echo "reachable=true" >> "$GITHUB_OUTPUT"
+            echo "SSH preflight passed for ${DEPLOY_HOST}:22"
+          else
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Cannot reach ${DEPLOY_HOST}:22 from GitHub runner."
+          fi
+
+      - name: Fail fast when deploy host is unreachable
+        if: steps.ssh_preflight.outputs.reachable != 'true'
+        run: |
+          echo "Production deployment aborted: SSH preflight failed." >&2
+          exit 1
+
       - name: Deploy to production server
+        if: steps.ssh_preflight.outputs.reachable == 'true'
         uses: appleboy/ssh-action@v1.0.3
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
@@ -299,6 +329,17 @@ jobs:
             echo "  PRODUCTION DEPLOYMENT"
             echo "  $(date '+%Y-%m-%d %H:%M:%S UTC')"
             echo "========================================="
+
+            # Preflight outbound registry access from target host.
+            # Production should fail fast if infrastructure prerequisites are missing.
+            if ! getent hosts ghcr.io >/dev/null 2>&1; then
+              echo "FATAL: ghcr.io DNS resolution failed on target host."
+              exit 1
+            fi
+            if ! timeout 10 bash -lc "cat < /dev/null > /dev/tcp/ghcr.io/443" 2>/dev/null; then
+              echo "FATAL: ghcr.io:443 is unreachable from target host."
+              exit 1
+            fi
 
             # Login to GitHub Container Registry
             echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
