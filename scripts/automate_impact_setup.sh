@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_DIR="${1:-/home/koros/Downloads/OneDrive_1_2-15-2026}"
-MAP_BASE_URL="${MAP_BASE_URL:-/mapserver/}"
+MAP_BASE_URL="${MAP_BASE_URL:-/mapcache/}"
 
 CMS_CONTAINER="${CMS_CONTAINER:-eafw-cms}"
 MAPCACHE_CONTAINER="${MAPCACHE_CONTAINER:-eafw-mapcache}"
@@ -272,6 +272,110 @@ with transaction.atomic():
 
     flood_ds.wms_layers.exclude(pk__in=keep).delete()
 
+    # --- Population (LandScan) WMS layer ---
+    pop_ds = Dataset.objects.filter(title__iexact="Population", category=impact).first()
+    if pop_ds:
+        pop_ds.layer_type = "wms"
+        pop_ds.multi_temporal = False
+        pop_ds.multi_layer = False
+        pop_ds.initial_visible = False
+        pop_ds.can_clip = False
+        pop_ds.save()
+
+        pop_md = pop_ds.metadata
+        if pop_md is None:
+            pop_md = Metadata.objects.create(title="LandScan Global 2024 Population Distribution")
+            pop_ds.metadata = pop_md
+            pop_ds.save(update_fields=["metadata", "modified"])
+
+        pop_md.title = "LandScan Global 2024 Population Distribution"
+        pop_md.subtitle = "Ambient (average over 24 hours) population distribution"
+        pop_md.function = "High-resolution population distribution for exposure and vulnerability assessment."
+        pop_md.resolution = "~1 km (30 arc-seconds)"
+        pop_md.geographic_coverage = "Greater Horn of Africa"
+        pop_md.source = "Oak Ridge National Laboratory (ORNL)"
+        pop_md.license = "Creative Commons Attribution 4.0 International (CC BY 4.0)"
+        pop_md.frequency_of_update = "Annual"
+        pop_md.overview = (
+            "<p>LandScan Global 2024 represents an ambient (average over 24 hours) population distribution "
+            "at approximately 1 km resolution. Values indicate estimated population count per grid cell.</p>"
+            "<p>This layer has been clipped to the Greater Horn of Africa administrative extent.</p>"
+        )
+        pop_md.cautions = (
+            "<p>Population counts are modelled estimates, not census enumerations. "
+            "Use for screening and planning, not as ground truth.</p>"
+        )
+        pop_md.citation = (
+            "<p>Sims, K., Reith, A., Bright, E., McKee, J., Rose, A. (2023). "
+            "LandScan Global 2024. Oak Ridge National Laboratory.</p>"
+        )
+        pop_md.learn_more = "https://landscan.ornl.gov/"
+        pop_md.save()
+
+        pop_legend = [
+            {
+                "type": "legend",
+                "value": {
+                    "type": "gradient",
+                    "items": [
+                        {"value": "1 - 5", "color": "#FFFFBE"},
+                        {"value": "6 - 25", "color": "#FFFF73"},
+                        {"value": "26 - 50", "color": "#FFFF00"},
+                        {"value": "51 - 100", "color": "#FFAA00"},
+                        {"value": "101 - 500", "color": "#FF6600"},
+                        {"value": "501 - 2500", "color": "#FF0000"},
+                        {"value": "2501 - 5000", "color": "#CC0000"},
+                        {"value": "5001+", "color": "#730000"},
+                    ],
+                },
+            }
+        ]
+
+        pop_wl = pop_ds.wms_layers.first()
+        if pop_wl is None:
+            pop_wl = pop_ds.wms_layers.create(
+                title="LandScan Population 2024",
+                default=True,
+                base_url=map_base_url,
+                version="1.1.1",
+                width=256,
+                height=256,
+                transparent=True,
+                srs="EPSG:3857",
+                format="image/png",
+                request_time_from_capabilities=False,
+                can_clip=False,
+                order=0,
+                legend=pop_legend,
+            )
+        else:
+            pop_wl.title = "LandScan Population 2024"
+            pop_wl.default = True
+            pop_wl.base_url = map_base_url
+            pop_wl.version = "1.1.1"
+            pop_wl.width = 256
+            pop_wl.height = 256
+            pop_wl.transparent = True
+            pop_wl.srs = "EPSG:3857"
+            pop_wl.format = "image/png"
+            pop_wl.request_time_from_capabilities = False
+            pop_wl.can_clip = False
+            pop_wl.order = 0
+            pop_wl.legend = pop_legend
+            pop_wl.save()
+
+        pop_req = pop_wl.wms_request_layers.first()
+        if pop_req is None:
+            WmsRequestLayer.objects.create(layer=pop_wl, name="landscan_population", sort_order=0)
+        else:
+            pop_req.name = "landscan_population"
+            pop_req.sort_order = 0
+            pop_req.save(update_fields=["name", "sort_order"])
+            pop_wl.wms_request_layers.exclude(pk=pop_req.pk).delete()
+
+        pop_ds.wms_layers.exclude(pk=pop_wl.pk).delete()
+        print("Population (LandScan) WMS layer configured.")
+
 print("CMS Impact configuration updated.")
 PY
 
@@ -296,7 +400,9 @@ nginx -s reload || true"
 echo "Running smoke tests..."
 smoke_test "$MAPSERVER_PUBLIC_URL" "flood_extent_rp25"
 smoke_test "$MAPSERVER_PUBLIC_URL" "flood_extent_rp100"
+smoke_test "$MAPSERVER_PUBLIC_URL" "landscan_population"
 smoke_test "$MAPCACHE_PUBLIC_URL" "flood_extent_rp25"
 smoke_test "$MAPCACHE_PUBLIC_URL" "flood_extent_rp100"
+smoke_test "$MAPCACHE_PUBLIC_URL" "landscan_population"
 
-echo "Done. Impact flood setup is automated and applied."
+echo "Done. Impact setup is automated and applied."

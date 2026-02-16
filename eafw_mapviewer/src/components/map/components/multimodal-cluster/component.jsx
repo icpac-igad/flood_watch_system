@@ -95,7 +95,7 @@ const MultimodalClusterLayer = ({
     console.log(`[MultimodalCluster] fetchData called with selectedDate: ${selectedDate}`);
     setLoading(true);
     try {
-      let url = `${API_BASE_URL}/api/multimodal/geojson/`;
+      let url = `${API_BASE_URL}/api/v1/multimodal/geojson/`;
       if (selectedDate) {
         url += `?date=${selectedDate}`;
       }

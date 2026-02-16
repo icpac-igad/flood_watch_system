@@ -286,6 +286,7 @@ services:
       - EAFW_DATABASE_PASSWORD=${CMS_DB_PASSWORD}
       - EAFW_DEBUG=${API_DEBUG:-false}
       - EAFW_CORS_ORIGINS=["*"]
+      - EAFW_CMS_API_BASE_URL=${EAFW_CMS_API_BASE_URL:-http://eafw_cms:8000/api}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9060/health"]

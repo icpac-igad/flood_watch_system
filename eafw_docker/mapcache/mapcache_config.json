@@ -86,10 +86,30 @@
       "timeout": 300
     },
     {
-      "name": "wrf_extreme_rainfall_source",
+      "name": "wrf_extreme_heavy_source",
       "type": "wms",
       "url_ref": "eafw_mapserver",
-      "layers": "wrf_extreme_rainfall",
+      "layers": "wrf_extreme_heavy",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    },
+    {
+      "name": "wrf_extreme_very_heavy_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "wrf_extreme_very_heavy",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    },
+    {
+      "name": "wrf_extreme_extremely_heavy_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "wrf_extreme_extremely_heavy",
       "format": "image/png",
       "transparent": "true",
       "connection_timeout": 30,
@@ -110,6 +130,16 @@
       "type": "wms",
       "url_ref": "eafw_mapserver",
       "layers": "flood_extent_rp100",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    },
+    {
+      "name": "landscan_population_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "landscan_population",
       "format": "image/png",
       "transparent": "true",
       "connection_timeout": 30,
@@ -160,20 +190,28 @@
       }
     },
     {
-      "name": "wrf_extreme_rainfall",
-      "source": "wrf_extreme_rainfall_source",
+      "name": "wrf_extreme_heavy",
+      "source": "wrf_extreme_heavy_source",
       "format_ref": "png_fast",
       "metadata": {
-        "title": "WRF Extreme Rainfall Tiles"
-      },
-      "dimensions": [
-        {
-          "name": "percentile",
-          "type": "regex",
-          "default": "f95",
-          "regex": "^f(90|95|99)$"
-        }
-      ]
+        "title": "WRF Heavy Rainfall Tiles"
+      }
+    },
+    {
+      "name": "wrf_extreme_very_heavy",
+      "source": "wrf_extreme_very_heavy_source",
+      "format_ref": "png_fast",
+      "metadata": {
+        "title": "WRF Very Heavy Rainfall Tiles"
+      }
+    },
+    {
+      "name": "wrf_extreme_extremely_heavy",
+      "source": "wrf_extreme_extremely_heavy_source",
+      "format_ref": "png_fast",
+      "metadata": {
+        "title": "WRF Extremely Heavy Rainfall Tiles"
+      }
     },
     {
       "name": "flood_extent_rp25",
@@ -189,6 +227,15 @@
       "format_ref": "png_fast",
       "metadata": {
         "title": "Flood Extent 100-Year Return Period Tiles"
+      }
+    },
+    {
+      "name": "landscan_population",
+      "source": "landscan_population_source",
+      "format_ref": "png_fast",
+      "no_dimensions": true,
+      "metadata": {
+        "title": "LandScan Global 2024 Population Distribution"
       }
     }
   ],

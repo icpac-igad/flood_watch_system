@@ -1,0 +1,15 @@
+LAYER
+    NAME "landscan_population"
+    TYPE RASTER
+    STATUS ON
+    DATA "data/population/landscan_population_2024.tif"
+    PROCESSING "NODATA=-2147483647"
+    INCLUDE "shared/common-layer-properties.map"
+    TYPE RASTER
+    INCLUDE "classifications/landscan-population.classes.map"
+    METADATA
+        "wms_title" "LandScan Global 2024 Population Distribution"
+        "wms_abstract" "LandScan Global 2024 ambient population distribution (~1 km resolution)"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+END

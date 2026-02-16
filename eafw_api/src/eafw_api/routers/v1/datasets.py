@@ -3,11 +3,12 @@ Datasets API - Replaces DRF DatasetViewSet
 Provides layer/dataset information from CMS
 """
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from datetime import datetime
 
 from eafw_api.db import get_connection
+from eafw_api.services.cms_proxy import proxy_cms_json
 
 router = APIRouter()
 
@@ -27,6 +28,18 @@ class DatasetResponse(BaseModel):
 class DatasetListResponse(BaseModel):
     datasets: list[DatasetResponse]
     count: int
+
+
+@router.get("/mapviewer")
+@router.get("/mapviewer/")
+async def list_mapviewer_datasets(request: Request):
+    """
+    Mapviewer-compatible dataset payload (legacy /api/datasets/ shape).
+    """
+    return await proxy_cms_json(
+        path="/datasets/",
+        query_items=request.query_params.multi_items(),
+    )
 
 
 @router.get("/", response_model=DatasetListResponse)

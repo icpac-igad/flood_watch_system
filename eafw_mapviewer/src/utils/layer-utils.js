@@ -79,19 +79,69 @@ const normalizeMultimodalPointStyling = (layerConfig, tileUrl = '') => {
   };
 };
 
+const SAFE_TILE_TEMPLATE_VALUES = new Set([
+  '{bbox-epsg-3857}',
+  '{{bbox-epsg-3857}}',
+  '{bbox-epsg-4326}',
+  '{{bbox-epsg-4326}}',
+  '{bbox}',
+  '{{bbox}}',
+  '{z}',
+  '{{z}}',
+  '{x}',
+  '{{x}}',
+  '{y}',
+  '{{y}}',
+  '{-y}',
+  '{{-y}}',
+  '{tms-y}',
+  '{{tms-y}}',
+  '{quadkey}',
+  '{{quadkey}}',
+  '{ratio}',
+  '{{ratio}}',
+  '{s}',
+  '{{s}}',
+]);
+
+const decodeUrlComponentSafe = (value = '') => {
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    return value;
+  }
+};
+
+const isTemplateToken = (value = '') => /^\{\{?[^}]+\}\}?$/.test(value.trim());
+
 const sanitizeTemplateParams = (url) => {
-  let sanitized = url;
-  // Remove unresolved placeholders like date={{time}} that can break pg_tileserv SQL casts.
-  sanitized = sanitized
-    .replace(/[&?][^=&]+=\{\{[^}]+\}\}/g, '')
-    .replace(/[&?][^=&]+=\{[^}]+\}/g, '');
-  // Normalize query separators after removals.
-  sanitized = sanitized
-    .replace(/\?&/g, '?')
-    .replace(/&&/g, '&')
-    .replace(/\?$/g, '')
-    .replace(/&$/g, '');
-  return sanitized;
+  if (!url || typeof url !== 'string' || !url.includes('?')) return url;
+
+  const [baseUrl, rawQuery = ''] = url.split('?');
+  if (!rawQuery) return url;
+
+  const keptQueryParts = rawQuery
+    .split('&')
+    .filter(Boolean)
+    .filter((part) => {
+      const [rawKey, ...valueParts] = part.split('=');
+      if (!rawKey) return false;
+      if (!valueParts.length) return true;
+
+      const rawValue = valueParts.join('=');
+      const decodedValue = decodeUrlComponentSafe(rawValue).trim().toLowerCase();
+
+      // Remove unresolved placeholders like date={{time}} that can break SQL casts,
+      // but preserve map tile placeholders needed by maplibre/mapcache.
+      if (isTemplateToken(decodedValue) && !SAFE_TILE_TEMPLATE_VALUES.has(decodedValue)) {
+        return false;
+      }
+
+      return true;
+    });
+
+  const sanitizedQuery = keptQueryParts.join('&');
+  return sanitizedQuery ? `${baseUrl}?${sanitizedQuery}` : baseUrl;
 };
 
 const appendParamsToUrl = (url, params, isFilteredLayer = false) => {
@@ -208,7 +258,7 @@ const appendGeojsonParamsToUrl = (url, params = {}) => {
   return query ? `${baseUrl}?${query}` : baseUrl;
 };
 
-const isWmsTileUrl = (url = '') => /SERVICE=WMS/i.test(url) || url.includes('/mapserver/');
+const isWmsTileUrl = (url = '') => /SERVICE=WMS/i.test(url) || url.includes('/mapserver/') || url.includes('/mapcache/');
 
 // =============================================================================
 // FloodWatch Custom: WHCA Countries Filter - Tile source swapping

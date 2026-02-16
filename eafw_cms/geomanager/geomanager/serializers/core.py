@@ -113,7 +113,7 @@ class DatasetSerializer(serializers.ModelSerializer):
             # These are placeholder CMS datasets that should render from the
             # modular API endpoints (DB-backed or derived from multimodal tables).
             "GeoSFM Flood Forecast": {
-                "endpoint": "/api/geosfm/geojson/",
+                "endpoint": "/api/v1/models/geosfm/geojson/",
                 "interaction_output": [
                     {"column": "admin_name", "property": "Location", "type": "string"},
                     {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
@@ -129,7 +129,7 @@ class DatasetSerializer(serializers.ModelSerializer):
                 ],
             },
             "Mike Hydro": {
-                "endpoint": "/api/mike-hydro/geojson/",
+                "endpoint": "/api/v1/models/mike-hydro/geojson/",
                 "interaction_output": [
                     {"column": "admin_name", "property": "Location", "type": "string"},
                     {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
@@ -148,7 +148,7 @@ class DatasetSerializer(serializers.ModelSerializer):
                 ],
             },
             "Google Flood Forecast": {
-                "endpoint": "/api/google-flood/geojson/",
+                "endpoint": "/api/v1/google-flood/geojson/",
                 "interaction_output": [
                     {"column": "admin_name", "property": "Location", "type": "string"},
                     {"column": "gauge_id", "property": "Gauge ID", "type": "string"},
@@ -170,7 +170,7 @@ class DatasetSerializer(serializers.ModelSerializer):
             # subcategory can display the same control points as Multimodal, but showing only the
             # Floodproof model series in the popup chart.
             "Floodproofs Discharge Forecast": {
-                "endpoint": "/api/floodproof/geojson/",
+                "endpoint": "/api/v1/models/floodproof/geojson/",
                 "interaction_output": [
                     {"column": "admin_name", "property": "Location", "type": "string"},
                     {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},

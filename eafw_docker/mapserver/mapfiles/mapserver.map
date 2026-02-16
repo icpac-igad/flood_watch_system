@@ -37,4 +37,5 @@ MAP
     INCLUDE "layers/wrf-streamflow.map"
     INCLUDE "layers/wrf-daily-rainfall.map"
     INCLUDE "layers/wrf-extreme-rainfall.map"
+    INCLUDE "layers/landscan-population.map"
 END

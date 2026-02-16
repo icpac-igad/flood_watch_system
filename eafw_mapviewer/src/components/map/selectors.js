@@ -440,13 +440,24 @@ export const getLayersFlattened = createSelector(
   (layerGroups) => {
     if (isEmpty(layerGroups)) return null;
 
+    const isAdminOverlayLayer = (layer = {}) => {
+      const name = String(layer.name || '').toLowerCase();
+      const tiles = String(layer?.layerConfig?.source?.tiles?.[0] || '').toLowerCase();
+      return (
+        name.includes('admin level') ||
+        name.includes('political boundaries') ||
+        tiles.includes('tileserv/gha.admin_')
+      );
+    };
+
     return sortBy(
       flatten(layerGroups.map((d) => d.layers))
         .filter((l) => l && l.active && (!l.isRecentImagery || l.params.url))
         .map((l, i) => {
           let zIndex = 1000 - i;
-          if (l.isRecentImagery) zIndex = 500;
-          if (l.isBoundary) zIndex = 900 - i;
+          if (isAdminOverlayLayer(l)) zIndex = 3000 + i;
+          else if (l.isRecentImagery) zIndex = 500;
+          else if (l.isBoundary) zIndex = 900 - i;
           return {
             ...l,
             zIndex,

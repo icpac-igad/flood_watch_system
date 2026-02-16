@@ -26,10 +26,20 @@ DECLARE
     normalized_scope text := lower(COALESCE(NULLIF(trim(scope_mode), ''), 'all'));
     scope_geom geometry;
     admin_geom geometry;
-    result_geom geometry;
+    has_admin_filter boolean := (
+        (country_name IS NOT NULL AND trim(country_name) <> '')
+        OR (region_name IS NOT NULL AND trim(region_name) <> '')
+        OR (district_name IS NOT NULL AND trim(district_name) <> '')
+    );
     countries_arr text[];
     whca_countries text[] := ARRAY['Sudan', 'South Sudan', 'Uganda', 'Ethiopia', 'Rwanda'];
 BEGIN
+    admin_geom := gha.resolve_admin_extent_geom(country_name, region_name, district_name);
+
+    IF normalized_scope = 'all' AND (project_countries IS NULL OR trim(project_countries) = '') THEN
+        RETURN admin_geom;
+    END IF;
+
     IF normalized_scope = 'whca' THEN
         SELECT ST_Multi(ST_UnaryUnion(ST_Collect(geom))) INTO scope_geom
         FROM gha.admin0
@@ -43,27 +53,42 @@ BEGIN
         scope_geom := gha.resolve_admin_extent_geom(NULL, NULL, NULL);
     END IF;
 
-    admin_geom := gha.resolve_admin_extent_geom(country_name, region_name, district_name);
-
-    IF admin_geom IS NOT NULL AND NOT ST_IsEmpty(admin_geom) THEN
-        IF scope_geom IS NOT NULL AND NOT ST_IsEmpty(scope_geom) THEN
-            result_geom := gha.clip_geom_to_admin_extent(admin_geom, scope_geom);
-        ELSE
-            result_geom := admin_geom;
-        END IF;
-    ELSE
-        result_geom := scope_geom;
+    IF scope_geom IS NULL OR ST_IsEmpty(scope_geom) THEN
+        RETURN admin_geom;
     END IF;
 
-    IF result_geom IS NULL OR ST_IsEmpty(result_geom) THEN
-        result_geom := scope_geom;
+    IF NOT has_admin_filter THEN
+        RETURN ST_Multi(ST_MakeValid(scope_geom));
     END IF;
 
-    IF result_geom IS NULL OR ST_IsEmpty(result_geom) THEN
+    IF admin_geom IS NULL OR ST_IsEmpty(admin_geom) THEN
         RETURN NULL;
     END IF;
 
-    RETURN ST_Multi(ST_MakeValid(result_geom));
+    IF normalized_scope = 'whca'
+       AND country_name IS NOT NULL
+       AND trim(country_name) <> ''
+       AND NOT (country_name = ANY(whca_countries)) THEN
+        RETURN NULL;
+    END IF;
+
+    IF project_countries IS NOT NULL
+       AND trim(project_countries) <> ''
+       AND country_name IS NOT NULL
+       AND trim(country_name) <> ''
+       AND NOT (country_name = ANY(countries_arr)) THEN
+        RETURN NULL;
+    END IF;
+
+    IF ST_Within(admin_geom, scope_geom) THEN
+        RETURN ST_Multi(ST_MakeValid(admin_geom));
+    END IF;
+
+    IF NOT ST_Intersects(admin_geom, scope_geom) THEN
+        RETURN NULL;
+    END IF;
+
+    RETURN ST_Multi(ST_MakeValid(ST_Intersection(admin_geom, scope_geom)));
 END;
 $function$;
 
@@ -168,43 +193,23 @@ DECLARE
     mvt bytea;
     tile_bbox_3857 geometry;
     tile_bbox_4326 geometry;
-    scope_geom geometry;
-    effective_geom geometry;
+    whca_countries text[] := ARRAY['Sudan', 'South Sudan', 'Uganda', 'Ethiopia', 'Rwanda'];
 BEGIN
     tile_bbox_3857 := ST_TileEnvelope(z, x, y);
     tile_bbox_4326 := ST_Transform(tile_bbox_3857, 4326);
-
-    scope_geom := gha.resolve_scope_extent_geom(
-        'whca',
-        NULL,
-        country_name,
-        region_name,
-        district_name
-    );
-    effective_geom := gha.clip_geom_to_admin_extent(tile_bbox_4326, scope_geom);
-
-    IF effective_geom IS NULL OR ST_IsEmpty(effective_geom) THEN
-        RETURN ''::bytea;
-    END IF;
 
     IF admin_level = 1 THEN
         SELECT ST_AsMVT(tile, 'gha.admin_whca', 4096, 'mvt_geom') INTO mvt
         FROM (
             SELECT
-                a.id AS gid,
-                a.gid_0,
-                a.country,
-                a.gid_1,
-                a.name_1 AS region,
-                a.type_1,
-                a.shape_area,
-                ST_AsMVTGeom(ST_Transform(c.clipped_geom, 3857), tile_bbox_3857, 4096, 64, true) AS mvt_geom
+                a.id AS gid, a.gid_0, a.country, a.gid_1,
+                a.name_1 AS region, a.type_1, a.shape_area,
+                ST_AsMVTGeom(ST_Transform(a.geom, 3857), tile_bbox_3857, 4096, 64, true) AS mvt_geom
             FROM gha.admin1 a
-            CROSS JOIN LATERAL (
-                SELECT gha.clip_geom_to_admin_extent(a.geom, effective_geom) AS clipped_geom
-            ) c
-            WHERE a.geom && effective_geom
-              AND c.clipped_geom IS NOT NULL
+            WHERE a.country = ANY(whca_countries)
+              AND a.geom && tile_bbox_4326
+              AND (country_name IS NULL OR country_name = '' OR LOWER(a.country) = LOWER(country_name))
+              AND (region_name IS NULL OR region_name = '' OR LOWER(a.name_1) = LOWER(region_name))
         ) AS tile
         WHERE tile.mvt_geom IS NOT NULL;
 
@@ -212,39 +217,28 @@ BEGIN
         SELECT ST_AsMVT(tile, 'gha.admin_whca', 4096, 'mvt_geom') INTO mvt
         FROM (
             SELECT
-                a.id AS gid,
-                a.gid_0,
-                a.country,
-                a.gid_1,
-                a.name_1 AS region,
-                a.gid_2,
-                a.name_2 AS district,
-                a.type_2,
-                a.shape_area,
-                ST_AsMVTGeom(ST_Transform(c.clipped_geom, 3857), tile_bbox_3857, 4096, 64, true) AS mvt_geom
+                a.id AS gid, a.gid_0, a.country, a.gid_1,
+                a.name_1 AS region, a.gid_2, a.name_2 AS district, a.type_2,
+                ST_AsMVTGeom(ST_Transform(a.geom, 3857), tile_bbox_3857, 4096, 64, true) AS mvt_geom
             FROM gha.admin2 a
-            CROSS JOIN LATERAL (
-                SELECT gha.clip_geom_to_admin_extent(a.geom, effective_geom) AS clipped_geom
-            ) c
-            WHERE a.geom && effective_geom
-              AND c.clipped_geom IS NOT NULL
+            WHERE a.country = ANY(whca_countries)
+              AND a.geom && tile_bbox_4326
+              AND (country_name IS NULL OR country_name = '' OR LOWER(a.country) = LOWER(country_name))
+              AND (region_name IS NULL OR region_name = '' OR LOWER(a.name_1) = LOWER(region_name))
+              AND (district_name IS NULL OR district_name = '' OR LOWER(a.name_2) = LOWER(district_name))
         ) AS tile
         WHERE tile.mvt_geom IS NOT NULL;
+
     ELSE
         SELECT ST_AsMVT(tile, 'gha.admin_whca', 4096, 'mvt_geom') INTO mvt
         FROM (
             SELECT
-                a.id AS gid,
-                a.gid_0,
-                a.country,
-                a.shape_area,
-                ST_AsMVTGeom(ST_Transform(c.clipped_geom, 3857), tile_bbox_3857, 4096, 64, true) AS mvt_geom
+                a.id AS gid, a.gid_0, a.country, a.shape_area,
+                ST_AsMVTGeom(ST_Transform(a.geom, 3857), tile_bbox_3857, 4096, 64, true) AS mvt_geom
             FROM gha.admin0 a
-            CROSS JOIN LATERAL (
-                SELECT gha.clip_geom_to_admin_extent(a.geom, effective_geom) AS clipped_geom
-            ) c
-            WHERE a.geom && effective_geom
-              AND c.clipped_geom IS NOT NULL
+            WHERE a.country = ANY(whca_countries)
+              AND a.geom && tile_bbox_4326
+              AND (country_name IS NULL OR country_name = '' OR LOWER(a.country) = LOWER(country_name))
         ) AS tile
         WHERE tile.mvt_geom IS NOT NULL;
     END IF;

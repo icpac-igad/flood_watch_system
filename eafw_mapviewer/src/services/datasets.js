@@ -1,9 +1,9 @@
 import request from "@/utils/request";
 
-import { CMS_API } from "@/utils/constants";
+import { FASTAPI_API } from "@/utils/constants";
 
-const DATASETS_ENDPOINT = `${CMS_API}/datasets/`;
-const MAPVIEWER_CONFIG_ENDPOINT = `${CMS_API}/mapviewer-config`;
+const DATASETS_ENDPOINT = `${FASTAPI_API}/datasets/mapviewer/`;
+const MAPVIEWER_CONFIG_ENDPOINT = `${FASTAPI_API}/mapviewer-config`;
 
 const mergeDatasetsWithConfig = (datasets = [], configDatasets = []) => {
   if (!Array.isArray(datasets) || !datasets.length) return [];

@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from eafw_api.db import get_connection
+from ._helpers import resolve_filter_geometry_ewkt
 
 router = APIRouter()
 
@@ -76,10 +77,7 @@ POINT_COUNTRY_CODE_SQL = (
     "WHERE ST_Within(cp.geom, a0.geom) LIMIT 1), "
     "'UN')"
 )
-WHCA_SCOPE_SQL_CONDITION = (
-    "(COALESCE(cp.whca_selected, FALSE) IS TRUE OR "
-    f"{POINT_COUNTRY_CODE_SQL} IN ({WHCA_COUNTRY_CODES_SQL}))"
-)
+WHCA_SCOPE_SQL_CONDITION = "(COALESCE(cp.whca_selected, FALSE) IS TRUE)"
 
 
 def _normalize_country_code(country: Optional[str]) -> Optional[str]:
@@ -110,6 +108,10 @@ async def get_multimodal_geojson(
     filter: Optional[str] = Query("all", description="Filter: all, active, alarm, emergency"),
     scope: Optional[str] = Query("all", description="Scope: all, whca"),
     country: Optional[str] = Query(None, description="Country name or ISO2 code"),
+    country_name: Optional[str] = Query(None, description="Admin0 country name filter"),
+    region_name: Optional[str] = Query(None, description="Admin1 region name filter"),
+    district_name: Optional[str] = Query(None, description="Admin2 district name filter"),
+    project_countries: Optional[str] = Query(None, description="Comma-separated project country names"),
 ):
     """
     Get multimodal ensemble forecast data as GeoJSON for map display.
@@ -127,8 +129,18 @@ async def get_multimodal_geojson(
     if scope not in ("all", "whca"):
         raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
 
-    country_code = _normalize_country_code(country)
-    if country and not country_code:
+    country_name = (country_name or "").strip()
+    region_name = (region_name or "").strip()
+    district_name = (district_name or "").strip()
+    project_countries = (project_countries or "").strip()
+    project_country_list = [c.strip() for c in project_countries.split(",") if c.strip()] if project_countries else []
+    has_spatial_filter = bool(country_name or region_name or district_name or project_country_list)
+
+    # Backward-compatible country filter from legacy `country` query param.
+    # If `country_name` is provided, it takes precedence for country-code filtering too.
+    country_lookup_value = country_name or country
+    country_code = _normalize_country_code(country_lookup_value)
+    if country and not _normalize_country_code(country):
         raise HTTPException(status_code=400, detail="Invalid country. Use country name or ISO2 code")
 
     point_filters = []
@@ -137,11 +149,31 @@ async def get_multimodal_geojson(
     if country_code:
         point_filters.append(f"({POINT_COUNTRY_CODE_SQL}) = '{country_code}'")
 
-    point_where_sql = ""
-    if point_filters:
-        point_where_sql = f"WHERE {' AND '.join(point_filters)}"
-
     async with get_connection() as conn:
+        point_filter_params = []
+
+        # Resolve clipping geometry once per request to avoid expensive per-row calls.
+        if has_spatial_filter:
+            clip_geom_ewkt = await resolve_filter_geometry_ewkt(
+                conn,
+                country_name=country_name,
+                region_name=region_name,
+                district_name=district_name,
+                project_countries=project_country_list,
+            )
+
+            # If a spatial filter was requested but no matching geometry exists,
+            # return an empty collection rather than silently dropping the filter.
+            if not clip_geom_ewkt:
+                return {"type": "FeatureCollection", "features": []}
+
+            point_filters.append(f"ST_Within(cp.geom, ST_GeomFromEWKT(${len(point_filter_params) + 1}))")
+            point_filter_params.append(clip_geom_ewkt)
+
+        point_where_sql = ""
+        if point_filters:
+            point_where_sql = f"WHERE {' AND '.join(point_filters)}"
+
         # Determine query date
         if date:
             query_date_sql = f"'{date}'::date"
@@ -243,7 +275,10 @@ async def get_multimodal_geojson(
             {filter_sql}
         """
 
-        row = await conn.fetchrow(query)
+        if point_filter_params:
+            row = await conn.fetchrow(query, *point_filter_params)
+        else:
+            row = await conn.fetchrow(query)
 
         if not row or not row['geojson']:
             raise HTTPException(status_code=404, detail="No forecast data available")

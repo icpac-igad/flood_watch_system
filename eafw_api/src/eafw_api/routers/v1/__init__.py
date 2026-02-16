@@ -7,6 +7,7 @@ Organization: ICPAC
 """
 from fastapi import APIRouter
 
+from .mapviewer import router as mapviewer_router
 from .datasets import router as datasets_router
 from .boundaries import router as boundaries_router
 from .assessments import router as assessments_router
@@ -24,6 +25,7 @@ from .wrf import router as wrf_router
 router = APIRouter(tags=["v1"])
 
 # Include sub-routers
+router.include_router(mapviewer_router, tags=["Mapviewer Compatibility"])
 router.include_router(cms_router, prefix="/cms", tags=["CMS Content"])
 router.include_router(datasets_router, prefix="/datasets", tags=["Datasets"])
 router.include_router(boundaries_router, prefix="/boundaries", tags=["Boundaries"])
