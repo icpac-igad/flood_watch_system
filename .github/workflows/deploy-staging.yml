@@ -293,8 +293,34 @@ jobs:
             echo "::warning::Cannot reach ${DEPLOY_HOST}:22 from GitHub runner. Skipping deploy."
           fi
 
-      - name: Deploy to staging server
+      - name: Preflight - check SSH authentication
+        id: ssh_auth_preflight
         if: steps.ssh_preflight.outputs.reachable == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || secrets.STAGING_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || secrets.STAGING_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY || secrets.STAGING_SSH_KEY }}
+        run: |
+          if [ -z "${DEPLOY_USER}" ] || [ -z "${SSH_KEY}" ]; then
+            echo "auth_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Missing DEPLOY_USER/STAGING_USER or SSH_KEY/STAGING_SSH_KEY. Skipping deploy."
+            exit 0
+          fi
+
+          KEY_FILE="$RUNNER_TEMP/staging_deploy_key"
+          printf '%s\n' "${SSH_KEY}" > "${KEY_FILE}"
+          chmod 600 "${KEY_FILE}"
+
+          if timeout 12 ssh -i "${KEY_FILE}" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 "${DEPLOY_USER}@${DEPLOY_HOST}" 'echo ssh-auth-ok' >/dev/null 2>&1; then
+            echo "auth_ok=true" >> "$GITHUB_OUTPUT"
+            echo "SSH auth preflight passed for ${DEPLOY_USER}@${DEPLOY_HOST}"
+          else
+            echo "auth_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SSH auth preflight failed for ${DEPLOY_USER}@${DEPLOY_HOST}. Skipping deploy."
+          fi
+
+      - name: Deploy to staging server
+        if: steps.ssh_preflight.outputs.reachable == 'true' && steps.ssh_auth_preflight.outputs.auth_ok == 'true'
         uses: appleboy/ssh-action@v1.0.3
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
@@ -423,20 +449,24 @@ jobs:
             if [ "$DB_STATUS" = "running" ] && [ "$DB_HEALTH" != "unhealthy" ]; then
               echo "Backing up database..."
               BACKUP="$HOME/eafw-backups/staging_db_$(date +%Y%m%d_%H%M%S).dump"
+              PG_DUMP_TIMEOUT_SECONDS=900
 
-              # Create backup
-              docker exec eafw-pgdb pg_dump -U eafw_user -Fc eafw_db > "$BACKUP" || echo "WARN: backup failed, continuing deploy"
+              # Create backup, but do not block staging deploy forever on slow dumps.
+              if timeout "${PG_DUMP_TIMEOUT_SECONDS}" docker exec eafw-pgdb pg_dump -U eafw_user -Fc eafw_db > "$BACKUP"; then
+                # Verify backup with checksum
+                if [ -f "$BACKUP" ] && [ -s "$BACKUP" ]; then
+                  BACKUP_SIZE=$(du -h "$BACKUP" | cut -f1)
+                  BACKUP_CHECKSUM=$(sha256sum "$BACKUP" | cut -d' ' -f1)
+                  echo "Backup saved: $BACKUP"
+                  echo "  Size: $BACKUP_SIZE"
+                  echo "  SHA256: ${BACKUP_CHECKSUM:0:16}..."
 
-              # Verify backup with checksum
-              if [ -f "$BACKUP" ] && [ -s "$BACKUP" ]; then
-                BACKUP_SIZE=$(du -h "$BACKUP" | cut -f1)
-                BACKUP_CHECKSUM=$(sha256sum "$BACKUP" | cut -d' ' -f1)
-                echo "Backup saved: $BACKUP"
-                echo "  Size: $BACKUP_SIZE"
-                echo "  SHA256: ${BACKUP_CHECKSUM:0:16}..."
-
-                # Save checksum alongside backup
-                echo "$BACKUP_CHECKSUM  $(basename $BACKUP)" > "${BACKUP}.sha256"
+                  # Save checksum alongside backup
+                  echo "$BACKUP_CHECKSUM  $(basename $BACKUP)" > "${BACKUP}.sha256"
+                fi
+              else
+                echo "WARN: backup failed or timed out after ${PG_DUMP_TIMEOUT_SECONDS}s, continuing deploy"
+                rm -f "$BACKUP" "${BACKUP}.sha256" 2>/dev/null || true
               fi
 
               # Keep last 5 staging backups
@@ -561,13 +591,21 @@ jobs:
             echo "Staging deploy successful!"
 
       - name: Deployment skipped summary
-        if: steps.ssh_preflight.outputs.reachable != 'true'
+        if: steps.ssh_preflight.outputs.reachable != 'true' || steps.ssh_auth_preflight.outputs.auth_ok != 'true'
+        env:
+          SSH_REACHABLE: ${{ steps.ssh_preflight.outputs.reachable }}
+          SSH_AUTH_OK: ${{ steps.ssh_auth_preflight.outputs.auth_ok }}
         run: |
           {
             echo "### Staging Deployment Skipped"
             echo ""
-            echo "Runner could not reach deploy host on SSH port 22."
+            if [ "${SSH_REACHABLE}" != "true" ]; then
+              echo "- Runner could not reach deploy host on SSH port 22."
+            fi
+            if [ "${SSH_AUTH_OK}" != "true" ]; then
+              echo "- SSH authentication preflight failed (user/key mismatch or key not authorized)."
+            fi
             echo "This is treated as a controlled skip to avoid noisy failed pipelines."
             echo ""
-            echo "Check firewall/NAT/public SSH exposure for DEPLOY_HOST/STAGING_HOST."
+            echo "Check firewall/NAT/public SSH exposure and staging deploy key/user secrets."
           } >> "$GITHUB_STEP_SUMMARY"
