@@ -82,6 +82,7 @@ const FloodWidgets = ({ params, settings, forecastData, loading, updateParams })
           params={params}
           forecastDate={params?.forecast_date}
           selectedCountry={selectedCountry?.code || params?.admin0_code}
+          forecastData={forecastData}
         />
       </div>
     </div>

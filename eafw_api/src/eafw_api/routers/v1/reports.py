@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from eafw_api.db import get_connection
+from eafw_api.routers.v1._helpers import format_report_key
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,8 @@ COUNTRY_NAMES = {
     "UG": "Uganda",
 }
 
-# Templates directory
-TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+# Templates directory (eafw_api/src/eafw_api/templates)
+TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "templates"
 
 
 class PdfRequest(BaseModel):
@@ -53,6 +54,7 @@ class PdfRequest(BaseModel):
     placename: str = Field(default="East Africa Region", description="Region/area name")
     unit_id: Optional[str] = Field(default=None, description="Admin unit ID")
     admin_level: Optional[str] = Field(default=None, description="Admin level")
+    assessment_id: Optional[int] = Field(default=None, description="Assessment ID for interactive draft/published export")
     map_image: Optional[str] = Field(default=None, description="Base64 PNG of map screenshot")
     chart_image: Optional[str] = Field(default=None, description="Base64 PNG of chart screenshot")
 
@@ -203,25 +205,122 @@ async def generate_flood_analysis_pdf(data: PdfRequest):
             detail=f"PDF generation dependencies not available: {e}",
         )
 
-    # Parse and validate date
-    try:
-        query_date = datetime.strptime(data.forecast_date, "%Y-%m-%d").date()
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD.")
+    assessment_row = None
+    interactive_report = None
 
-    # Fetch data from database
     async with get_connection() as conn:
+        if data.assessment_id:
+            assessment_row = await conn.fetchrow(
+                """
+                SELECT id, expert_type, assessment_date, country_code, country_name, risk_level,
+                       assessment_comment, affected_areas, recommendations, is_published
+                FROM gha.expert_assessments
+                WHERE id = $1
+                """,
+                data.assessment_id,
+            )
+            if not assessment_row:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Assessment {data.assessment_id} not found",
+                )
+            query_date = assessment_row["assessment_date"]
+        else:
+            try:
+                query_date = datetime.strptime(data.forecast_date, "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD.")
+
         has_data = await conn.fetchval(
             "SELECT 1 FROM gha.multimodal_forecasts WHERE data_date = $1::date LIMIT 1",
             query_date,
         )
-        if not has_data:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No forecast data available for date {data.forecast_date}",
+        if has_data:
+            risk_counts, country_breakdown = await _fetch_situation_data(conn, query_date)
+        else:
+            if not data.assessment_id:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No forecast data available for date {query_date.isoformat()}",
+                )
+            risk_counts = {"emergency": 0, "alarm": 0, "warning": 0, "normal": 0, "total": 0}
+            country_breakdown = []
+
+        if assessment_row:
+            assessment_country_code = (assessment_row["country_code"] or "REGION").upper()
+            assessment_country_name = (
+                assessment_row["country_name"]
+                or COUNTRY_NAMES.get(assessment_country_code, assessment_country_code)
             )
 
-        risk_counts, country_breakdown = await _fetch_situation_data(conn, query_date)
+            district_params = [assessment_row["expert_type"], assessment_row["assessment_date"]]
+            district_query = """
+                SELECT country, admin1, admin2, gid_2, risk_level, comment
+                FROM gha.district_risk_levels
+                WHERE expert_type = $1 AND assessment_date = $2
+            """
+
+            if assessment_country_code == "REGION":
+                district_query += " AND UPPER(COALESCE(country, '')) LIKE 'REGION::%'"
+            else:
+                district_query += " AND (UPPER(COALESCE(country, '')) = $3 OR LOWER(COALESCE(country, '')) = LOWER($4))"
+                district_params.extend([assessment_country_code, assessment_country_name])
+
+            district_query += " ORDER BY country, admin1, admin2"
+            district_rows = await conn.fetch(district_query, *district_params)
+
+            district_summary = {"emergency": 0, "alarm": 0, "warning": 0, "watch": 0, "normal": 0}
+            district_assessments = []
+            for row in district_rows:
+                district_country = row["country"]
+                if district_country and district_country.startswith("REGION::"):
+                    district_country = district_country.split("REGION::", 1)[1]
+
+                district_risk = (row["risk_level"] or "normal").strip().lower()
+                if district_risk in district_summary:
+                    district_summary[district_risk] += 1
+
+                district_assessments.append(
+                    {
+                        "country": district_country or "",
+                        "admin1": row["admin1"] or "",
+                        "admin2": row["admin2"] or "",
+                        "gid_2": row["gid_2"] or "",
+                        "risk_level": district_risk,
+                        "comment": row["comment"] or "",
+                    }
+                )
+
+            is_published = bool(assessment_row["is_published"])
+            has_content = bool(
+                (assessment_row["assessment_comment"] or "").strip()
+                or (assessment_row["affected_areas"] or "").strip()
+                or (assessment_row["recommendations"] or "").strip()
+                or district_assessments
+            )
+            completion_state = "approved" if is_published else ("unapproved" if has_content else "unfinished")
+            interactive_report = {
+                "id": assessment_row["id"],
+                "report_key": format_report_key(
+                    assessment_row["expert_type"],
+                    assessment_country_code,
+                    assessment_row["assessment_date"].isoformat(),
+                ),
+                "status": "published" if is_published else "draft",
+                "status_label": "Approved / Published" if is_published else "Draft / Unapproved",
+                "completion_state": completion_state,
+                "expert_type": assessment_row["expert_type"],
+                "country_code": assessment_country_code,
+                "country_name": assessment_country_name,
+                "assessment_date": assessment_row["assessment_date"].isoformat(),
+                "risk_level": (assessment_row["risk_level"] or "normal").strip().lower(),
+                "assessment_comment": assessment_row["assessment_comment"] or "",
+                "affected_areas": assessment_row["affected_areas"] or "",
+                "recommendations": assessment_row["recommendations"] or "",
+                "district_assessments": district_assessments,
+                "district_summary": district_summary,
+                "district_count": len(district_assessments),
+            }
 
     # Determine overall alert level
     if risk_counts["emergency"] > 0:
@@ -239,11 +338,17 @@ async def generate_flood_analysis_pdf(data: PdfRequest):
 
     # Prepare template context
     generated_at = datetime.utcnow().strftime("%d %B %Y, %H:%M UTC")
+    report_placename = (
+        interactive_report["country_name"]
+        if interactive_report and interactive_report.get("country_name")
+        else data.placename
+    )
+
     context = {
-        "title": f"Flood Forecast Report for {data.placename}",
-        "placename": data.placename,
+        "title": f"Flood Forecast Report for {report_placename}",
+        "placename": report_placename,
         "forecast_date": query_date.strftime("%d %B %Y"),
-        "forecast_date_iso": data.forecast_date,
+        "forecast_date_iso": query_date.isoformat(),
         "generated_at": generated_at,
         "overall_level": overall_level,
         "risk_counts": risk_counts,
@@ -256,6 +361,7 @@ async def generate_flood_analysis_pdf(data: PdfRequest):
         },
         "map_image": data.map_image,
         "chart_image": data.chart_image,
+        "interactive_report": interactive_report,
     }
 
     # Render HTML from Jinja2 template
@@ -269,8 +375,8 @@ async def generate_flood_analysis_pdf(data: PdfRequest):
     pdf_buffer.seek(0)
 
     # Generate filename
-    date_str = data.forecast_date
-    region_str = data.placename.replace(" ", "_")
+    date_str = query_date.isoformat()
+    region_str = report_placename.replace(" ", "_")
     filename = f"FloodAnalysis_{region_str}_{date_str}.pdf"
 
     return StreamingResponse(

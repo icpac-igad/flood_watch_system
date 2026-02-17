@@ -30,8 +30,7 @@
     align-items: stretch;
     margin-bottom: 14px;
 
-    .expert-switch,
-    .group-switch {
+    .expert-switch {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
@@ -64,28 +63,6 @@
       &.active {
         background: #f3f9ff;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-      }
-    }
-
-    .group-btn {
-      border: 1px solid #cfd8dc;
-      border-radius: 18px;
-      padding: 7px 14px;
-      background: #fff;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      color: #334155;
-
-      &.active {
-        background: #1d4d2d;
-        border-color: #1d4d2d;
-        color: #fff;
-      }
-
-      &:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
       }
     }
   }
@@ -232,6 +209,26 @@
         font-size: 12px;
       }
 
+      .header-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+      }
+
+      .workflow-pill {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #14532d;
+        background: #ecfdf5;
+        border: 1px solid #86efac;
+        border-radius: 999px;
+        padding: 4px 10px;
+        white-space: nowrap;
+      }
+
       .active-id {
         font-size: 11px;
         color: #0f766e;
@@ -253,11 +250,68 @@
       font-size: 12px;
     }
 
-    .general-user-row {
+    .point-summary-card {
       margin-top: 10px;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
+      border: 1px solid #d6e3f0;
+      border-radius: 8px;
+      background: #f8fbff;
+      padding: 10px;
+
+      .point-summary-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 8px;
+
+        h5 {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 700;
+          color: #0f172a;
+        }
+
+        span {
+          font-size: 11px;
+          color: #475569;
+          font-weight: 600;
+        }
+      }
+
+      .point-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .point-summary-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 5px 7px;
+        background: #fff;
+        font-size: 11px;
+
+        .dot {
+          width: 11px;
+          height: 11px;
+          border-radius: 3px;
+          flex-shrink: 0;
+        }
+
+        strong {
+          margin-left: auto;
+          color: #111827;
+        }
+      }
+
+      .point-summary-total {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #334155;
+      }
     }
 
     .overall-editor {
@@ -527,7 +581,7 @@
 
     .interactive-column {
       .form-group-row,
-      .general-user-row {
+      .point-summary-card .point-summary-grid {
         grid-template-columns: 1fr;
       }
 

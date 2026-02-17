@@ -4,30 +4,39 @@
 
 .c-action-buttons {
   display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 2rem;
-  padding: 1.5rem;
-  background: #f9fafb;
-  border-radius: 8px;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.4rem;
+  padding: 1rem 0 0;
+  border-top: 1px solid #dce7f2;
   flex-wrap: wrap;
 
   .action-btn {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border-radius: 25px;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 40px;
+    padding: 0.58rem 1rem;
+    border-radius: 8px;
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.84rem;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+    border: 1px solid transparent;
     color: #fff;
+    box-shadow: 0 3px 10px rgba(13, 36, 62, 0.14);
 
     &:disabled {
       opacity: 0.7;
       cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
     }
 
     .spinner {
@@ -41,10 +50,11 @@
   }
 
   .pdf-btn {
-    background: #064a8b;
+    background: #1c5d8b;
+    border-color: #194f75;
 
     &:hover:not(:disabled) {
-      background: #0a5ba8;
+      background: #154a6f;
     }
 
     &.ready {
@@ -53,26 +63,29 @@
   }
 
   .share-btn {
-    background: #1a73e8;
+    background: #2a7dc5;
+    border-color: #236ca9;
 
     &:hover {
-      background: #1557b0;
+      background: #1f649f;
     }
   }
 
   .print-btn {
-    background: #6c757d;
+    background: #4f657a;
+    border-color: #455a6e;
 
     &:hover {
-      background: #5a6268;
+      background: #3d5063;
     }
   }
 
   .subscribe-btn {
-    background: #ff9800;
+    background: #f08e1f;
+    border-color: #d8801d;
 
     &:hover {
-      background: #e68900;
+      background: #d87708;
     }
   }
 }
@@ -277,11 +290,11 @@
 // Responsive
 @media (max-width: 768px) {
   .c-action-buttons {
-    flex-direction: column;
+    justify-content: flex-start;
 
     .action-btn {
-      width: 100%;
-      justify-content: center;
+      min-width: 132px;
+      flex: 1 1 140px;
     }
   }
 }

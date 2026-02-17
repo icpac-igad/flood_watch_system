@@ -124,6 +124,21 @@ const ReportSidePanel = ({ mode, params }) => {
     if (!Number.isFinite(reportId)) return;
 
     window.dispatchEvent(
+      new CustomEvent("flood-report-active-selection", {
+        detail: {
+          id: report.id,
+          status: report.status,
+          report_key: report.report_key,
+          expert_type: report.expert_type,
+          country_code: report.country_code,
+          country_name: report.country_name,
+          assessment_date: report.assessment_date,
+          completion_state: report.completion_state,
+        },
+      })
+    );
+
+    window.dispatchEvent(
       new CustomEvent("flood-report-load-request", {
         detail: { id: reportId },
       })

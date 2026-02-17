@@ -68,6 +68,25 @@ const FloodAnalysisPage = () => {
     }
   }, [params]);
 
+  // Keep report content offset in sync with fixed CMS navbar height.
+  useEffect(() => {
+    const applyNavbarOffset = () => {
+      const navbar = document.getElementById("navbar");
+      const navbarHeight = navbar ? Math.ceil(navbar.getBoundingClientRect().height) : 64;
+      document.documentElement.style.setProperty(
+        "--flood-analysis-nav-offset",
+        `${Math.max(navbarHeight, 56)}px`
+      );
+    };
+
+    applyNavbarOffset();
+    window.addEventListener("resize", applyNavbarOffset);
+
+    return () => {
+      window.removeEventListener("resize", applyNavbarOffset);
+    };
+  }, []);
+
   // Encode params to URL when they change
   useEffect(() => {
     if (!isEmpty(params) && !isEmpty(settings)) {

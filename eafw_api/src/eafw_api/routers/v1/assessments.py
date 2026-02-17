@@ -618,16 +618,14 @@ async def legacy_country_assessments_post(request: Request):
     is_published = coerce_bool(data.get("is_published"), default=save_mode in ("submitted", "publish", "published"))
     logged_in = coerce_bool(data.get("logged_in"), default=False)
 
-    if country_code != "REGION" and not logged_in:
-        raise HTTPException(status_code=403, detail="Sign-in is required for member-state expert assessments")
-
     if country_code == "REGION":
         display_name = contributor_name or explicit_creator or "public-user"
         display_country = contributor_country or "REGION"
         created_by = f"public|{display_name}|{display_country}"
     else:
-        display_name = explicit_creator or contributor_name or "authenticated-user"
-        created_by = f"kpp|{display_name}|{country_code}"
+        display_name = explicit_creator or contributor_name or "expert-user"
+        created_by_prefix = "kpp" if logged_in else "open"
+        created_by = f"{created_by_prefix}|{display_name}|{country_code}"
 
     if save_mode in ("submitted", "publish", "published") and not comment.strip():
         raise HTTPException(status_code=400, detail="Assessment comment is required")
