@@ -511,19 +511,6 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
         verbose_name=_("Max Country Cards"),
         help_text=_("Maximum number of country cards to display"),
     )
-    homepage_member_countries = StreamField(
-        [("country", CountryBlock())],
-        blank=True,
-        verbose_name=_("Homepage Member Countries"),
-        help_text=_("Member countries displayed in the homepage partners strip"),
-    )
-    homepage_partners = StreamField(
-        [("partner", LogoItemBlock())],
-        blank=True,
-        verbose_name=_("Homepage Partners"),
-        help_text=_("Partner logos displayed in the homepage partners strip"),
-    )
-
     # Homepage Layout Mode
     LAYOUT_CHOICES = [
         ('split', _('Split View (Map + Cards)')),
@@ -703,14 +690,6 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
             heading=_("Country Cards"),
             help_text=_("Configure the country cards panel (sorted by severity)"),
         ),
-        MultiFieldPanel(
-            [
-                FieldPanel("homepage_member_countries"),
-                FieldPanel("homepage_partners"),
-            ],
-            heading=_("Homepage Members and Partners"),
-            help_text=_("Manage the member countries and partner logos shown on the homepage"),
-        ),
         # Hero Banner Section
         MultiFieldPanel(
             [
@@ -864,12 +843,6 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
 
         footer = Footer.objects.live().first()
         context["footer"] = footer
-        context["homepage_member_countries"] = self.homepage_member_countries or (
-            footer.member_countries if footer else []
-        )
-        context["homepage_partners"] = self.homepage_partners or (
-            footer.partners if footer else []
-        )
 
         navbar = Navbar.objects.live().first()
         context["navbar"] = navbar

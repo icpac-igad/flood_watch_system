@@ -4,7 +4,7 @@
 {% block body_class %}homepage{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260217-5">
+<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260217-6">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" />
 {% endblock %}
 
@@ -46,7 +46,7 @@
     let selectedCountry = null;
     let resizeTimer = null;
     let mapResizeFrame = null;
-    let selectedMapScope = 'whca';
+    let selectedMapScope = 'all';
     let selectedMiniMapLayerKey = 'multimodal';
     let mapStatusToastTimer = null;
     let pointLayerEventsBound = false;
@@ -213,12 +213,14 @@
     document.addEventListener('DOMContentLoaded', function() {
         document.body.classList.add('homepage-js-ready');
         setHomepageLayoutHeights();
+        dedupePartnersAndMembers();
         initMapScopeControl();
         initCategoryMenuControl();
         updateScopeHeadings();
         initRiskTickerLoop();
         updateMemberCountriesByScope();
         updatePartnersByScope();
+        initPartnersReveal();
         initMiniMap();
         loadCountryData();
         loadSituationSummary();
@@ -240,6 +242,74 @@
     function setHomepageLayoutHeights() {
         const compact = window.innerHeight < 860 || window.innerWidth < 1200;
         document.body.classList.toggle('homepage-tight', compact);
+    }
+
+    function initPartnersReveal() {
+        const partnersSection = document.querySelector('.partners-section');
+        if (!partnersSection) return;
+
+        const reveal = () => partnersSection.classList.add('is-visible');
+        if (!('IntersectionObserver' in window)) {
+            reveal();
+            return;
+        }
+
+        const observer = new IntersectionObserver((entries) => {
+            const visible = entries.some((entry) => entry.isIntersecting);
+            if (!visible) return;
+            reveal();
+            observer.disconnect();
+        }, {
+            root: null,
+            threshold: 0.18
+        });
+
+        observer.observe(partnersSection);
+    }
+
+    function dedupeStripItems(container, selector, keyBuilder) {
+        if (!container) return;
+
+        // Remove legacy animation clones if present.
+        container.querySelectorAll('.marquee-clone, .is-clone').forEach((el) => el.remove());
+
+        const seen = new Set();
+        container.querySelectorAll(selector).forEach((item) => {
+            const key = String(keyBuilder(item) || '').trim().toLowerCase();
+            if (!key) {
+                item.remove();
+                return;
+            }
+
+            if (seen.has(key)) {
+                item.remove();
+                return;
+            }
+
+            seen.add(key);
+        });
+    }
+
+    function dedupePartnersAndMembers() {
+        document.querySelectorAll('.member-flags').forEach((container) => {
+            dedupeStripItems(container, '.member-flag[data-country-code]', (item) => (
+                item.getAttribute('data-country-code')
+                || item.getAttribute('title')
+                || item.querySelector('img')?.getAttribute('alt')
+            ));
+        });
+
+        document.querySelectorAll('.partners-logos').forEach((container) => {
+            dedupeStripItems(container, '.partner-item', (item) => {
+                const logo = item.querySelector('.partner-logo');
+                const name = item.getAttribute('data-partner-name')
+                    || logo?.getAttribute('alt')
+                    || logo?.getAttribute('title')
+                    || '';
+                const normalizedName = normalizePartnerName(name);
+                return normalizedName || logo?.getAttribute('src') || item.getAttribute('href') || '';
+            });
+        });
     }
 
     function getMiniMapContainerHeight() {
@@ -306,8 +376,6 @@
     function handleHomepageLoad() {
         setHomepageLayoutHeights();
         initRiskTickerLoop();
-        updateMemberCountriesByScope();
-        updatePartnersByScope();
     }
 
     function getAutoFitCardLimit(totalCountries) {
@@ -340,8 +408,6 @@
             } else {
                 scheduleMiniMapResize();
             }
-            updateMemberCountriesByScope();
-            updatePartnersByScope();
         }, mapUiConfig.resizeDebounceMs);
     }
 
@@ -704,97 +770,28 @@
         await loadSituationSummary();
     }
 
-    function getDefaultLabel(labelEl, fallbackLabel) {
-        if (!labelEl) return fallbackLabel;
-        return labelEl.getAttribute('data-default-label') || fallbackLabel;
-    }
-
-    function restartRevealAnimation(items) {
-        items.forEach((item, index) => {
-            item.style.setProperty('--item-order', String(index));
-            item.classList.remove('is-visible');
-            void item.offsetHeight;
-            item.classList.add('is-visible');
-        });
-    }
-
-    function clearStripMarquee(track) {
-        if (!track) return;
-        track.querySelectorAll('.marquee-clone').forEach((clone) => clone.remove());
-        track.classList.remove('marquee-enabled');
-        track.style.removeProperty('--marquee-shift');
-        track.style.removeProperty('--marquee-duration');
-    }
-
-    function syncStripMarquee(track, visibleItems) {
-        if (!track) return;
-        clearStripMarquee(track);
-
-        if (window.matchMedia('(max-width: 768px)').matches) return;
-
-        const viewport = track.closest('.strip-viewport');
-        if (!viewport) return;
-
-        const items = (visibleItems || []).filter((item) => item && item.style.display !== 'none');
-        if (items.length < 2) return;
-
-        const trackStyle = window.getComputedStyle(track);
-        const gap = parseFloat(trackStyle.columnGap || trackStyle.gap || '0') || 0;
-        const cycleWidth = items.reduce((sum, item) => sum + item.getBoundingClientRect().width, 0)
-            + (Math.max(0, items.length - 1) * gap);
-
-        if (!Number.isFinite(cycleWidth) || cycleWidth <= 0) return;
-
-        const minTrackWidth = Math.max(viewport.clientWidth * 1.8, cycleWidth * 2);
-        let guard = 0;
-        while (track.scrollWidth < minTrackWidth && guard < 8) {
-            items.forEach((item) => {
-                if (track.scrollWidth >= minTrackWidth) return;
-                const clone = item.cloneNode(true);
-                clone.classList.add('marquee-clone', 'is-visible');
-                clone.setAttribute('aria-hidden', 'true');
-                clone.style.removeProperty('--item-order');
-                track.appendChild(clone);
-            });
-            guard += 1;
-        }
-
-        const duration = Math.max(18, Math.min(44, Math.round(cycleWidth / 30)));
-        track.style.setProperty('--marquee-shift', `${cycleWidth}px`);
-        track.style.setProperty('--marquee-duration', `${duration}s`);
-        track.classList.add('marquee-enabled');
-    }
-
     function updateMemberCountriesByScope() {
         const membersGroup = document.querySelector('.members-group');
         if (!membersGroup) return;
 
-        const flags = Array.from(membersGroup.querySelectorAll('.member-flag[data-country-code]:not(.marquee-clone)'));
+        const flags = Array.from(document.querySelectorAll('.member-flag[data-country-code]'));
         if (!flags.length) return;
 
         let visibleCount = 0;
-        const visibleItems = [];
         flags.forEach((flag) => {
             const code = (flag.getAttribute('data-country-code') || '').toUpperCase();
             const isVisible = selectedMapScope !== 'whca' || WHCA_MEMBER_CODES.has(code);
             flag.style.display = isVisible ? '' : 'none';
-            if (isVisible) {
-                visibleCount += 1;
-                visibleItems.push(flag);
-            }
+            if (isVisible) visibleCount += 1;
         });
 
         const label = membersGroup.querySelector('.partners-label');
         if (label) {
-            label.textContent = getDefaultLabel(label, 'Member States');
+            label.textContent = selectedMapScope === 'whca' ? 'WHCA Countries' : 'Member Countries';
         }
 
         membersGroup.style.display = visibleCount > 0 ? '' : 'none';
-        const track = membersGroup.querySelector('.member-flags');
-        if (visibleCount > 0) {
-            restartRevealAnimation(visibleItems);
-        }
-        syncStripMarquee(track, visibleItems);
+        dedupePartnersAndMembers();
     }
 
     function normalizePartnerName(value) {
@@ -822,11 +819,10 @@
         const partnersGroup = document.querySelector('.partners-group');
         if (!partnersGroup) return;
 
-        const partnerItems = Array.from(partnersGroup.querySelectorAll('.partner-item:not(.marquee-clone)'));
+        const partnerItems = Array.from(partnersGroup.querySelectorAll('.partner-item'));
         if (!partnerItems.length) return;
 
         let visibleCount = 0;
-        const visibleItems = [];
         partnerItems.forEach((item) => {
             const logo = item.querySelector('.partner-logo');
             const rawName = item.getAttribute('data-partner-name')
@@ -835,23 +831,16 @@
                 || '';
             const isVisible = selectedMapScope !== 'whca' || isWhcaPartner(rawName);
             item.style.display = isVisible ? '' : 'none';
-            if (isVisible) {
-                visibleCount += 1;
-                visibleItems.push(item);
-            }
+            if (isVisible) visibleCount += 1;
         });
 
         const label = partnersGroup.querySelector('.partners-label');
         if (label) {
-            label.textContent = getDefaultLabel(label, 'Partners');
+            label.textContent = selectedMapScope === 'whca' ? 'WHCA Partners' : 'Partners';
         }
 
         partnersGroup.style.display = visibleCount > 0 ? '' : 'none';
-        const track = partnersGroup.querySelector('.partners-logos');
-        if (visibleCount > 0) {
-            restartRevealAnimation(visibleItems);
-        }
-        syncStripMarquee(track, visibleItems);
+        dedupePartnersAndMembers();
     }
 
     function getCountryByCode(code) {

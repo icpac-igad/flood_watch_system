@@ -1,4 +1,5 @@
 import logging
+import re
 
 from django import template
 from django.conf import settings
@@ -52,3 +53,104 @@ def sort_member_countries(stream_value):
         return (str(name).casefold(), str(code).casefold())
 
     return sorted(items, key=_sort_key)
+
+
+def _stream_items(stream_value):
+    if not stream_value:
+        return []
+    try:
+        return list(stream_value)
+    except TypeError:
+        return []
+
+
+def _block_value(block):
+    return getattr(block, "value", None)
+
+
+def _country_code_from_block(block):
+    value = _block_value(block)
+    if value is None:
+        return ""
+    if hasattr(value, "get"):
+        return (value.get("country") or "").strip().upper()
+    return str(getattr(value, "country", "") or "").strip().upper()
+
+
+def _normalize_partner_name(raw):
+    text = str(raw or "").strip().lower()
+    text = text.replace("&", "and")
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def _partner_key_from_block(block):
+    value = _block_value(block)
+    if value is None:
+        return ""
+
+    if hasattr(value, "get"):
+        name = value.get("name") or ""
+        image = value.get("image")
+        url = value.get("url") or ""
+    else:
+        name = getattr(value, "name", "") or ""
+        image = getattr(value, "image", None)
+        url = getattr(value, "url", "") or ""
+
+    normalized_name = _normalize_partner_name(name)
+    if normalized_name:
+        return f"name:{normalized_name}"
+
+    image_id = str(getattr(image, "id", "") or "").strip()
+    if image_id:
+        return f"image:{image_id}"
+
+    normalized_url = str(url).strip().lower()
+    if normalized_url:
+        return f"url:{normalized_url}"
+
+    return ""
+
+
+@register.filter
+def unique_member_countries(stream_value):
+    """
+    Return member country blocks with duplicates removed by ISO2 code.
+    Keeps first occurrence order.
+    """
+    items = _stream_items(stream_value)
+    if not items:
+        return []
+
+    seen = set()
+    unique_items = []
+    for block in items:
+        code = _country_code_from_block(block)
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        unique_items.append(block)
+
+    return unique_items
+
+
+@register.filter
+def unique_partners(stream_value):
+    """
+    Return partner blocks with duplicates removed by image/name/url key.
+    Keeps first occurrence order.
+    """
+    items = _stream_items(stream_value)
+    if not items:
+        return []
+
+    seen = set()
+    unique_items = []
+    for block in items:
+        key = _partner_key_from_block(block)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique_items.append(block)
+
+    return unique_items
