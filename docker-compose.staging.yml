@@ -247,8 +247,7 @@ services:
       - eafw_mapviewer_static:/mapviewer/static:ro
       - ./eafw_docker/nginx/nginx.staging.conf:/etc/nginx/nginx.conf:z
     ports:
-      - 0.0.0.0:80:80                          # public entry point
-      - 127.0.0.1:${CMS_HOST_PORT:-9068}:80    # internal/VPN access
+      - ${NGINX_HOST_BIND:-0.0.0.0}:${NGINX_HOST_PORT:-9068}:80
     depends_on:
       - eafw_cms
 
