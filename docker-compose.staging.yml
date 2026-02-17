@@ -1,6 +1,6 @@
 # EAFW FloodWatch - Staging
-# Hosts: 41.139.151.242, floodwatch.icpac.net, 10.10.1.13, 0.0.0.0, 127.0.0.1
-# Ports: 9060-9069 (nginx entry: 9068)
+# Hosts: 41.139.151.242, floodwatch.icpac.net, 10.10.1.13
+# Public entry: port 80 (nginx). Internal services on 127.0.0.1 only.
 # Usage: docker compose -f docker-compose.staging.yml up -d
 
 networks:
@@ -40,7 +40,7 @@ services:
       - POSTGRES_PASSWORD=${CMS_DB_PASSWORD}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     ports:
-      - ${HOST_IP:-0.0.0.0}:${DB_HOST_PORT:-9060}:5432
+      - 127.0.0.1:${DB_HOST_PORT:-9060}:5432
     volumes:
       - eafw_pgdata:/var/lib/postgresql/data/
       - eafw_backups:/backups
@@ -61,7 +61,7 @@ services:
       eafw_db:
         condition: service_healthy
     ports:
-      - ${PGB_HOST_IP:-${HOST_IP:-0.0.0.0}}:${PGB_HOST_PORT:-9061}:${PGB_LISTEN_PORT:-6432}
+      - 127.0.0.1:${PGB_HOST_PORT:-9061}:${PGB_LISTEN_PORT:-6432}
     environment:
       - LISTEN_PORT=${PGB_LISTEN_PORT:-6432}
       - DB_HOST=${PG_HOST:-eafw_db}
@@ -88,7 +88,7 @@ services:
     container_name: ${MEMCACHED_CNTR_NAME:-eafw-memcached}
     restart: ${RESTART_POLICY:-always}
     ports:
-      - ${HOST_IP:-0.0.0.0}:${CACHE_HOST_PORT:-9062}:11211
+      - 127.0.0.1:${CACHE_HOST_PORT:-9062}:11211
     entrypoint:
       - memcached
       - -m 1024
@@ -115,13 +115,13 @@ services:
       - TIME_ZONE=${TIME_ZONE:-Africa/Nairobi}
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-41.139.151.242,floodwatch.icpac.net,10.10.1.13,0.0.0.0,127.0.0.1,localhost}
-      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://41.139.151.242,http://41.139.151.242:9068,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://41.139.151.242,http://41.139.151.242:9068,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-http://41.139.151.242,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://41.139.151.242,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net}
       - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@${PGB_HOST:-eafw_pgbouncer}:${PGB_PORT:-6432}/${CMS_DB_NAME}
       - MEMCACHED_URI=${MEMCACHED_URI:-eafw_memcached:11211}
       - MAPVIEWER_SERVER_URL=${MAPVIEWER_SERVER_URL:-http://eafw_mapviewer:3000}
-      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://41.139.151.242:9068}
-      - CMS_BASE_URL=${CMS_BASE_URL:-http://41.139.151.242:9068}
+      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://41.139.151.242}
+      - CMS_BASE_URL=${CMS_BASE_URL:-http://41.139.151.242}
       - LANGUAGE_CODE=${CMS_DEFAULT_LANGUAGE_CODE:-en}
       - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
       - GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
@@ -142,7 +142,7 @@ services:
       eafw_db:
         condition: service_healthy
     ports:
-      - ${HOST_IP:-0.0.0.0}:${WEB_HOST_PORT:-9063}:8000
+      - 127.0.0.1:${WEB_HOST_PORT:-9063}:8000
     volumes:
       - eafw_static:/opt/eafw_cms/static
       - eafw_media:/opt/eafw_cms/media
@@ -168,7 +168,7 @@ services:
       - eafw_mapviewer_static:/app/nginx/.next/static
       - ./eafw_docker/volumes/mapviewer/.cache:/root/.cache:z
     ports:
-      - ${HOST_IP:-0.0.0.0}:${UI_HOST_PORT:-9064}:3000
+      - 127.0.0.1:${UI_HOST_PORT:-9064}:3000
 
   eafw_mapserver:
     container_name: ${MAPSERVER_CNTR_NAME:-eafw-mapserver}
@@ -178,7 +178,7 @@ services:
     depends_on:
       - eafw_pgbouncer
     ports:
-      - ${HOST_IP:-0.0.0.0}:${MS_HOST_PORT:-9065}:${MS_APP_PORT:-80}
+      - 127.0.0.1:${MS_HOST_PORT:-9065}:${MS_APP_PORT:-80}
     environment:
       - MS_DEBUGLEVEL=${MS_DEBUGLEVEL:-2}
       - MS_ERRORFILE=${MS_ERRORFILE:-stderr}
@@ -187,7 +187,7 @@ services:
       - MAPSERVER_CONFIG_FILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.conf
       - MAX_PROCESSES=${MS_MAX_PROCESSES:-10}
       - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
-      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://41.139.151.242:9065/mapserver/}
+      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://eafw_mapserver/mapserver/}
       - DB_HOST=${PGB_HOST:-eafw_pgbouncer}
       - DB_MAP_USER=${CMS_DB_USER}
       - DB_MAP_USER_PASSWORD=${CMS_DB_PASSWORD}
@@ -205,11 +205,11 @@ services:
     depends_on:
       - eafw_mapserver
     ports:
-      - ${HOST_IP:-0.0.0.0}:${MC_HOST_PORT:-9066}:${MC_APP_PORT:-80}
+      - 127.0.0.1:${MC_HOST_PORT:-9066}:${MC_APP_PORT:-80}
     volumes:
       - eafw_mapcache_tiles:/opt/tiles
     environment:
-      - SERVICE_URL=${MC_SERVICE_URL:-http://41.139.151.242:9066/mapcache/}
+      - SERVICE_URL=${MC_SERVICE_URL:-http://eafw_mapcache/mapcache/}
       - SOURCE_URL=${MC_SOURCE_URL:-http://eafw_mapserver/mapserver/?}
       - MAPCACHE_CONFIG_FILE=${MC_CONFIG_FILE:-/opt/mapcache/mapcache.xml}
       - WEB_GRID_EXTENTS=${WEB_GRID_EXTENTS:-2337709 -1329087 5792092 2632018}
@@ -235,7 +235,7 @@ services:
       - TS_DEBUG=${TILESERV_DEBUG:-false}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     ports:
-      - ${HOST_IP:-0.0.0.0}:${TILESERV_HOST_PORT:-9067}:7800
+      - 127.0.0.1:${TILESERV_HOST_PORT:-9067}:7800
 
   eafw_nginx:
     container_name: ${NGINX_CNTR_NAME:-eafw-nginx}
@@ -247,7 +247,8 @@ services:
       - eafw_mapviewer_static:/mapviewer/static:ro
       - ./eafw_docker/nginx/nginx.staging.conf:/etc/nginx/nginx.conf:z
     ports:
-      - ${HOST_IP:-0.0.0.0}:${CMS_HOST_PORT:-9068}:80
+      - 0.0.0.0:80:80                          # public entry point
+      - 127.0.0.1:${CMS_HOST_PORT:-9068}:80    # internal/VPN access
     depends_on:
       - eafw_cms
 
@@ -259,7 +260,7 @@ services:
     depends_on:
       - eafw_pgbouncer
     ports:
-      - ${HOST_IP:-0.0.0.0}:${API_HOST_PORT:-9069}:9060
+      - 127.0.0.1:${API_HOST_PORT:-9069}:9060
     environment:
       - EAFW_DATABASE_HOST=${PGB_HOST:-eafw_pgbouncer}
       - EAFW_DATABASE_PORT=${PGB_LISTEN_PORT:-6432}
