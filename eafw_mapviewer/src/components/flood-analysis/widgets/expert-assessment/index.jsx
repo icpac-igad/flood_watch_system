@@ -149,8 +149,6 @@ const getRiskColor = (riskLevel) => {
 };
 
 const ExpertAssessmentWidget = ({
-  params,
-  forecastData,
   forecastDate,
   selectedCountry,
   loggedIn,
@@ -160,7 +158,6 @@ const ExpertAssessmentWidget = ({
   const mapRef = useRef(null);
   const districtEditsRef = useRef({});
   const mergedRiskByKeyRef = useRef({});
-  const timeseriesSnapshotRef = useRef(null);
 
   const [expertType, setExpertType] = useState("hydrologist");
   const [reportGroup, setReportGroup] = useState("member_state");
@@ -261,7 +258,7 @@ const ExpertAssessmentWidget = ({
 
   const loadSingleReport = useCallback(async (assessmentId) => {
     try {
-      const response = await fetch(`/api/v1/assessments/country-assessments/?id=${assessmentId}&include_districts=true&include_snapshot=true`);
+      const response = await fetch(`/api/v1/assessments/country-assessments/?id=${assessmentId}&include_districts=true`);
       if (!response.ok) return;
       const data = await response.json();
       const report = (data.assessments || [])[0];
@@ -339,47 +336,9 @@ const ExpertAssessmentWidget = ({
 
     const creatorFromProfile = (userData && (userData.full_name || userData.email || userData.username)) || "";
 
-    const reportSnapshot = {
-      version: "2026.02",
-      captured_at: new Date().toISOString(),
-      context: {
-        reporting_unit: params?.reporting_unit || "East Africa Region",
-        forecast_date: forecastDate,
-        alert_filter: params?.alert_filter || "all",
-        scope: params?.scope || "all",
-        admin_level: params?.admin_level || null,
-        unit_id: params?.unit_id || null,
-        placename: params?.placename || (reportGroup === "member_state" ? selectedCountryName : "East Africa Region"),
-        admin0_code: params?.admin0_code || null,
-        admin1_code: params?.admin1_code || null,
-        report_group: reportGroup,
-        expert_type: expertType,
-      },
-      sections: {
-        flood_risk_exposure: forecastData?.alert_summary || null,
-        regional_breakdown: Array.isArray(forecastData?.country_breakdown) ? forecastData.country_breakdown : [],
-        timeseries: timeseriesSnapshotRef.current,
-        interactive_report: {
-          overall_risk_level: overallRisk,
-          overall_assessment_comment: overallComment,
-          affected_areas: affectedAreas,
-          recommendations,
-          district_summary: districtSummary,
-          district_assessment_count: districtPayload.length,
-          district_assessments: districtPayload,
-        },
-      },
-    };
-
     const payload = {
       expert_type: expertType,
       forecast_date: forecastDate,
-      reporting_unit: params?.reporting_unit || "East Africa Region",
-      placename: params?.placename || "",
-      alert_filter: params?.alert_filter || "all",
-      scope: params?.scope || "all",
-      admin_level: params?.admin_level || null,
-      unit_id: params?.unit_id || null,
       report_group: reportGroup,
       country_code: reportGroup === "member_state" ? selectedCountryCode : "REGION",
       country_name: reportGroup === "member_state"
@@ -397,7 +356,6 @@ const ExpertAssessmentWidget = ({
       logged_in: !!loggedIn,
       district_assessments: districtPayload,
       replace_district_assessments: true,
-      report_snapshot: reportSnapshot,
     };
 
     setSaveLoading(true);
@@ -443,22 +401,11 @@ const ExpertAssessmentWidget = ({
     contributorCountry,
     districtEdits,
     userData,
-    params?.admin0_code,
-    params?.admin1_code,
-    params?.admin_level,
-    params?.alert_filter,
-    params?.placename,
-    params?.reporting_unit,
-    params?.scope,
-    params?.unit_id,
-    forecastData?.alert_summary,
-    forecastData?.country_breakdown,
     contributorName,
     expertType,
     overallRisk,
     affectedAreas,
     recommendations,
-    districtSummary,
     loadSingleReport,
   ]);
 
@@ -477,15 +424,6 @@ const ExpertAssessmentWidget = ({
     window.addEventListener("flood-report-load-request", handleLoadRequest);
     return () => window.removeEventListener("flood-report-load-request", handleLoadRequest);
   }, [loadSingleReport]);
-
-  useEffect(() => {
-    const handleTimeseriesSnapshot = (event) => {
-      timeseriesSnapshotRef.current = event?.detail || null;
-    };
-
-    window.addEventListener("flood-report-timeseries-snapshot", handleTimeseriesSnapshot);
-    return () => window.removeEventListener("flood-report-timeseries-snapshot", handleTimeseriesSnapshot);
-  }, []);
 
   useEffect(() => {
     if (!mapRef.current) {
@@ -912,8 +850,6 @@ const ExpertAssessmentWidget = ({
 };
 
 ExpertAssessmentWidget.propTypes = {
-  params: PropTypes.object,
-  forecastData: PropTypes.object,
   forecastDate: PropTypes.string,
   selectedCountry: PropTypes.string,
   loggedIn: PropTypes.bool,

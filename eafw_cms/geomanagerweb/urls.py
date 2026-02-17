@@ -29,6 +29,7 @@ from geomanagerweb.api import (
     RiverBasinsView,
     ForecastMajorityRiskView,
     CountryAssessmentPublishView,
+    country_inundation_view,
 )
 
 ADMIN_URL_PATH = getattr(settings, "ADMIN_URL_PATH", None)
@@ -75,6 +76,9 @@ urlpatterns = [
     path("api/regional-summary/generate", RegionalSummaryView.as_view(), name="regional_summary_generate_noslash"),
     path("api/river-basins/", RiverBasinsView.as_view(), name="river_basins"),
     path("api/river-basins", RiverBasinsView.as_view(), name="river_basins_noslash"),
+    # Country inundation endpoint used by the country detail widget
+    path("api/country-inundation/", country_inundation_view, name="country_inundation"),
+    path("api/country-inundation", country_inundation_view, name="country_inundation_noslash"),
     # Custom mapviewer config (includes datasets and layers)
     path("mapviewer-config", get_mapviewer_config, name="mapview_config_alias"),
     path("api/mapviewer-config", get_mapviewer_config, name="mapview_config"),

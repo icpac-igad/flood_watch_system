@@ -143,6 +143,7 @@ services:
       - ${CMS_LOG_FILE:-./logs/cms-web.log}:/opt/eafw_cms/cms-web.log:z
       - ./eafw_cms/home/templates:/opt/eafw_cms/home/templates:z
       - ./eafw_docker/cms/seed:/opt/eafw_cms/seed:z
+      - ${MS_MAPFILES_VOLUME:-./data/mapfiles}/data:/opt/rasterdata:ro,z
 
   eafw_mapviewer:
     platform: linux/x86_64

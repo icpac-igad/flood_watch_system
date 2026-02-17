@@ -17,5 +17,5 @@ async def get_mapviewer_config(request: Request):
     return await proxy_cms_json(
         path="/mapviewer-config",
         query_items=request.query_params.multi_items(),
+        source_request=request,
     )
-

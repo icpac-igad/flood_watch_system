@@ -1,49 +1,106 @@
-{% load wagtailimages_tags cms_tags %}
+{% load wagtailimages_tags cms_tags i18n %}
 
-{% if footer %}
-{% if footer.partners or footer.member_countries %}
+{% with member_countries=homepage_member_countries partners=homepage_partners %}
+{% if member_countries or partners %}
 <section class="home-module home-module--partners">
     <div class="partners-section">
-        <div class="partners-container">
-            {% if footer and footer.member_countries %}
-            <div class="members-group">
-                <span class="partners-label">Member Countries</span>
-                <div class="member-flags">
-                    {% for block in footer.member_countries|sort_member_countries %}
-                    {% with block.value as item %}
-                    <div class="member-flag" data-country-code="{{ item.country|upper }}" title="{{ item.country }}">
-                        <img src="https://flagcdn.com/w40/{{ item.country|lower }}.png" alt="{{ item.country }}">
+        <div class="home-module__container partners-shell">
+            <div class="partners-intro">
+                <p class="partners-eyebrow">{% trans "Regional Collaboration" %}</p>
+                <h2 class="partners-title">{% trans "Member States and Partners" %}</h2>
+                <p class="partners-copy">
+                    {% trans "Flood Watch is supported by IGAD member states and partner institutions working together on impact-based flood early warning." %}
+                </p>
+            </div>
+
+            <div class="partners-container">
+            {% if member_countries %}
+            <div class="members-group" data-strip-group="members">
+                <span
+                    class="partners-label"
+                    data-default-label="{% trans 'Member States' %}"
+                >{% trans "Member States" %}</span>
+                <div class="strip-viewport">
+                    <div class="member-flags strip-track marquee-enabled">
+                        {% for block in member_countries|sort_member_countries %}
+                        {% with block.value as item %}
+                        {% with item.country|country_name as country_label %}
+                        <div
+                            class="member-flag module-reveal-item"
+                            data-country-code="{{ item.country|upper }}"
+                            title="{{ country_label }}"
+                        >
+                            <img
+                                src="https://flagcdn.com/w80/{{ item.country|lower }}.png"
+                                alt="{{ country_label }}"
+                                loading="lazy"
+                                decoding="async"
+                            >
+                            <span class="member-flag-name">{{ country_label }}</span>
+                        </div>
+                        {% endwith %}
+                        {% endwith %}
+                        {% endfor %}
                     </div>
-                    {% endwith %}
-                    {% endfor %}
                 </div>
             </div>
             {% endif %}
 
-            {% if footer and footer.partners %}
-            <div class="partners-group">
-                <span class="partners-label">Partners</span>
-                <div class="partners-logos">
-                    {% for block in footer.partners %}
-                    {% with block.value as partner %}
-                    {% if partner.image %}
-                    <a
-                        href="{{ partner.url|default:'#' }}"
-                        class="partner-item"
-                        data-partner-name="{{ partner.name|default:''|escape }}"
-                        {% if partner.url %}target="_blank" rel="noopener"{% endif %}
-                    >
-                        {% image partner.image height-45 as partner_logo %}
-                        <img src="{{ partner_logo.url }}" alt="{{ partner.name }}" class="partner-logo" title="{{ partner.name }}">
-                    </a>
-                    {% endif %}
-                    {% endwith %}
-                    {% endfor %}
+            {% if partners %}
+            <div class="partners-group" data-strip-group="partners">
+                <span
+                    class="partners-label"
+                    data-default-label="{% trans 'Partners' %}"
+                >{% trans "Partners" %}</span>
+                <div class="strip-viewport">
+                    <div class="partners-logos strip-track marquee-enabled">
+                        {% for block in partners %}
+                        {% with block.value as partner %}
+                        {% if partner.image %}
+                        {% image partner.image height-56 as partner_logo %}
+                        {% if partner.url %}
+                        <a
+                            href="{{ partner.url }}"
+                            class="partner-item module-reveal-item"
+                            data-partner-name="{{ partner.name|default:''|escape }}"
+                            target="_blank"
+                            rel="noopener"
+                            aria-label="{{ partner.name|default:'Partner' }}"
+                        >
+                            <img
+                                src="{{ partner_logo.url }}"
+                                alt="{{ partner.name|default:'Partner' }}"
+                                class="partner-logo"
+                                title="{{ partner.name }}"
+                                loading="lazy"
+                                decoding="async"
+                            >
+                        </a>
+                        {% else %}
+                        <div
+                            class="partner-item partner-item--static module-reveal-item"
+                            data-partner-name="{{ partner.name|default:''|escape }}"
+                        >
+                            <img
+                                src="{{ partner_logo.url }}"
+                                alt="{{ partner.name|default:'Partner' }}"
+                                class="partner-logo"
+                                title="{{ partner.name }}"
+                                loading="lazy"
+                                decoding="async"
+                            >
+                        </div>
+                        {% endif %}
+                        {% endif %}
+                        {% endwith %}
+                        {% endfor %}
+                    </div>
                 </div>
             </div>
             {% endif %}
         </div>
+        </div>
     </div>
 </section>
 {% endif %}
-{% endif %}
+{% endwith %}

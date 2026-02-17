@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 import httpx
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from eafw_api.config import get_settings
 
@@ -39,17 +39,41 @@ def _candidate_api_bases() -> list[str]:
     return deduped
 
 
-def _proxy_headers() -> dict[str, str]:
+def _proxy_headers(source_request: Request | None = None) -> dict[str, str]:
     headers = {"accept": "application/json"}
-    host_header = (settings.cms_proxy_host_header or "").strip()
+    request_host = ""
+    if source_request:
+        request_host = (source_request.headers.get("host") or "").strip()
+
+    host_header = request_host or (settings.cms_proxy_host_header or "").strip()
     if host_header:
         headers["host"] = host_header
+        headers["x-forwarded-host"] = host_header
+
+    if source_request:
+        forwarded_proto = (
+            source_request.headers.get("x-forwarded-proto")
+            or source_request.url.scheme
+            or ""
+        ).strip()
+        if forwarded_proto:
+            headers["x-forwarded-proto"] = forwarded_proto
+
+        forwarded_port = (source_request.headers.get("x-forwarded-port") or "").strip()
+        if forwarded_port:
+            headers["x-forwarded-port"] = forwarded_port
+
+        forwarded_for = (source_request.headers.get("x-forwarded-for") or "").strip()
+        if forwarded_for:
+            headers["x-forwarded-for"] = forwarded_for
+
     return headers
 
 
 async def proxy_cms_json(
     path: str,
     query_items: Iterable[tuple[str, str]] | None = None,
+    source_request: Request | None = None,
 ) -> Any:
     """
     Fetch JSON from the upstream Django CMS API.
@@ -68,7 +92,7 @@ async def proxy_cms_json(
                 response = await client.get(
                     upstream_url,
                     params=params,
-                    headers=_proxy_headers(),
+                    headers=_proxy_headers(source_request),
                 )
             except httpx.HTTPError as exc:
                 last_error = f"{type(exc).__name__}: {exc}"

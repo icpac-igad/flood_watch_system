@@ -47,17 +47,54 @@ def _is_multimodal_provider_dataset(dataset_name):
     )
 
 
+def _build_request_base_url(request):
+    if not request:
+        return None
+
+    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
+    host = forwarded_host or request.get_host()
+    if not host:
+        return None
+
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
+    scheme = forwarded_proto or request.scheme or "http"
+
+    forwarded_port = (request.headers.get("x-forwarded-port") or "").split(",")[0].strip()
+    if forwarded_port and ":" not in host:
+        is_default_http = scheme == "http" and forwarded_port == "80"
+        is_default_https = scheme == "https" and forwarded_port == "443"
+        if not (is_default_http or is_default_https):
+            host = f"{host}:{forwarded_port}"
+
+    return f"{scheme}://{host}"
+
+
 def get_full_url(request, path):
     """
-    Custom get_full_url that uses CMS_BASE_URL environment variable when available.
-    Falls back to Wagtail's default behavior if CMS_BASE_URL is not set.
+    Build absolute URLs using the active request host when available.
+    Falls back to CMS_BASE_URL only when request context is missing.
     """
+    if not path:
+        return path
+
+    if str(path).startswith(("http://", "https://")):
+        return path
+
+    request_base_url = _build_request_base_url(request)
+    if request_base_url:
+        if not path.startswith('/'):
+            path = '/' + path
+        return urljoin(request_base_url, path)
+
     cms_base_url = getattr(settings, 'CMS_BASE_URL', None)
     if cms_base_url:
-        # Ensure path starts with /
-        if path and not path.startswith('/'):
+        if not path.startswith('/'):
             path = '/' + path
         return urljoin(cms_base_url, path)
+
+    if request:
+        return request.build_absolute_uri(path)
+
     return wagtail_get_full_url(request, path)
 
 

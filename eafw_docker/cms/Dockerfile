@@ -52,6 +52,9 @@ COPY ./eafw_cms/pyproject.toml ./eafw_cms/uv.lock ./eafw_cms/build-constraints.t
 # Copy the geomanager package (local dependency referenced as path = "./geomanager" in pyproject.toml)
 COPY ./eafw_cms/geomanager ./geomanager
 
+# Copy the floodreport package (local dependency referenced as path = "./floodreport" in pyproject.toml)
+COPY ./eafw_cms/floodreport ./floodreport
+
 # Install dependencies (not the project itself yet)
 RUN --mount=type=ssh \
     uv sync --frozen --no-dev --no-install-project

@@ -39,6 +39,7 @@ async def list_mapviewer_datasets(request: Request):
     return await proxy_cms_json(
         path="/datasets/",
         query_items=request.query_params.multi_items(),
+        source_request=request,
     )
 
 

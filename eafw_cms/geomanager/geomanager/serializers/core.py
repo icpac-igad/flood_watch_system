@@ -17,16 +17,24 @@ def _get_full_url(request, path: str) -> str:
     """
     Build absolute URLs for API endpoints.
 
-    Prefer CMS_BASE_URL when set (useful behind nginx/reverse proxies),
-    otherwise fall back to request.build_absolute_uri.
+    Prefer request-derived host/protocol so responses always match the
+    environment serving the request. Fall back to CMS_BASE_URL when request
+    context is unavailable.
     """
+    if not path:
+        return path
+
+    if request:
+        return request.build_absolute_uri(path)
+
     cms_base_url = getattr(settings, "CMS_BASE_URL", None)
     if cms_base_url:
+        if str(path).startswith(("http://", "https://")):
+            return path
         if path and not path.startswith("/"):
             path = "/" + path
         return urljoin(cms_base_url, path)
-    if request:
-        return request.build_absolute_uri(path)
+
     return path
 
 
