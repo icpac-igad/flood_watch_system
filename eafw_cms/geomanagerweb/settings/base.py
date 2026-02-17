@@ -39,6 +39,7 @@ if os.path.exists(os.path.join(BASE_DIR, ".env")):
 # Application definition
 INSTALLED_APPS = [
     "home",
+    "storylines",
     "geomanager",
     "daphne",
     "channels",

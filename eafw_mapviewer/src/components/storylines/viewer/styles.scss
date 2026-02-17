@@ -1,0 +1,493 @@
+@import "~maplibre-gl/dist/maplibre-gl.css";
+
+/* ═══════════════════════════════════════
+   VEDA-style Storyline Viewer
+   Full-bleed dark map + floating glass cards
+   ═══════════════════════════════════════ */
+
+.c-storyline-viewer {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  background: #111;
+}
+
+/* ── Loading / Error ── */
+.sv-loading,
+.sv-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  color: #aaa;
+  font-size: 1rem;
+  gap: 16px;
+}
+
+.sv-loading__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #4fc3f7;
+  border-radius: 50%;
+  animation: sv-spin 0.8s linear infinite;
+}
+
+@keyframes sv-spin {
+  to { transform: rotate(360deg); }
+}
+
+.sv-error {
+  color: #ef5350;
+  i { font-size: 2rem; }
+}
+
+/* ── Full-bleed Map ── */
+.sv-map {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  z-index: 1;
+}
+
+/* ── Scroll Container (overlays map) ── */
+.sv-scroll-container {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+  padding-left: 40px;
+  max-width: 520px;
+}
+
+.sv-scroll-container > * {
+  pointer-events: auto;
+}
+
+/* ── Hero Card ── */
+.sv-hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 60px 0;
+}
+
+.sv-hero__card {
+  background: rgba(10, 15, 20, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 36px 32px;
+  color: #fff;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+.sv-hero__region {
+  display: inline-block;
+  background: rgba(79, 195, 247, 0.15);
+  color: #4fc3f7;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+.sv-hero__title {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.sv-hero__period {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 16px;
+}
+
+.sv-hero__description {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.75);
+  margin-bottom: 24px;
+}
+
+.sv-hero__stats {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 20px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sv-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.sv-stat__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #4fc3f7;
+}
+
+.sv-stat__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 2px;
+}
+
+.sv-hero__countries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.sv-hero__chip {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 3px 12px;
+  border-radius: 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sv-hero__scroll-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.82rem;
+  margin-top: 8px;
+  animation: sv-bounce 2.5s ease-in-out infinite;
+
+  i { font-size: 1.2rem; }
+}
+
+@keyframes sv-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+
+/* ── Chapter Cards ── */
+.sv-chapter {
+  background: rgba(10, 15, 20, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 28px 26px;
+  margin-bottom: 65vh;
+  color: #fff;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.4s, box-shadow 0.4s;
+  border-left: 3px solid transparent;
+
+  &--active {
+    border-left-color: #4fc3f7;
+    box-shadow: 0 6px 32px rgba(79, 195, 247, 0.15);
+  }
+
+  &:last-child {
+    margin-bottom: 50vh;
+  }
+}
+
+.sv-chapter__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.sv-chapter__number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: rgba(79, 195, 247, 0.12);
+  color: #4fc3f7;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.sv-chapter__title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+  margin: 0;
+}
+
+.sv-chapter__dates {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 4px;
+}
+
+/* ── Chapter body prose ── */
+.sv-chapter__body {
+  .chapter-prose__html,
+  .chapter-prose__mdx {
+    font-size: 0.9rem;
+    line-height: 1.72;
+    color: rgba(255, 255, 255, 0.78);
+
+    p { margin-bottom: 12px; }
+    ul, ol { margin: 8px 0 12px 18px; }
+    li { margin-bottom: 4px; }
+
+    a {
+      color: #4fc3f7;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(79, 195, 247, 0.3);
+      transition: border-color 0.2s;
+      &:hover { border-bottom-color: #4fc3f7; }
+    }
+
+    blockquote {
+      border-left: 3px solid #4fc3f7;
+      padding-left: 16px;
+      margin: 14px 0;
+      color: rgba(255, 255, 255, 0.6);
+      font-style: italic;
+    }
+
+    strong { color: rgba(255, 255, 255, 0.92); }
+  }
+}
+
+/* ── Media ── */
+.sv-chapter__media {
+  margin-top: 16px;
+}
+
+.sv-chapter__img {
+  width: 100%;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.sv-chapter__embed {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: #000;
+}
+
+.sv-chapter__media figcaption {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ── References (collapsible) ── */
+.sv-chapter__refs {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+
+  summary {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+
+    &:hover { color: rgba(255, 255, 255, 0.7); }
+    &::marker { color: #4fc3f7; }
+  }
+
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+  }
+
+  li { margin-bottom: 6px; }
+
+  a {
+    font-size: 0.78rem;
+    color: #4fc3f7;
+    text-decoration: none;
+    word-break: break-all;
+    opacity: 0.8;
+
+    &:hover {
+      text-decoration: underline;
+      opacity: 1;
+    }
+  }
+}
+
+/* ── End Card ── */
+.sv-end {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+.sv-end__card {
+  background: rgba(10, 15, 20, 0.88);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 40px 32px;
+  text-align: center;
+  color: #fff;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+
+  i {
+    font-size: 2rem;
+    color: #4fc3f7;
+    margin-bottom: 16px;
+  }
+
+  h3 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  p {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 20px;
+  }
+}
+
+.sv-end__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #4fc3f7;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 8px 20px;
+  border: 1px solid rgba(79, 195, 247, 0.3);
+  border-radius: 8px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(79, 195, 247, 0.1);
+    border-color: #4fc3f7;
+  }
+}
+
+/* ── Progress Dots ── */
+.sv-progress {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+.sv-progress__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.3s;
+
+  &:hover {
+    background: rgba(79, 195, 247, 0.3);
+    border-color: rgba(79, 195, 247, 0.5);
+  }
+
+  &--active {
+    background: #4fc3f7;
+    border-color: #4fc3f7;
+    transform: scale(1.4);
+    box-shadow: 0 0 8px rgba(79, 195, 247, 0.5);
+  }
+
+  &--done {
+    background: rgba(79, 195, 247, 0.5);
+    border-color: rgba(79, 195, 247, 0.6);
+  }
+}
+
+/* ── Chapter Counter ── */
+.sv-counter {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10;
+  background: rgba(10, 15, 20, 0.8);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.6);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .sv-scroll-container {
+    padding: 0 16px;
+    max-width: 100%;
+  }
+
+  .sv-hero__card {
+    padding: 28px 22px;
+  }
+
+  .sv-hero__title {
+    font-size: 1.5rem;
+  }
+
+  .sv-hero__stats {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .sv-stat__value {
+    font-size: 1.2rem;
+  }
+
+  .sv-chapter {
+    padding: 22px 18px;
+    margin-bottom: 50vh;
+  }
+
+  .sv-progress {
+    display: none;
+  }
+
+  .sv-counter {
+    bottom: 12px;
+    right: 12px;
+  }
+}
