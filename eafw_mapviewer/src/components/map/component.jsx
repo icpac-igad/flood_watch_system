@@ -326,6 +326,10 @@ class MapComponent extends Component {
   }
 
   componentWillUnmount() {
+    if (this.map) {
+      this.map.off("styledata", this.onStyleLoad);
+      this.map.off("styleimagemissing", this.handleStyleImageMissing);
+    }
     if (this.state.compareMap) {
       this.state.compareMap.remove();
     }
@@ -444,8 +448,9 @@ class MapComponent extends Component {
     if (this.map) {
       this.fitMapBoundaryBounds();
 
-      // Listeners
-      this.map.once("styledata", this.onStyleLoad);
+      // Listeners — use `on` (not `once`) so applyBaseMap re-runs
+      // whenever the style URL changes (e.g. after ConfigProvider sets mapStyle).
+      this.map.on("styledata", this.onStyleLoad);
 
       // Handle missing images on-demand
       this.map.on("styleimagemissing", this.handleStyleImageMissing);

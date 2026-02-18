@@ -128,4 +128,25 @@ def style_json_gl(request, source_slug):
     existing_sources["openmaptiles"] = openmaptiles_source
     style_config["sources"] = existing_sources
 
+    # Enforce correct default visibility for basemap layers.
+    # The default basemap is "basemap-light"; all other basemap groups
+    # (e.g. satellite, OSM, Google, ESRI) must start hidden so the map
+    # doesn't flash multiple basemaps before the frontend applies its selection.
+    DEFAULT_BASEMAP_GROUP_KEY = "basemap_light"
+    mapbox_groups = (style_config.get("metadata") or {}).get("mapbox:groups") or {}
+    basemap_group_keys = {
+        k for k, v in mapbox_groups.items()
+        if isinstance(v, dict) and "basemap" in (v.get("name") or "").lower()
+    }
+
+    if basemap_group_keys:
+        for layer in style_config.get("layers") or []:
+            layer_group = (layer.get("metadata") or {}).get("mapbox:group")
+            if layer_group in basemap_group_keys:
+                layout = layer.setdefault("layout", {})
+                if layer_group == DEFAULT_BASEMAP_GROUP_KEY:
+                    layout["visibility"] = "visible"
+                else:
+                    layout["visibility"] = "none"
+
     return JsonResponse(style_config)

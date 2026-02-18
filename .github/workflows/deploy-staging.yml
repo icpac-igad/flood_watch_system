@@ -446,27 +446,58 @@ jobs:
               echo "FIRST DEPLOY: created .env from template"
             fi
 
+            # Upsert .env keys robustly (handles missing keys and leading spaces)
+            upsert_env() {
+              key="$1"
+              value="$2"
+              awk -v key="$key" -v value="$value" '
+                BEGIN { done=0 }
+                {
+                  if ($0 ~ "^[[:space:]]*" key "=") {
+                    if (!done) {
+                      print key "=" value
+                      done=1
+                    }
+                    next
+                  }
+                  print
+                }
+                END {
+                  if (!done) print key "=" value
+                }
+              ' .env > .env.tmp && mv .env.tmp .env
+            }
+
+            # Canonical staging values to prevent drift on existing servers
+            upsert_env "CMS_DB_USER" "eafw_user"
+            upsert_env "CMS_DB_NAME" "eafw_db"
+            upsert_env "NGINX_HOST_BIND" "0.0.0.0"
+            upsert_env "NGINX_HOST_PORT" "9068"
+            upsert_env "ALLOWED_HOSTS" "41.139.151.242,floodwatch.icpac.net,10.10.1.13,0.0.0.0,127.0.0.1,localhost"
+            upsert_env "CSRF_TRUSTED_ORIGINS" "http://41.139.151.242,http://41.139.151.242:9068,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net"
+            upsert_env "CORS_ALLOWED_ORIGINS" "http://41.139.151.242,http://41.139.151.242:9068,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net"
+
             # Inject ALL secrets from GitHub Environment into .env
-            sed -i "s|^CMS_DB_PASSWORD=.*|CMS_DB_PASSWORD=${DB_PASSWORD}|" .env
-            sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${DJANGO_SECRET_KEY}|" .env
-            sed -i "s|^SFTP_HOST=.*|SFTP_HOST=${SFTP_HOST}|" .env
-            sed -i "s|^SFTP_USERNAME=.*|SFTP_USERNAME=${SFTP_USERNAME}|" .env
-            sed -i "s|^SFTP_PASSWORD=.*|SFTP_PASSWORD=${SFTP_PASSWORD}|" .env
-            sed -i "s|^FLOODPROOFS_SFTP_HOST=.*|FLOODPROOFS_SFTP_HOST=${FLOODPROOFS_SFTP_HOST}|" .env
-            sed -i "s|^FLOODPROOFS_SFTP_USER=.*|FLOODPROOFS_SFTP_USER=${FLOODPROOFS_SFTP_USER}|" .env
-            sed -i "s|^FLOODPROOFS_SFTP_PASSWORD=.*|FLOODPROOFS_SFTP_PASSWORD=${FLOODPROOFS_SFTP_PASSWORD}|" .env
-            sed -i "s|^ENSEMBLE_FTP_HOST=.*|ENSEMBLE_FTP_HOST=${ENSEMBLE_FTP_HOST}|" .env
-            sed -i "s|^ENSEMBLE_FTP_USER=.*|ENSEMBLE_FTP_USER=${ENSEMBLE_FTP_USER}|" .env
-            sed -i "s|^ENSEMBLE_FTP_PASSWORD=.*|ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}|" .env
-            sed -i "s|^WRF_FTP_HOST=.*|WRF_FTP_HOST=${WRF_FTP_HOST}|" .env
-            sed -i "s|^WRF_FTP_USER=.*|WRF_FTP_USER=${WRF_FTP_USER}|" .env
-            sed -i "s|^WRF_FTP_PASSWORD=.*|WRF_FTP_PASSWORD=${WRF_FTP_PASSWORD}|" .env
-            sed -i "s|^FLOODS_API_KEY=.*|FLOODS_API_KEY=${FLOODS_API_KEY}|" .env
-            sed -i "s|^SMTP_EMAIL_HOST=.*|SMTP_EMAIL_HOST=${SMTP_EMAIL_HOST}|" .env
-            sed -i "s|^SMTP_EMAIL_HOST_USER=.*|SMTP_EMAIL_HOST_USER=${SMTP_EMAIL_HOST_USER}|" .env
-            sed -i "s|^SMTP_EMAIL_HOST_PASSWORD=.*|SMTP_EMAIL_HOST_PASSWORD=${SMTP_EMAIL_HOST_PASSWORD}|" .env
+            upsert_env "CMS_DB_PASSWORD" "${DB_PASSWORD}"
+            upsert_env "SECRET_KEY" "${DJANGO_SECRET_KEY}"
+            upsert_env "SFTP_HOST" "${SFTP_HOST}"
+            upsert_env "SFTP_USERNAME" "${SFTP_USERNAME}"
+            upsert_env "SFTP_PASSWORD" "${SFTP_PASSWORD}"
+            upsert_env "FLOODPROOFS_SFTP_HOST" "${FLOODPROOFS_SFTP_HOST}"
+            upsert_env "FLOODPROOFS_SFTP_USER" "${FLOODPROOFS_SFTP_USER}"
+            upsert_env "FLOODPROOFS_SFTP_PASSWORD" "${FLOODPROOFS_SFTP_PASSWORD}"
+            upsert_env "ENSEMBLE_FTP_HOST" "${ENSEMBLE_FTP_HOST}"
+            upsert_env "ENSEMBLE_FTP_USER" "${ENSEMBLE_FTP_USER}"
+            upsert_env "ENSEMBLE_FTP_PASSWORD" "${ENSEMBLE_FTP_PASSWORD}"
+            upsert_env "WRF_FTP_HOST" "${WRF_FTP_HOST}"
+            upsert_env "WRF_FTP_USER" "${WRF_FTP_USER}"
+            upsert_env "WRF_FTP_PASSWORD" "${WRF_FTP_PASSWORD}"
+            upsert_env "FLOODS_API_KEY" "${FLOODS_API_KEY}"
+            upsert_env "SMTP_EMAIL_HOST" "${SMTP_EMAIL_HOST}"
+            upsert_env "SMTP_EMAIL_HOST_USER" "${SMTP_EMAIL_HOST_USER}"
+            upsert_env "SMTP_EMAIL_HOST_PASSWORD" "${SMTP_EMAIL_HOST_PASSWORD}"
             # Force DEBUG off on staging
-            sed -i "s|^CMS_DEBUG=.*|CMS_DEBUG=False|" .env
+            upsert_env "CMS_DEBUG" "False"
 
             # Compare checksums to detect secret changes
             ENV_CHECKSUM_AFTER=$(sha256sum .env | cut -d' ' -f1)
@@ -479,6 +510,15 @@ jobs:
             else
               SECRETS_CHANGED=true
               echo "FIRST DEPLOY: all secrets are new"
+            fi
+
+            # Ensure mapfiles exist before mapserver starts (volume mount can be empty on first deploy)
+            if ! bash scripts/manage_map_services.sh \
+              --compose-file docker-compose.staging.yml \
+              --env-file .env \
+              --sync-mapfiles; then
+              echo "FATAL: mapfiles bootstrap failed"
+              exit 1
             fi
 
             # ─── DATABASE BACKUP WITH CHECKSUM VERIFICATION ──────
@@ -618,7 +658,7 @@ jobs:
             echo "Waiting 30s for services to stabilize..."
             sleep 30
             FAILED=0
-            for svc in eafw-pgdb eafw-pgbouncer eafw-cms eafw-api eafw-mapviewer eafw-nginx; do
+            for svc in eafw-pgdb eafw-pgbouncer eafw-cms eafw-api eafw-mapviewer eafw-nginx eafw-mapserver eafw-mapcache eafw-tileserv; do
               STATUS=$(docker inspect --format='{{.State.Status}}' $svc 2>/dev/null)
               if [ "$STATUS" != "running" ]; then
                 echo "WARN: $svc is $STATUS"
@@ -626,6 +666,16 @@ jobs:
                 FAILED=1
               fi
             done
+
+            # Endpoint smoke tests for mapserver/mapcache through nginx
+            if ! bash scripts/manage_map_services.sh \
+              --compose-file docker-compose.staging.yml \
+              --env-file .env \
+              --base-url http://127.0.0.1:9068 \
+              --smoke-test; then
+              echo "WARN: map service smoke tests failed"
+              FAILED=1
+            fi
 
             echo ""
             echo "========================================="

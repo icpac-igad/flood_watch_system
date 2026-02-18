@@ -11,16 +11,16 @@ body.homepage {
   --home-shadow: 0 8px 24px rgba(8, 30, 52, 0.08);
   --home-text-strong: #213244;
   --home-text-muted: #5b6b7c;
-  --home-gap: clamp(12px, 2.2vw, 24px);
-  --home-container-max: 1320px;
+  --home-gap: clamp(16px, 2.5vw, 32px);
+  --home-container-max: 1440px;
   --home-inline: clamp(12px, 2.2vw, 24px);
   --home-navbar-offset: 60px;
-  --home-map-min-height: clamp(390px, 53vh, 600px);
+  --home-map-min-height: clamp(450px, 62vh, 740px);
   --home-panel-offset-height: 44px;
   --home-mobile-panel-height: 320px;
   --home-partners-row-min-height: 72px;
-  --home-partner-logo-height: 56px;
-  --home-member-flag-height: 34px;
+  --home-partner-logo-height: 44px;
+  --home-member-flag-height: 28px;
   background: linear-gradient(180deg, #f4f8fc 0%, var(--home-page-bg) 100%);
   min-height: 100vh;
   overflow-x: hidden;
@@ -60,9 +60,9 @@ body.homepage .footer-professional {
 /* Hero */
 .hero-banner {
   position: relative;
-  min-height: 230px;
-  height: clamp(250px, 32vh, 390px);
-  max-height: 410px;
+  min-height: 300px;
+  height: clamp(340px, 50vh, 550px);
+  max-height: 580px;
   overflow: hidden;
   color: #fff;
 }
@@ -155,11 +155,11 @@ body.homepage .footer-professional {
   width: 100%;
   max-width: none;
   margin: 0;
-  border: 1px solid color-mix(in srgb, var(--home-border) 80%, #fff);
+  border: none;
   border-top: 0;
   border-radius: 0;
-  background: color-mix(in srgb, #f8fbff 88%, #fff);
-  box-shadow: 0 6px 22px rgba(7, 27, 46, 0.08);
+  background: transparent;
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -984,7 +984,7 @@ body.homepage .footer-professional {
 
 /* Partners strip */
 .partners-section {
-  padding: 18px 0 30px;
+  padding: 10px 0 18px;
   opacity: 1;
   transform: translateY(0);
 }
@@ -1003,14 +1003,14 @@ body.homepage.homepage-js-ready .partners-section.is-visible {
 .partners-container {
   width: min(var(--home-container-max), calc(100% - 2 * var(--home-inline)));
   margin: 0 auto;
-  padding: 18px 20px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   background: var(--home-surface);
-  border: 1px solid var(--home-border);
+  border: none;
   border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(8, 30, 52, 0.08);
+  box-shadow: none;
 }
 
 .partners-group,
@@ -1018,9 +1018,9 @@ body.homepage.homepage-js-ready .partners-section.is-visible {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: 8px;
   min-height: auto;
-  padding: 12px 14px;
+  padding: 8px 12px;
   border: 1px solid #dbe6f0;
   border-radius: 10px;
   background: #f7fbff;
@@ -1028,7 +1028,7 @@ body.homepage.homepage-js-ready .partners-section.is-visible {
 }
 
 .partners-group {
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 .partners-label {
@@ -1245,8 +1245,8 @@ body.homepage.homepage-tight .member-flag img {
   }
 
   .hero-banner {
-    height: clamp(200px, 33vh, 300px);
-    min-height: 190px;
+    height: clamp(260px, 42vh, 400px);
+    min-height: 240px;
   }
 
   .risk-ticker-container {

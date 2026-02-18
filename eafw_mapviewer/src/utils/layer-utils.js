@@ -128,12 +128,19 @@ const sanitizeTemplateParams = (url) => {
       if (!rawKey) return false;
       if (!valueParts.length) return true;
 
+      const decodedKey = decodeUrlComponentSafe(rawKey).trim().toLowerCase();
       const rawValue = valueParts.join('=');
-      const decodedValue = decodeUrlComponentSafe(rawValue).trim().toLowerCase();
+      const decodedValue = decodeUrlComponentSafe(rawValue).trim();
+      const normalizedValue = decodedValue.toLowerCase();
+
+      // Empty time params (time=) trigger 400s from mapcache for time-dimension layers.
+      if ((decodedKey === 'time' || decodedKey === 'dim_time') && decodedValue === '') {
+        return false;
+      }
 
       // Remove unresolved placeholders like date={{time}} that can break SQL casts,
       // but preserve map tile placeholders needed by maplibre/mapcache.
-      if (isTemplateToken(decodedValue) && !SAFE_TILE_TEMPLATE_VALUES.has(decodedValue)) {
+      if (isTemplateToken(normalizedValue) && !SAFE_TILE_TEMPLATE_VALUES.has(normalizedValue)) {
         return false;
       }
 
@@ -470,6 +477,22 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
   return filteredLayers.map(layer => {
     let tiles = layer.layerConfig?.source?.tiles?.[0] || '';
     const newLayer = { ...layer };
+
+    if (tiles) {
+      const sanitizedTiles = sanitizeTemplateParams(tiles);
+      if (sanitizedTiles !== tiles) {
+        tiles = sanitizedTiles;
+        if (newLayer.layerConfig?.source) {
+          newLayer.layerConfig = {
+            ...newLayer.layerConfig,
+            source: {
+              ...newLayer.layerConfig.source,
+              tiles: [sanitizedTiles],
+            },
+          };
+        }
+      }
+    }
 
     // Resolve URL templates for GeoJSON string sources
     const sourceData = newLayer.layerConfig?.source?.data;

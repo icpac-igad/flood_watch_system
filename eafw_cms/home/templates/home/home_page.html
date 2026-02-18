@@ -52,13 +52,27 @@
     let pointLayerEventsBound = false;
     let adminLayerEventsBound = false;
     let admin0FeaturesCache = null;
+    let admin1FeaturesCache = null;
+    let wrfExtremeRainfallDateCache = null;
     let scopeBoundsByScope = { all: null, whca: null };
+    let miniMapDefaultLegendTitle = '';
+    let miniMapDefaultLegendItemsHtml = '';
 
     const ADMIN0_SOURCE_ID = 'admin0-boundary-source';
     const ADMIN0_FILL_LAYER_ID = 'admin0-boundary-fill';
     const ADMIN0_LINE_LAYER_ID = 'admin0-boundary-line';
+    const IMPACT_ADMIN1_SOURCE_ID = 'impact-admin1-source';
+    const IMPACT_ADMIN1_LAYER_ID = 'impact-admin1-fill-layer';
+    const EXTREME_RAINFALL_SOURCE_ID = 'extreme-rainfall-raster-source';
+    const EXTREME_RAINFALL_LAYER_ID = 'extreme-rainfall-raster-layer';
     const FOCUS_MASK_SOURCE_ID = 'focus-mask-source';
     const FOCUS_MASK_LAYER_ID = 'focus-mask-layer';
+    const DEFAULT_EXTREME_RAINFALL_PERCENTILE = 'f95';
+    const EXTREME_RAINFALL_WMS_LAYER_BY_PERCENTILE = Object.freeze({
+        f90: 'wrf_extreme_heavy',
+        f95: 'wrf_extreme_very_heavy',
+        f99: 'wrf_extreme_extremely_heavy'
+    });
     const WHCA_ADMIN0_CODES = new Set(['ETH', 'RWA', 'SSD', 'SDN', 'UGA']);
     const WHCA_MEMBER_CODES = new Set(['SD', 'SS', 'UG', 'ET', 'RW']);
     const WHCA_ALLOWED_PARTNER_KEYS = new Set([
@@ -160,13 +174,16 @@
             '/api/v1/multimodal/geojson',
             '/api/v1/multimodal/geojson/'
         ],
-        extremeRainfallGeojson: [
-            '/api/v1/models/geosfm/geojson',
-            '/api/v1/models/geosfm/geojson/'
-        ],
-        impactGeojson: [
-            '/api/v1/multimodal/geojson',
-            '/api/v1/multimodal/geojson/'
+        // Match mapserver layer names used by mapviewer for Extreme Rainfall.
+        extremeRainfallWmsBaseUrl: (
+            '/mapserver/?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap'
+            + '&FORMAT=image/png&TRANSPARENT=true'
+            + '&LAYERS={layer}&STYLES='
+            + '&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}'
+        ),
+        wrfExtremeRainfallDates: [
+            '/api/v1/wrf/extreme-rainfall/dates',
+            '/api/v1/wrf/extreme-rainfall/dates/'
         ],
         countrySummary: [
             '/api/v1/multimodal/country-summary-with-bounds/',
@@ -179,12 +196,21 @@
         admin0: [
             '/api/v1/boundaries/admin0',
             '/api/v1/boundaries/admin0/'
+        ],
+        admin1: [
+            '/api/v1/boundaries/admin1',
+            '/api/v1/boundaries/admin1/'
+        ],
+        riskMajority: [
+            '/api/v1/risk/risk-majority',
+            '/api/v1/risk/risk-majority/'
         ]
     };
     const miniMapLayerConfig = Object.freeze({
         multimodal: {
             key: 'multimodal',
             label: 'Multimodal',
+            renderMode: 'points',
             geojsonUrls: apiEndpoints.multimodalGeojson,
             available: true,
             valueLabel: 'Discharge',
@@ -194,7 +220,9 @@
         'extreme-rainfall': {
             key: 'extreme-rainfall',
             label: 'Extreme Rainfall',
-            geojsonUrls: apiEndpoints.extremeRainfallGeojson,
+            renderMode: 'wms-raster',
+            wmsBaseUrl: apiEndpoints.extremeRainfallWmsBaseUrl,
+            wmsPercentile: DEFAULT_EXTREME_RAINFALL_PERCENTILE,
             available: true,
             validationMessage: EXTREME_WRF_VALIDATION_MESSAGE,
             valueLabel: 'Rainfall Risk',
@@ -204,11 +232,10 @@
         impact: {
             key: 'impact',
             label: 'Impact',
-            geojsonUrls: apiEndpoints.impactGeojson,
+            renderMode: 'impact-score',
             available: true,
             validationMessage: IMPACT_VALIDATION_MESSAGE,
-            valueLabel: 'Impact Score',
-            valueField: 'floodproof',
+            valueLabel: 'Risk Score',
             valueUnit: ''
         }
     });
@@ -507,6 +534,127 @@
         return miniMapLayerConfig[normalizedKey] || miniMapLayerConfig.multimodal;
     }
 
+    function getMiniMapLegendElements() {
+        const legend = document.querySelector('.c-legend');
+        if (!legend) return null;
+        const titleEl = legend.querySelector('.c-legend-title');
+        const listEl = legend.querySelector('.c-legend-basic');
+        if (!titleEl || !listEl) return null;
+        return { titleEl, listEl };
+    }
+
+    function ensureMiniMapLegendDefaultsCaptured() {
+        if (miniMapDefaultLegendItemsHtml) return;
+        const elements = getMiniMapLegendElements();
+        if (!elements) return;
+        miniMapDefaultLegendTitle = (elements.titleEl.textContent || '').trim() || 'Current Flood Alerts';
+        sanitizeLegendLabels(elements.listEl);
+        miniMapDefaultLegendItemsHtml = elements.listEl.innerHTML || '';
+    }
+
+    function buildMiniMapLegendItem(label, color) {
+        const itemEl = document.createElement('li');
+        itemEl.className = 'c-legend-item';
+
+        const iconEl = document.createElement('div');
+        iconEl.className = 'c-legend-item-icon';
+        if (color) iconEl.style.backgroundColor = color;
+
+        const labelEl = document.createElement('span');
+        labelEl.className = 'c-legend-item-label';
+        labelEl.textContent = stripLegendThresholdText(label);
+
+        itemEl.appendChild(iconEl);
+        itemEl.appendChild(labelEl);
+        return itemEl;
+    }
+
+    function stripLegendThresholdText(label) {
+        const rawLabel = String(label || '').trim();
+        if (!rawLabel) return rawLabel;
+
+        let cleaned = rawLabel
+            .replace(/\s*\([^)]*\)\s*/g, ' ')
+            .replace(/\s*[-:]\s*.*\d.*$/g, '')
+            .replace(/\s+\d.*$/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        if (!cleaned) cleaned = rawLabel;
+        return cleaned;
+    }
+
+    function sanitizeLegendLabels(listEl) {
+        if (!listEl) return;
+        listEl.querySelectorAll('.c-legend-item-label').forEach((labelEl) => {
+            const cleaned = stripLegendThresholdText(labelEl.textContent);
+            if (cleaned) labelEl.textContent = cleaned;
+        });
+    }
+
+    function getMiniMapLegendDefinition(layerConfig) {
+        const layerKey = normalizeLayerKey(layerConfig?.key);
+
+        if (layerKey === 'extreme-rainfall') {
+            const percentile = String(layerConfig?.wmsPercentile || DEFAULT_EXTREME_RAINFALL_PERCENTILE).toLowerCase();
+            if (percentile === 'f90') {
+                return {
+                    title: 'Extreme Rainfall',
+                    items: [{ label: 'Heavy Rainfall', color: '#afeeee' }]
+                };
+            }
+            if (percentile === 'f99') {
+                return {
+                    title: 'Extreme Rainfall',
+                    items: [{ label: 'Extremely Heavy Rainfall', color: '#06008b' }]
+                };
+            }
+            return {
+                title: 'Extreme Rainfall',
+                items: [{ label: 'Very Heavy Rainfall', color: '#1774cd' }]
+            };
+        }
+
+        if (layerKey === 'impact') {
+            return {
+                title: 'Impact Risk Score',
+                items: [
+                    { label: 'Emergency', color: alertColors.emergency },
+                    { label: 'Alarm', color: alertColors.alarm },
+                    { label: 'Warning', color: alertColors.warning },
+                    { label: 'Normal', color: alertColors.normal }
+                ]
+            };
+        }
+
+        return {
+            title: miniMapDefaultLegendTitle || 'Current Flood Alerts',
+            useDefaultItems: true,
+            items: []
+        };
+    }
+
+    function renderMiniMapLegend(layerConfig = null) {
+        ensureMiniMapLegendDefaultsCaptured();
+        const elements = getMiniMapLegendElements();
+        if (!elements) return;
+
+        const config = layerConfig || getMiniMapLayerConfig();
+        const definition = getMiniMapLegendDefinition(config);
+        elements.titleEl.textContent = definition.title || miniMapDefaultLegendTitle || 'Legend';
+
+        if (definition.useDefaultItems) {
+            elements.listEl.innerHTML = miniMapDefaultLegendItemsHtml;
+            sanitizeLegendLabels(elements.listEl);
+            return;
+        }
+
+        elements.listEl.innerHTML = '';
+        (definition.items || []).forEach((item) => {
+            elements.listEl.appendChild(buildMiniMapLegendItem(item.label, item.color));
+        });
+    }
+
     function resolveLayerConfigFromCategory(buttonEl) {
         if (!buttonEl) return null;
         const layerKey = normalizeLayerKey(buttonEl.getAttribute('data-layer-key'));
@@ -583,6 +731,18 @@
         if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
     }
 
+    function clearExtremeRainfallLayer() {
+        if (!miniMap || !miniMap.isStyleLoaded()) return;
+        if (miniMap.getLayer(EXTREME_RAINFALL_LAYER_ID)) miniMap.removeLayer(EXTREME_RAINFALL_LAYER_ID);
+        if (miniMap.getSource(EXTREME_RAINFALL_SOURCE_ID)) miniMap.removeSource(EXTREME_RAINFALL_SOURCE_ID);
+    }
+
+    function clearImpactAdmin1Layer() {
+        if (!miniMap || !miniMap.isStyleLoaded()) return;
+        if (miniMap.getLayer(IMPACT_ADMIN1_LAYER_ID)) miniMap.removeLayer(IMPACT_ADMIN1_LAYER_ID);
+        if (miniMap.getSource(IMPACT_ADMIN1_SOURCE_ID)) miniMap.removeSource(IMPACT_ADMIN1_SOURCE_ID);
+    }
+
     function clearMapPopups() {
         if (!miniMap) return;
         const mapContainer = miniMap.getContainer();
@@ -592,8 +752,73 @@
 
     function applyAdminOnlyLayerState() {
         clearMapPointsLayer();
+        clearExtremeRainfallLayer();
+        clearImpactAdmin1Layer();
         clearMapPopups();
+        resetAdminFillStyle();
         applyCountryFiltersToMapLayers();
+    }
+
+    function getLayerMode(layerConfig) {
+        return layerConfig?.renderMode || 'points';
+    }
+
+    function getRiskColorByScore(score) {
+        const numeric = Number(score) || 0;
+        if (numeric >= 100) return alertColors.emergency;
+        if (numeric >= 10) return alertColors.alarm;
+        if (numeric >= 1) return alertColors.warning;
+        return alertColors.normal;
+    }
+
+    function getRiskOpacityByScore(score) {
+        const numeric = Number(score) || 0;
+        if (numeric >= 100) return 0.5;
+        if (numeric >= 10) return 0.42;
+        if (numeric >= 1) return 0.32;
+        return 0.16;
+    }
+
+    function getRiskScoreFromLevel(riskLevel) {
+        const normalized = String(riskLevel || '').trim().toLowerCase();
+        if (normalized === 'emergency') return 100;
+        if (normalized === 'alarm') return 10;
+        if (normalized === 'warning') return 1;
+        return 0;
+    }
+
+    function normalizeNameToken(value) {
+        return String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+    }
+
+    function resetAdminFillStyle() {
+        if (!miniMap || !miniMap.isStyleLoaded() || !miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) return;
+        miniMap.setPaintProperty(ADMIN0_FILL_LAYER_ID, 'fill-color', '#2a6f97');
+        miniMap.setPaintProperty(ADMIN0_FILL_LAYER_ID, 'fill-opacity', 0.1);
+    }
+
+    function applyImpactScoreStylingByAdmin1(scoreMapByGid1 = {}) {
+        if (!miniMap || !miniMap.isStyleLoaded() || !miniMap.getLayer(IMPACT_ADMIN1_LAYER_ID)) return;
+
+        const fillColorExpr = ['match', ['upcase', ['coalesce', ['get', 'gid_1'], '']]];
+        const fillOpacityExpr = ['match', ['upcase', ['coalesce', ['get', 'gid_1'], '']]];
+
+        Object.entries(scoreMapByGid1).forEach(([gid1, score]) => {
+            if (!gid1) return;
+            fillColorExpr.push(gid1, getRiskColorByScore(score));
+            fillOpacityExpr.push(gid1, getRiskOpacityByScore(score));
+        });
+
+        fillColorExpr.push(alertColors.normal);
+        fillOpacityExpr.push(0.16);
+
+        miniMap.setPaintProperty(IMPACT_ADMIN1_LAYER_ID, 'fill-color', fillColorExpr);
+        miniMap.setPaintProperty(IMPACT_ADMIN1_LAYER_ID, 'fill-opacity', fillOpacityExpr);
     }
 
     function formatLayerPopupValue(properties, layerConfig) {
@@ -650,6 +875,7 @@
         if (selectedLayerConfig.available === false) {
             selectedMiniMapLayerKey = selectedLayerConfig.key;
             setActiveCategoryButton(categoryButton);
+            renderMiniMapLegend(selectedLayerConfig);
             applyAdminOnlyLayerState();
             showMapStatusToast(selectedLayerConfig.validationMessage || LAYER_VALIDATION_MESSAGE);
             return;
@@ -670,6 +896,7 @@
         if (loadResult.ok) {
             selectedMiniMapLayerKey = selectedLayerConfig.key;
             setActiveCategoryButton(categoryButton);
+            renderMiniMapLegend(selectedLayerConfig);
             hideMapStatusToast();
             return;
         }
@@ -677,6 +904,7 @@
         if (loadResult.reason === 'no_data') {
             selectedMiniMapLayerKey = selectedLayerConfig.key;
             setActiveCategoryButton(categoryButton);
+            renderMiniMapLegend(selectedLayerConfig);
             showMapStatusToast(
                 loadResult.message || `No ${selectedLayerConfig.label.toLowerCase()} data available for the current selection.`,
                 { withSpinner: false, autoHideMs: 2200 }
@@ -686,6 +914,7 @@
 
         selectedMiniMapLayerKey = previousLayerKey;
         setActiveCategoryButton(previousButton || getCategoryButtonByLayerKey(previousLayerKey));
+        renderMiniMapLegend(getMiniMapLayerConfig(previousLayerKey));
         showMapStatusToast(LAYER_VALIDATION_MESSAGE);
     }
 
@@ -704,6 +933,7 @@
         if (activeConfig) {
             selectedMiniMapLayerKey = activeConfig.key;
             setActiveCategoryButton(activeCategory);
+            renderMiniMapLegend(activeConfig);
         }
 
         menu.addEventListener('click', async (event) => {
@@ -985,6 +1215,13 @@
             );
         }
 
+        if (miniMap.getLayer(IMPACT_ADMIN1_LAYER_ID)) {
+            miniMap.setFilter(
+                IMPACT_ADMIN1_LAYER_ID,
+                iso3 ? ['==', ['upcase', ['coalesce', ['get', 'gid_0'], '']], iso3] : null
+            );
+        }
+
         applyFocusMaskLayer();
     }
 
@@ -1259,7 +1496,7 @@
         });
     }
 
-    function normalizeAdmin0Feature(feature) {
+    function normalizeBoundaryFeature(feature) {
         if (!feature) return null;
         let geometry = feature.geometry;
         if (typeof geometry === 'string') {
@@ -1281,6 +1518,14 @@
         };
     }
 
+    function normalizeAdmin0Feature(feature) {
+        return normalizeBoundaryFeature(feature);
+    }
+
+    function normalizeAdmin1Feature(feature) {
+        return normalizeBoundaryFeature(feature);
+    }
+
     async function getAdmin0Features() {
         if (admin0FeaturesCache) return admin0FeaturesCache;
 
@@ -1288,6 +1533,15 @@
         const features = Array.isArray(payload?.features) ? payload.features : [];
         admin0FeaturesCache = features.map(normalizeAdmin0Feature).filter(Boolean);
         return admin0FeaturesCache;
+    }
+
+    async function getAdmin1Features() {
+        if (admin1FeaturesCache) return admin1FeaturesCache;
+
+        const payload = await fetchJsonWithFallback(apiEndpoints.admin1);
+        const features = Array.isArray(payload?.features) ? payload.features : [];
+        admin1FeaturesCache = features.map(normalizeAdmin1Feature).filter(Boolean);
+        return admin1FeaturesCache;
     }
 
     async function loadAdmin0Boundaries() {
@@ -1458,6 +1712,204 @@
     // ========================================
     // LOAD MAP POINTS
     // ========================================
+    function normalizeLayerDateValue(dateValue) {
+        const raw = String(dateValue || '').trim();
+        if (!raw) return '';
+        return raw.length >= 10 ? raw.slice(0, 10) : raw;
+    }
+
+    async function getLatestWrfExtremeRainfallDate(forceRefresh = false) {
+        if (wrfExtremeRainfallDateCache && !forceRefresh) {
+            return wrfExtremeRainfallDateCache;
+        }
+
+        const payload = await fetchJsonWithFallback(apiEndpoints.wrfExtremeRainfallDates);
+        const timestamps = Array.isArray(payload?.timestamps)
+            ? payload.timestamps
+            : (Array.isArray(payload?.dates) ? payload.dates : []);
+
+        if (!timestamps.length) {
+            wrfExtremeRainfallDateCache = null;
+            return null;
+        }
+
+        wrfExtremeRainfallDateCache = normalizeLayerDateValue(timestamps[timestamps.length - 1]);
+        return wrfExtremeRainfallDateCache;
+    }
+
+    async function loadExtremeRainfallRasterLayer(layerConfig, options = {}) {
+        const { silent = false } = options || {};
+
+        try {
+            clearMapPointsLayer();
+            clearImpactAdmin1Layer();
+            clearMapPopups();
+            resetAdminFillStyle();
+
+            const latestDate = await getLatestWrfExtremeRainfallDate(true);
+            if (!latestDate) {
+                applyCountryFiltersToMapLayers();
+                const noDataMessage = `No ${layerConfig.label.toLowerCase()} data available for the current selection.`;
+                if (!silent) {
+                    showMapStatusToast(noDataMessage, { withSpinner: false, autoHideMs: 2200 });
+                }
+                return { ok: false, reason: 'no_data', message: noDataMessage };
+            }
+
+            const baseUrl = layerConfig.wmsBaseUrl || apiEndpoints.extremeRainfallWmsBaseUrl;
+            const percentile = String(layerConfig.wmsPercentile || DEFAULT_EXTREME_RAINFALL_PERCENTILE).toLowerCase();
+            const wmsLayerName = EXTREME_RAINFALL_WMS_LAYER_BY_PERCENTILE[percentile]
+                || EXTREME_RAINFALL_WMS_LAYER_BY_PERCENTILE[DEFAULT_EXTREME_RAINFALL_PERCENTILE];
+            const resolvedBaseUrl = (baseUrl || '')
+                .replace('{layer}', encodeURIComponent(wmsLayerName))
+                .replace('wrf_extreme_rainfall', encodeURIComponent(wmsLayerName));
+            const wmsTileUrl = `${resolvedBaseUrl}&time=${encodeURIComponent(latestDate)}`;
+
+            clearExtremeRainfallLayer();
+            miniMap.addSource(EXTREME_RAINFALL_SOURCE_ID, {
+                type: 'raster',
+                tiles: [wmsTileUrl],
+                tileSize: 256
+            });
+
+            const layerDefinition = {
+                id: EXTREME_RAINFALL_LAYER_ID,
+                type: 'raster',
+                source: EXTREME_RAINFALL_SOURCE_ID,
+                paint: {
+                    'raster-opacity': 0.86
+                }
+            };
+
+            if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) {
+                miniMap.addLayer(layerDefinition, ADMIN0_FILL_LAYER_ID);
+            } else {
+                miniMap.addLayer(layerDefinition);
+            }
+
+            applyCountryFiltersToMapLayers();
+            hideMapStatusToast();
+
+            return { ok: true, reason: 'loaded', dataDate: latestDate, mode: 'wms-raster' };
+        } catch (error) {
+            console.error('Error loading extreme rainfall WMS layer:', error);
+            if (!silent) {
+                showMapStatusToast(LAYER_VALIDATION_MESSAGE);
+            }
+            return { ok: false, reason: 'request_failed', error };
+        }
+    }
+
+    async function loadImpactRiskScoreLayer(layerConfig, options = {}) {
+        const { silent = false } = options || {};
+
+        try {
+            clearMapPointsLayer();
+            clearExtremeRainfallLayer();
+            clearImpactAdmin1Layer();
+            clearMapPopups();
+            resetAdminFillStyle();
+
+            const [admin1Features, riskPayload] = await Promise.all([
+                getAdmin1Features(),
+                fetchJsonWithFallback(buildUrlsWithParams(apiEndpoints.riskMajority, { admin_level: '1' }))
+            ]);
+
+            let scopedAdmin1Features = Array.isArray(admin1Features) ? [...admin1Features] : [];
+            if (selectedMapScope === 'whca') {
+                scopedAdmin1Features = scopedAdmin1Features.filter((feature) =>
+                    WHCA_ADMIN0_CODES.has((feature.properties?.gid_0 || '').toUpperCase())
+                );
+            }
+
+            const selectedIso3 = ISO2_TO_ISO3[(selectedCountry || '').toUpperCase()] || '';
+            if (selectedIso3) {
+                scopedAdmin1Features = scopedAdmin1Features.filter(
+                    (feature) => (feature.properties?.gid_0 || '').toUpperCase() === selectedIso3
+                );
+            }
+
+            const riskByAdmin = Array.isArray(riskPayload?.risk_by_admin) ? riskPayload.risk_by_admin : [];
+            if (!scopedAdmin1Features.length || !riskByAdmin.length) {
+                applyCountryFiltersToMapLayers();
+                const noDataMessage = `No ${layerConfig.label.toLowerCase()} risk score data available for the current selection.`;
+                if (!silent) {
+                    showMapStatusToast(noDataMessage, { withSpinner: false, autoHideMs: 2200 });
+                }
+                return { ok: false, reason: 'no_data', message: noDataMessage };
+            }
+
+            const riskScoreByCountryAdmin1 = {};
+            riskByAdmin.forEach((item) => {
+                const countryToken = normalizeNameToken(item?.country);
+                const admin1Token = normalizeNameToken(item?.admin1);
+                if (!countryToken || !admin1Token) return;
+                const key = `${countryToken}|${admin1Token}`;
+                const score = getRiskScoreFromLevel(item?.risk_level);
+                const previous = Number(riskScoreByCountryAdmin1[key]);
+                riskScoreByCountryAdmin1[key] = Number.isFinite(previous) ? Math.max(previous, score) : score;
+            });
+
+            const riskScoreByGid1 = {};
+            scopedAdmin1Features.forEach((feature) => {
+                const gid1 = String(feature?.properties?.gid_1 || '').toUpperCase();
+                if (!gid1) return;
+
+                const countryToken = normalizeNameToken(feature?.properties?.country);
+                const admin1Token = normalizeNameToken(feature?.properties?.name_1);
+                if (!countryToken || !admin1Token) return;
+
+                const score = riskScoreByCountryAdmin1[`${countryToken}|${admin1Token}`];
+                if (!Number.isFinite(Number(score))) return;
+                riskScoreByGid1[gid1] = Number(score);
+            });
+
+            miniMap.addSource(IMPACT_ADMIN1_SOURCE_ID, {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: scopedAdmin1Features
+                }
+            });
+
+            const impactLayerDefinition = {
+                id: IMPACT_ADMIN1_LAYER_ID,
+                type: 'fill',
+                source: IMPACT_ADMIN1_SOURCE_ID,
+                paint: {
+                    'fill-color': alertColors.normal,
+                    'fill-opacity': 0.16,
+                    'fill-outline-color': 'rgba(15, 56, 84, 0.35)'
+                }
+            };
+
+            if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) {
+                miniMap.addLayer(impactLayerDefinition, ADMIN0_LINE_LAYER_ID);
+            } else if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) {
+                miniMap.addLayer(impactLayerDefinition, ADMIN0_FILL_LAYER_ID);
+            } else {
+                miniMap.addLayer(impactLayerDefinition);
+            }
+
+            applyImpactScoreStylingByAdmin1(riskScoreByGid1);
+            applyCountryFiltersToMapLayers();
+            hideMapStatusToast();
+
+            return {
+                ok: true,
+                reason: 'loaded',
+                mode: 'impact-score',
+                admin1Count: Object.keys(riskScoreByGid1).length
+            };
+        } catch (error) {
+            console.error('Error loading impact risk score layer:', error);
+            if (!silent) {
+                showMapStatusToast(LAYER_VALIDATION_MESSAGE);
+            }
+            return { ok: false, reason: 'request_failed', error };
+        }
+    }
+
     async function loadMapPoints(selectedLayerConfig = null, options = {}) {
         if (!miniMap) {
             return { ok: false, reason: 'map_not_initialized' };
@@ -1465,6 +1917,7 @@
 
         const { silent = false } = options || {};
         const layerConfig = selectedLayerConfig || getMiniMapLayerConfig();
+        const layerMode = getLayerMode(layerConfig);
 
         if (layerConfig.available === false) {
             applyAdminOnlyLayerState();
@@ -1475,10 +1928,22 @@
             };
         }
 
+        if (layerMode === 'wms-raster') {
+            return await loadExtremeRainfallRasterLayer(layerConfig, options);
+        }
+
+        if (layerMode === 'impact-score') {
+            return await loadImpactRiskScoreLayer(layerConfig, options);
+        }
+
         try {
             const params = {};
             if (mapConfig.pointFilter !== 'all') params.filter = mapConfig.pointFilter;
             if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+
+            clearExtremeRainfallLayer();
+            clearImpactAdmin1Layer();
+            resetAdminFillStyle();
 
             const geojsonUrls = buildUrlsWithParams(layerConfig.geojsonUrls, params);
             const geojson = await fetchJsonWithFallback(geojsonUrls);
