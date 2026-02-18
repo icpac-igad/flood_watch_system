@@ -165,8 +165,8 @@
             '/api/v1/models/geosfm/geojson/'
         ],
         impactGeojson: [
-            '/api/v1/models/floodproof/geojson',
-            '/api/v1/models/floodproof/geojson/'
+            '/api/v1/multimodal/geojson',
+            '/api/v1/multimodal/geojson/'
         ],
         countrySummary: [
             '/api/v1/multimodal/country-summary-with-bounds/',
@@ -188,24 +188,27 @@
             geojsonUrls: apiEndpoints.multimodalGeojson,
             available: true,
             valueLabel: 'Discharge',
+            valueField: 'daily_avg',
             valueUnit: 'm³/s'
         },
         'extreme-rainfall': {
             key: 'extreme-rainfall',
             label: 'Extreme Rainfall',
             geojsonUrls: apiEndpoints.extremeRainfallGeojson,
-            available: false,
+            available: true,
             validationMessage: EXTREME_WRF_VALIDATION_MESSAGE,
             valueLabel: 'Rainfall Risk',
+            valueField: 'geosfm',
             valueUnit: ''
         },
         impact: {
             key: 'impact',
             label: 'Impact',
             geojsonUrls: apiEndpoints.impactGeojson,
-            available: false,
+            available: true,
             validationMessage: IMPACT_VALIDATION_MESSAGE,
-            valueLabel: 'Impact Value',
+            valueLabel: 'Impact Score',
+            valueField: 'floodproof',
             valueUnit: ''
         }
     });
@@ -594,7 +597,22 @@
     }
 
     function formatLayerPopupValue(properties, layerConfig) {
-        const rawValue = Number(properties?.daily_avg);
+        const preferredFields = [
+            layerConfig?.valueField,
+            'daily_avg',
+            'floodproof',
+            'geosfm'
+        ].filter(Boolean);
+
+        let rawValue = null;
+        for (const field of preferredFields) {
+            const candidate = Number(properties?.[field]);
+            if (Number.isFinite(candidate)) {
+                rawValue = candidate;
+                break;
+            }
+        }
+
         if (Number.isFinite(rawValue)) {
             const rounded = Math.round(rawValue);
             return layerConfig.valueUnit ? `${rounded} ${layerConfig.valueUnit}` : `${rounded}`;
@@ -653,6 +671,16 @@
             selectedMiniMapLayerKey = selectedLayerConfig.key;
             setActiveCategoryButton(categoryButton);
             hideMapStatusToast();
+            return;
+        }
+
+        if (loadResult.reason === 'no_data') {
+            selectedMiniMapLayerKey = selectedLayerConfig.key;
+            setActiveCategoryButton(categoryButton);
+            showMapStatusToast(
+                loadResult.message || `No ${selectedLayerConfig.label.toLowerCase()} data available for the current selection.`,
+                { withSpinner: false, autoHideMs: 2200 }
+            );
             return;
         }
 
@@ -758,7 +786,12 @@
         if (miniMap && miniMap.isStyleLoaded()) {
             const scopeBounds = await loadAdmin0Boundaries();
             const scopeLayerResult = await loadMapPoints(null, { silent: true });
-            if (!scopeLayerResult?.ok) {
+            if (scopeLayerResult?.reason === 'no_data') {
+                showMapStatusToast(
+                    scopeLayerResult?.message || 'No data available for the selected layer in this scope.',
+                    { withSpinner: false, autoHideMs: 2200 }
+                );
+            } else if (!scopeLayerResult?.ok) {
                 showMapStatusToast(scopeLayerResult?.message || LAYER_VALIDATION_MESSAGE);
             } else {
                 hideMapStatusToast();
@@ -1392,7 +1425,12 @@
                 // Load all data while spinner covers the map
                 await loadAdmin0Boundaries();
                 const initialLayerResult = await loadMapPoints(null, { silent: true });
-                if (!initialLayerResult?.ok) {
+                if (initialLayerResult?.reason === 'no_data') {
+                    showMapStatusToast(
+                        initialLayerResult?.message || 'No data available for the selected layer.',
+                        { withSpinner: false, autoHideMs: 2200 }
+                    );
+                } else if (!initialLayerResult?.ok) {
                     showMapStatusToast(initialLayerResult?.message || LAYER_VALIDATION_MESSAGE);
                 }
 
@@ -1449,7 +1487,12 @@
             }
 
             if (geojson.features.length === 0) {
-                return { ok: false, reason: 'no_data' };
+                applyAdminOnlyLayerState();
+                const noDataMessage = `No ${layerConfig.label.toLowerCase()} data available for the current selection.`;
+                if (!silent) {
+                    showMapStatusToast(noDataMessage, { withSpinner: false, autoHideMs: 2200 });
+                }
+                return { ok: false, reason: 'no_data', message: noDataMessage };
             }
 
             // Add alert_level based on thresholds when endpoint doesn't provide one.

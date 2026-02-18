@@ -250,70 +250,6 @@
       font-size: 12px;
     }
 
-    .point-summary-card {
-      margin-top: 10px;
-      border: 1px solid #d6e3f0;
-      border-radius: 8px;
-      background: #f8fbff;
-      padding: 10px;
-
-      .point-summary-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        gap: 10px;
-        margin-bottom: 8px;
-
-        h5 {
-          margin: 0;
-          font-size: 13px;
-          font-weight: 700;
-          color: #0f172a;
-        }
-
-        span {
-          font-size: 11px;
-          color: #475569;
-          font-weight: 600;
-        }
-      }
-
-      .point-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 6px;
-      }
-
-      .point-summary-item {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        border: 1px solid #e5e7eb;
-        border-radius: 6px;
-        padding: 5px 7px;
-        background: #fff;
-        font-size: 11px;
-
-        .dot {
-          width: 11px;
-          height: 11px;
-          border-radius: 3px;
-          flex-shrink: 0;
-        }
-
-        strong {
-          margin-left: auto;
-          color: #111827;
-        }
-      }
-
-      .point-summary-total {
-        margin-top: 8px;
-        font-size: 12px;
-        color: #334155;
-      }
-    }
-
     .overall-editor {
       margin-top: 10px;
       border: 1px solid #e5e7eb;
@@ -580,8 +516,7 @@
     }
 
     .interactive-column {
-      .form-group-row,
-      .point-summary-card .point-summary-grid {
+      .form-group-row {
         grid-template-columns: 1fr;
       }
 

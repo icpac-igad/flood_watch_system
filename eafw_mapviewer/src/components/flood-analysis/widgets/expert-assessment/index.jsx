@@ -146,7 +146,6 @@ const getRiskColor = (riskLevel) => {
 const ExpertAssessmentWidget = ({
   forecastDate,
   selectedCountry,
-  forecastData,
   userData,
 }) => {
   const mapContainerRef = useRef(null);
@@ -209,57 +208,6 @@ const ExpertAssessmentWidget = ({
     });
     return summary;
   }, [districtEdits]);
-
-  const pointSummary = useMemo(() => {
-    const empty = { emergency: 0, alarm: 0, warning: 0, watch: 0, normal: 0, total: 0 };
-    const globalByLevel = forecastData?.alert_summary?.by_level || empty;
-    const globalTotal = Number(forecastData?.alert_summary?.total_points || 0);
-
-    if (!hasCountryFocus) {
-      return {
-        ...empty,
-        emergency: Number(globalByLevel.emergency || 0),
-        alarm: Number(globalByLevel.alarm || 0),
-        warning: Number(globalByLevel.warning || 0),
-        watch: Number(globalByLevel.watch || 0),
-        normal: Number(globalByLevel.normal || 0),
-        total: globalTotal,
-        label: "East Africa Region",
-      };
-    }
-
-    const matched = (forecastData?.country_breakdown || []).find((item) => {
-      const code = normalizeCountryCode(item?.code || item?.country_code || item?.name || "");
-      return code === selectedCountryCode;
-    });
-
-    if (!matched) {
-      return {
-        ...empty,
-        emergency: Number(globalByLevel.emergency || 0),
-        alarm: Number(globalByLevel.alarm || 0),
-        warning: Number(globalByLevel.warning || 0),
-        watch: Number(globalByLevel.watch || 0),
-        normal: Number(globalByLevel.normal || 0),
-        total: globalTotal,
-        label: selectedCountryName || selectedCountryCode || "Focused Country",
-      };
-    }
-
-    const emergency = Number(matched.emergency || 0);
-    const alarm = Number(matched.alarm || 0);
-    const warning = Number(matched.warning || 0);
-    const atRisk = Number(matched.total_at_risk || emergency + alarm + warning);
-
-    return {
-      ...empty,
-      emergency,
-      alarm,
-      warning,
-      total: atRisk,
-      label: selectedCountryName || matched.name || selectedCountryCode,
-    };
-  }, [forecastData, hasCountryFocus, selectedCountryCode, selectedCountryName]);
 
   useEffect(() => {
     districtEditsRef.current = districtEdits;
@@ -673,7 +621,7 @@ const ExpertAssessmentWidget = ({
   return (
     <div className="c-expert-assessment">
       <div className="widget-header">
-        <h3 className="widget-title">Flood Analysis Report Workspace</h3>
+        <h3 className="widget-title">Flood Assessment Workspace</h3>
         <p className="widget-subtitle">
           Hydrologists and meteorologists update flood narratives and district edits here. Every update is saved as draft and published after admin review.
         </p>
@@ -710,25 +658,6 @@ const ExpertAssessmentWidget = ({
           <div className="header-meta">
             <span className="workflow-pill">Draft → Admin Review → Published</span>
             {activeReportId && <span className="active-id">Report ID: {activeReportId}</span>}
-          </div>
-        </div>
-
-        <div className="point-summary-card">
-          <div className="point-summary-header">
-            <h5>Forecast Point Summary</h5>
-            <span>{pointSummary.label}</span>
-          </div>
-          <div className="point-summary-grid">
-            {RISK_LEVELS.map((level) => (
-              <div key={level.value} className="point-summary-item">
-                <span className="dot" style={{ backgroundColor: level.color }} />
-                <span>{level.label}</span>
-                <strong>{pointSummary[level.value] || 0}</strong>
-              </div>
-            ))}
-          </div>
-          <div className="point-summary-total">
-            Total points tracked: <strong>{pointSummary.total || 0}</strong>
           </div>
         </div>
 
@@ -806,9 +735,6 @@ const ExpertAssessmentWidget = ({
         </div>
 
         <div className="editor-actions">
-          <Button theme="theme-button-light" onClick={() => clearEditor()}>
-            New Report
-          </Button>
           <Button
             theme="theme-button-light"
             onClick={() => saveReport("draft")}
@@ -885,7 +811,6 @@ const ExpertAssessmentWidget = ({
 ExpertAssessmentWidget.propTypes = {
   forecastDate: PropTypes.string,
   selectedCountry: PropTypes.string,
-  forecastData: PropTypes.object,
   userData: PropTypes.object,
 };
 
