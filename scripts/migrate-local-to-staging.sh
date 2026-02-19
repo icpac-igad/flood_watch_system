@@ -175,27 +175,29 @@ fi
 if $DO_TRANSFER; then
   log "Step 2: Transferring to staging ($STAGING_HOST)..."
 
+  REMOTE_DUMP_DIR="\${HOME}/eafw-migration-dumps"
+
   # Create staging dump directory
-  run ssh "$STAGING_HOST" "mkdir -p ${STAGING_DIR}/data/migration-dumps"
+  run ssh "$STAGING_HOST" "mkdir -p ~/eafw-migration-dumps"
 
   if $DO_DB && [[ -f "${DUMP_DIR}/eafw_db.dump" ]]; then
     log "  Transferring DB dump..."
     run rsync -avz --progress "${DUMP_DIR}/eafw_db.dump" \
-      "${STAGING_HOST}:${STAGING_DIR}/data/migration-dumps/"
+      "${STAGING_HOST}:~/eafw-migration-dumps/"
     ok "DB dump transferred"
   fi
 
   if $DO_MEDIA && [[ -f "${DUMP_DIR}/eafw_media.tar.gz" ]]; then
     log "  Transferring media archive..."
     run rsync -avz --progress "${DUMP_DIR}/eafw_media.tar.gz" \
-      "${STAGING_HOST}:${STAGING_DIR}/data/migration-dumps/"
+      "${STAGING_HOST}:~/eafw-migration-dumps/"
     ok "Media transferred"
   fi
 
   if $DO_MAPFILES && [[ -f "${DUMP_DIR}/eafw_mapfiles.tar.gz" ]]; then
     log "  Transferring mapfiles archive..."
     run rsync -avz --progress "${DUMP_DIR}/eafw_mapfiles.tar.gz" \
-      "${STAGING_HOST}:${STAGING_DIR}/data/migration-dumps/"
+      "${STAGING_HOST}:~/eafw-migration-dumps/"
     ok "Mapfiles transferred"
   fi
 
@@ -206,7 +208,7 @@ fi
 if $DO_RESTORE; then
   log "Step 3: Restoring on staging..."
 
-  REMOTE_DUMP_DIR="${STAGING_DIR}/data/migration-dumps"
+  REMOTE_DUMP_DIR="\${HOME}/eafw-migration-dumps"
 
   # Database restore
   if $DO_DB; then

@@ -442,10 +442,8 @@
 }
 
 // Responsive
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .c-flood-analysis {
-    padding: 56px 0 18px;
-
     .c-report-layout {
       grid-template-columns: 1fr;
       gap: 14px;
@@ -456,6 +454,16 @@
       position: static;
       top: auto;
     }
+
+    .c-flood-analysis-body {
+      padding: 16px 14px 20px;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .c-flood-analysis {
+    padding: 56px 0 18px;
 
     .c-flood-analysis-body {
       padding: 14px 12px 18px;
@@ -498,7 +506,7 @@
   }
 }
 
-@media (max-width: 1200px) {
+@media (min-width: 1025px) and (max-width: 1200px) {
   .c-flood-analysis {
     max-width: 1400px;
 

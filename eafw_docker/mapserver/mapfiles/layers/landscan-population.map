@@ -3,6 +3,7 @@ LAYER
     TYPE RASTER
     STATUS ON
     DATA "data/population/landscan_population_2024.tif"
+    MASK "gha_admin_extent_mask"
     PROCESSING "NODATA=-2147483647"
     INCLUDE "shared/common-layer-properties.map"
     TYPE RASTER

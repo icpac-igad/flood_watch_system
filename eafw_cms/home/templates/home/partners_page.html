@@ -5,336 +5,388 @@
 
 {% block content %}
 <section class="partners-page">
-  <div class="container">
-    <!-- Page Header -->
-    <div class="partners-header">
+  <div class="partners-container">
+    <header class="partners-header">
       <h1 class="partners-title">{{ page_title }}</h1>
       <p class="partners-subtitle">
-        Working together to monitor and respond to flood risks across the East Africa region
+        Working together to monitor and respond to flood risks across the East Africa region.
       </p>
-    </div>
+    </header>
 
-    {% if footer %}
-    <!-- Member Countries Section -->
-    {% if footer.member_countries %}
-    <div class="countries-section">
-      <h2 class="section-title">
-        <i class="fas fa-globe-africa"></i>
-        Member Countries
-      </h2>
-      <p class="section-description">
-        The East Africa Flood Watch system serves the following IGAD member countries.
-      </p>
+    {% if footer and footer.member_countries %}
+    <section class="countries-section">
+      <div class="section-head">
+        <h2 class="section-title">Member Countries</h2>
+        <p class="section-description">IGAD member countries represented in the Flood Watch platform.</p>
+      </div>
       <div class="countries-grid">
-        {% for item in footer.member_countries|sort_member_countries %}
-          <div class="country-card">
-            {% if item.value.url %}
-            <a href="{{ item.value.url }}" target="_blank" rel="noopener noreferrer" class="country-link">
-            {% endif %}
-              <div class="country-flag-wrapper">
-                <img src="https://flagcdn.com/h80/{{ item.value.country|lower }}.png"
-                     alt="{{ item.value.country|country_name }}"
-                     class="country-flag">
-              </div>
-              <div class="country-name">{{ item.value.country|country_name }}</div>
-            {% if item.value.url %}
-            </a>
-            {% endif %}
-          </div>
+        {% for block in footer.member_countries|sort_member_countries|unique_member_countries %}
+        {% with block.value as item %}
+        <article class="country-card">
+          {% if item.url %}
+          <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="country-link">
+          {% endif %}
+            <div class="country-flag-wrapper">
+              <img
+                src="https://flagcdn.com/h80/{{ item.country|lower }}.png"
+                alt="{{ item.country|country_name }}"
+                class="country-flag"
+                loading="lazy"
+              >
+            </div>
+            <div class="country-name">{{ item.country|country_name }}</div>
+          {% if item.url %}
+          </a>
+          {% endif %}
+        </article>
+        {% endwith %}
         {% endfor %}
       </div>
-    </div>
+    </section>
     {% endif %}
 
-    <!-- Partners Section -->
-    {% if footer.partners %}
-    <div class="partners-section">
-      <h2 class="section-title">
-        <i class="fas fa-handshake"></i>
-        Our Partners
-      </h2>
-      <p class="section-description">
-        We collaborate with leading organizations to provide comprehensive flood monitoring and early warning services.
-      </p>
+    <section class="partners-section">
+      <div class="section-head">
+        <h2 class="section-title">Our Partners</h2>
+        <p class="section-description">
+          Organizations collaborating with ICPAC on flood monitoring, preparedness, and response.
+        </p>
+      </div>
+
+      {% if footer and footer.partners %}
       <div class="partners-grid">
-        {% for item in footer.partners %}
-          <div class="partner-card">
-            {% if item.value.url %}
-            <a href="{{ item.value.url }}" target="_blank" rel="noopener noreferrer" class="partner-link">
-            {% endif %}
-              <div class="partner-logo-wrapper">
-                {% image item.value.image max-280x120 class="partner-logo" %}
+        {% for block in footer.partners|unique_partners %}
+        {% with block.value as partner %}
+        {% if partner.image %}
+        <div class="partner-tile">
+          {% if partner.url %}
+          <a href="{{ partner.url }}" target="_blank" rel="noopener noreferrer" class="partner-card-container is-link">
+          {% else %}
+          <div class="partner-card-container">
+          {% endif %}
+            <div class="partner-card">
+              <div class="partner-card-front">
+                <div class="partner-logo-container">
+                  {% image partner.image original as partner_logo %}
+                  <img
+                    class="partner-logo"
+                    src="{{ partner_logo.url }}"
+                    alt="{{ partner.name|default:'Partner' }} logo"
+                    loading="lazy"
+                  >
+                </div>
               </div>
-              <div class="partner-info">
-                <div class="partner-name">{{ item.value.name }}</div>
-                {% if item.value.description %}
-                <div class="partner-description">{{ item.value.description }}</div>
+
+              <div class="partner-card-back">
+                <div class="partner-card-back-content">
+                  <h3 class="partner-name">{{ partner.name|default:"Partner" }}</h3>
+                  <div class="partner-description">{{ partner.description|default:"Partner organization" }}</div>
+                </div>
+                {% if partner.url %}
+                <span class="partner-more-btn">Click for More</span>
                 {% endif %}
               </div>
-            {% if item.value.url %}
-            </a>
-            {% endif %}
+            </div>
+          {% if partner.url %}
+          </a>
+          {% else %}
           </div>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% endwith %}
         {% endfor %}
       </div>
-    </div>
-    {% endif %}
-    {% else %}
-    <div class="no-data">
-      <i class="fas fa-info-circle"></i>
-      <p>Partner information is not yet configured. Please check back later.</p>
-    </div>
-    {% endif %}
+      {% else %}
+      <div class="no-partners">
+        <p>No partners have been added yet.</p>
+      </div>
+      {% endif %}
+    </section>
 
-    <!-- Call to Action -->
-    <div class="partners-cta">
+    <section class="partners-cta">
       <h3>Interested in Partnering?</h3>
-      <p>We welcome collaboration with organizations committed to flood risk management and disaster preparedness in East Africa.</p>
-      <a href="mailto:disaster-risk-management@igad.int" class="cta-button">
-        <i class="fas fa-envelope"></i>
-        Contact Us
-      </a>
-    </div>
+      <p>
+        We welcome collaboration with organizations committed to flood risk management
+        and disaster preparedness in East Africa.
+      </p>
+      <a href="mailto:disaster-risk-management@igad.int" class="cta-button">Contact Us</a>
+    </section>
   </div>
 </section>
 
 <style>
 .partners-page {
-  padding: 2rem 1rem;
-  background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+  padding: 5.5rem 1rem 3rem;
+  background: linear-gradient(180deg, #f4f8fc 0%, #ffffff 42%);
   min-height: 60vh;
 }
 
-.container {
-  max-width: 1200px;
+.partners-container {
+  max-width: 1240px;
   margin: 0 auto;
 }
 
 .partners-header {
   text-align: center;
-  margin-bottom: 3rem;
-  padding: 2rem 0;
+  margin-bottom: 2.25rem;
 }
 
 .partners-title {
-  font-size: 2.5rem;
-  font-weight: 600;
-  color: var(--primary-color, #034930);
-  margin-bottom: 1rem;
+  margin: 0 0 0.75rem;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  font-weight: 700;
+  color: #0f2d45;
 }
 
 .partners-subtitle {
-  font-size: 1.1rem;
-  color: #666;
-  max-width: 600px;
   margin: 0 auto;
+  max-width: 760px;
+  color: #4d6175;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.section-head {
+  margin-bottom: 1rem;
 }
 
 .section-title {
-  font-size: 1.5rem;
-  font-weight: 500;
-  color: var(--primary-color, #034930);
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.section-title i {
-  color: var(--secondary-color, #198754);
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.35rem, 2vw, 1.65rem);
+  color: #123750;
+  font-weight: 700;
 }
 
 .section-description {
-  color: #666;
-  margin-bottom: 1.5rem;
+  margin: 0;
+  color: #607389;
+  line-height: 1.6;
 }
 
-/* Partners Grid */
+.countries-section,
 .partners-section {
-  margin-bottom: 3rem;
-}
-
-.partners-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-
-.partner-card {
-  background: white;
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  transition: transform 0.2s, box-shadow 0.2s;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.partner-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-}
-
-.partner-link {
-  text-decoration: none;
-  color: inherit;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-}
-
-.partner-logo-wrapper {
-  height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 1rem;
-  padding: 0.5rem;
-}
-
-.partner-logo {
-  max-height: 100px;
-  max-width: 100%;
-  object-fit: contain;
-}
-
-.partner-info {
-  width: 100%;
-}
-
-.partner-name {
-  font-weight: 600;
-  color: var(--primary-color, #034930);
-  font-size: 1.1rem;
-  margin-bottom: 0.5rem;
-}
-
-.partner-description {
-  color: #666;
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-/* Countries Grid */
-.countries-section {
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
 .countries-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.85rem;
 }
 
 .country-card {
-  background: white;
+  border: 1px solid #dbe6f0;
   border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  transition: transform 0.2s, box-shadow 0.2s;
+  background: #ffffff;
+  padding: 1rem;
   text-align: center;
-}
-
-.country-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  box-shadow: 0 2px 8px rgba(8, 30, 52, 0.06);
 }
 
 .country-link {
-  text-decoration: none;
   color: inherit;
-  display: block;
+  text-decoration: none;
 }
 
 .country-flag-wrapper {
-  margin-bottom: 0.75rem;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.55rem;
 }
 
 .country-flag {
-  height: 50px;
+  height: 46px;
   width: auto;
   border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .country-name {
-  font-weight: 500;
-  color: #333;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
+  color: #244058;
+  font-weight: 600;
 }
 
-/* No Data */
-.no-data {
+.partners-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.partner-tile {
+  min-height: 260px;
+}
+
+.partner-card-container {
+  display: block;
+  width: 100%;
+  height: 100%;
+  perspective: 1000px;
+}
+
+.partner-card-container.is-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.partner-card {
+  position: relative;
+  width: 100%;
+  min-height: 260px;
+  height: 100%;
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+}
+
+.partner-card-container:hover .partner-card,
+.partner-card-container:focus-visible .partner-card,
+.partner-card-container:focus-within .partner-card {
+  transform: rotateY(180deg);
+}
+
+.partner-card-front,
+.partner-card-back {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+}
+
+.partner-card-front {
+  justify-content: center;
+  align-items: center;
+  border: 1px solid #dbe6f0;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(8, 30, 52, 0.1);
+}
+
+.partner-card-back {
+  transform: rotateY(180deg);
+  justify-content: space-between;
+  gap: 1rem;
+  background: linear-gradient(135deg, #034930 0%, #0f8b66 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(3, 73, 48, 0.24);
+}
+
+.partner-logo-container {
+  min-height: 136px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.partner-logo {
+  max-height: 120px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.partner-card-back-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.partner-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.partner-description {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.partner-more-btn {
+  align-self: flex-start;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  background: #fbc02d;
+  color: #24364a;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.no-partners {
+  padding: 2rem 1rem;
   text-align: center;
-  padding: 3rem;
-  color: #666;
+  border: 1px dashed #c5d5e5;
+  border-radius: 12px;
+  color: #607389;
+  background: #f8fbff;
 }
 
-.no-data i {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-  color: var(--secondary-color, #198754);
-}
-
-/* Call to Action */
 .partners-cta {
-  background: var(--primary-color, #034930);
-  color: white;
-  border-radius: 16px;
-  padding: 2.5rem;
-  text-align: center;
   margin-top: 2rem;
+  padding: 2rem;
+  border-radius: 16px;
+  text-align: center;
+  background: linear-gradient(130deg, #0f2d45 0%, #176287 100%);
+  color: #ffffff;
 }
 
 .partners-cta h3 {
-  font-size: 1.5rem;
-  font-weight: 500;
-  margin-bottom: 0.75rem;
+  margin: 0 0 0.5rem;
+  font-size: 1.45rem;
 }
 
 .partners-cta p {
-  opacity: 0.9;
-  max-width: 500px;
-  margin: 0 auto 1.5rem;
+  margin: 0 auto 1.2rem;
+  max-width: 620px;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1.6;
 }
 
 .cta-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  background: var(--accent-color, #fbc02d);
-  color: #333;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+  justify-content: center;
+  padding: 0.68rem 1.25rem;
+  border-radius: 999px;
+  background: #fbc02d;
+  color: #24364a;
   text-decoration: none;
-  font-weight: 500;
-  transition: background 0.2s, transform 0.2s;
+  font-weight: 700;
 }
 
 .cta-button:hover {
-  background: var(--accent-hover, #e0a800);
-  transform: translateY(-2px);
+  background: #ffd760;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .partners-title {
-    font-size: 2rem;
+@media (max-width: 800px) {
+  .partners-page {
+    padding: 4.8rem 0.8rem 2.2rem;
   }
 
   .partners-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
 
-  .countries-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  .partner-tile,
+  .partner-card {
+    min-height: 230px;
+  }
+
+  .partner-logo {
+    max-height: 96px;
   }
 
   .partners-cta {
-    padding: 1.5rem;
+    padding: 1.35rem;
   }
 }
 </style>

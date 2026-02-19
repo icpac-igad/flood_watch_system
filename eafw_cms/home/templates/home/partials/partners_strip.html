@@ -21,10 +21,15 @@
             {% endif %}
 
             {% if footer and footer.partners %}
+            {% with partner_blocks=footer.partners|unique_partners %}
+            {% if partner_blocks %}
             <div class="partners-group">
-                <span class="partners-label">Partners</span>
-                <div class="partners-logos">
-                    {% for block in footer.partners|unique_partners %}
+                <div class="partners-group-header">
+                    <span class="partners-label">Our Partners</span>
+                </div>
+                <div class="partners-logos-shell">
+                    <div class="partners-logos" data-slider-threshold="5">
+                    {% for block in partner_blocks %}
                     {% with block.value as partner %}
                     {% if partner.image %}
                     <a
@@ -39,8 +44,16 @@
                     {% endif %}
                     {% endwith %}
                     {% endfor %}
+                    </div>
                 </div>
+                {% if partner_blocks|length >= 5 %}
+                <div class="partners-more-wrap">
+                    <a href="{% url 'partners' %}" class="partners-more-link">More Partners</a>
+                </div>
+                {% endif %}
             </div>
+            {% endif %}
+            {% endwith %}
             {% endif %}
         </div>
     </div>

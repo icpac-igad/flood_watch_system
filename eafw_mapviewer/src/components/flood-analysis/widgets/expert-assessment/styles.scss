@@ -69,7 +69,7 @@
 
   .three-column-layout {
     display: grid;
-    grid-template-columns: minmax(250px, 1fr) minmax(760px, 2.5fr) minmax(250px, 1fr);
+    grid-template-columns: minmax(240px, 1fr) minmax(700px, 2.4fr) minmax(240px, 1fr);
     gap: 16px;
     align-items: start;
   }
@@ -177,9 +177,14 @@
       .report-card-meta {
         display: flex;
         justify-content: space-between;
+        flex-wrap: wrap;
         gap: 6px;
         font-size: 10px;
         color: #6b7280;
+
+        span {
+          overflow-wrap: anywhere;
+        }
       }
     }
   }
@@ -226,7 +231,7 @@
         border: 1px solid #86efac;
         border-radius: 999px;
         padding: 4px 10px;
-        white-space: nowrap;
+        white-space: normal;
       }
 
       .active-id {
@@ -236,7 +241,8 @@
         border: 1px solid #99f6e4;
         border-radius: 14px;
         padding: 4px 10px;
-        white-space: nowrap;
+        white-space: normal;
+        overflow-wrap: anywhere;
       }
     }
 
@@ -536,18 +542,71 @@
     padding: 12px;
 
     .assessment-controls {
+      .expert-switch {
+        width: 100%;
+      }
+
       .expert-btn {
         min-width: 100%;
       }
     }
 
+    .reports-column {
+      .report-card {
+        .report-card-meta {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 2px;
+        }
+      }
+    }
+
     .interactive-column {
+      .editor-header {
+        flex-direction: column;
+
+        .header-meta {
+          width: 100%;
+          align-items: flex-start;
+        }
+      }
+
+      .risk-buttons {
+        .risk-btn {
+          flex: 1 1 calc(50% - 6px);
+        }
+      }
+
       .district-summary {
         grid-template-columns: 1fr;
       }
 
+      .map-wrapper {
+        .map-container {
+          height: 260px;
+        }
+      }
+
       .editor-actions {
         flex-direction: column;
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .c-expert-assessment {
+    .interactive-column {
+      .risk-buttons {
+        .risk-btn {
+          flex: 1 1 100%;
+        }
+      }
+
+      .map-wrapper {
+        .map-container {
+          height: 220px;
+        }
       }
     }
   }

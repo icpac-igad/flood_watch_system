@@ -107,9 +107,37 @@
     .report-card-meta {
       display: flex;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 6px;
       font-size: 10px;
       color: #6b7280;
+
+      span {
+        overflow-wrap: anywhere;
+      }
+    }
+  }
+}
+
+@media (max-width: 1024px) {
+  .c-report-side-panel {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .c-report-side-panel {
+    .panel-body {
+      padding: 8px;
+      gap: 6px;
+    }
+
+    .report-card {
+      .report-card-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+      }
     }
   }
 }

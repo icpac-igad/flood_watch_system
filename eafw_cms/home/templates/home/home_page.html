@@ -4,7 +4,7 @@
 {% block body_class %}homepage{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260217-6">
+<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260219-1">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" />
 {% endblock %}
 
@@ -250,6 +250,7 @@
         initRiskTickerLoop();
         updateMemberCountriesByScope();
         updatePartnersByScope();
+        initPartnersAutoScroll();
         initPartnersReveal();
         initMiniMap();
         loadCountryData();
@@ -301,7 +302,7 @@
         if (!container) return;
 
         // Remove legacy animation clones if present.
-        container.querySelectorAll('.marquee-clone, .is-clone').forEach((el) => el.remove());
+        container.querySelectorAll('.marquee-clone, .partner-clone').forEach((el) => el.remove());
 
         const seen = new Set();
         container.querySelectorAll(selector).forEach((item) => {
@@ -339,6 +340,42 @@
                 const normalizedName = normalizePartnerName(name);
                 return normalizedName || logo?.getAttribute('src') || item.getAttribute('href') || '';
             });
+        });
+    }
+
+    function initPartnersAutoScroll() {
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        document.querySelectorAll('.partners-logos').forEach((track) => {
+            const shell = track.closest('.partners-logos-shell');
+            track.querySelectorAll('.partner-clone').forEach((clone) => clone.remove());
+            track.classList.remove('is-animated');
+            track.style.removeProperty('--partners-marquee-duration');
+            if (shell) shell.classList.remove('is-animated');
+
+            if (reduceMotion) return;
+
+            const minItems = Number.parseInt(track.getAttribute('data-slider-threshold') || '5', 10);
+            const threshold = Number.isFinite(minItems) && minItems > 1 ? minItems : 5;
+            const visibleBaseItems = Array.from(track.querySelectorAll('.partner-item')).filter((item) => (
+                item.style.display !== 'none'
+            ));
+
+            if (visibleBaseItems.length < threshold) return;
+
+            visibleBaseItems.forEach((item) => {
+                const clone = item.cloneNode(true);
+                clone.classList.remove('partner-item');
+                clone.classList.add('partner-clone');
+                clone.setAttribute('aria-hidden', 'true');
+                clone.setAttribute('tabindex', '-1');
+                track.appendChild(clone);
+            });
+
+            const durationSeconds = Math.max(20, Math.round(visibleBaseItems.length * 4));
+            track.style.setProperty('--partners-marquee-duration', `${durationSeconds}s`);
+            track.classList.add('is-animated');
+            if (shell) shell.classList.add('is-animated');
         });
     }
 
@@ -433,6 +470,7 @@
         resizeTimer = setTimeout(() => {
             setHomepageLayoutHeights();
             initRiskTickerLoop();
+            initPartnersAutoScroll();
             if (countriesData.length) {
                 renderCountryList(countriesData);
             } else {
@@ -1099,11 +1137,20 @@
 
         const label = partnersGroup.querySelector('.partners-label');
         if (label) {
-            label.textContent = selectedMapScope === 'whca' ? 'WHCA Partners' : 'Partners';
+            label.textContent = selectedMapScope === 'whca' ? 'WHCA Partners' : 'Our Partners';
+        }
+
+        const partnerTrack = partnersGroup.querySelector('.partners-logos');
+        const moreLink = partnersGroup.querySelector('.partners-more-link');
+        if (moreLink && partnerTrack) {
+            const minItems = Number.parseInt(partnerTrack.getAttribute('data-slider-threshold') || '5', 10);
+            const threshold = Number.isFinite(minItems) && minItems > 1 ? minItems : 5;
+            moreLink.style.display = visibleCount >= threshold ? '' : 'none';
         }
 
         partnersGroup.style.display = visibleCount > 0 ? '' : 'none';
         dedupePartnersAndMembers();
+        initPartnersAutoScroll();
     }
 
     function getCountryByCode(code) {
