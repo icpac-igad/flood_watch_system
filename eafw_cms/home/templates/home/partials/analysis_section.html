@@ -3,20 +3,20 @@
 <div class="dashboard-container">
     <div class="dashboard-grid">
         {% if page.show_mini_map %}
-        <div class="map-section" style="--map-height: {{ page.mini_map_height|default:500 }}px;">
+        <div class="map-section ui-module-card" style="--map-height: {{ page.mini_map_height|default:500 }}px;">
             <div class="map-wrapper">
                 <div id="mini-map"></div>
-                <div class="map-loading" id="map-loading">
+                <div class="map-loading ui-loading-state" id="map-loading">
                     <div class="spinner"></div>
                     <span>{% trans "Loading map..." %}</span>
                 </div>
 
-                {% if page.show_category_menu %}
+                {% if mini_map_categories %}
                 <div class="c-menu-control {% if page.category_menu_style == 'card_list' %}card-style{% endif %}">
                     <div class="c-map-menu" style="--menu-bg: {{ page.category_menu_bg_color|default:'rgba(68, 65, 65, 0.84)' }}; --menu-active: {{ page.category_menu_active_color|default:'#f7a600' }};">
                         {% for category in mini_map_categories %}
                         <div
-                            class="menu-category{% if category.is_default %} active{% endif %}"
+                            class="menu-category"
                             data-category-id="{{ category.category_id|default:'' }}"
                             data-layer-name="{{ category.title }}"
                             data-layer-key="{{ category.key }}"
@@ -55,7 +55,9 @@
 
                 <div class="map-scope-control" id="map-scope-control" role="group" aria-label="{% trans 'Mini map country filter' %}">
                     <button type="button" class="map-scope-btn" data-scope="all">{% trans "All Countries" %}</button>
-                    <button type="button" class="map-scope-btn active" data-scope="whca">{% trans "WHCA Project" %}</button>
+                    {% for scope in map_scopes %}
+                    <button type="button" class="map-scope-btn" data-scope="{{ scope.key }}">{{ scope.name }}</button>
+                    {% endfor %}
                 </div>
 
                 <div class="c-legend legend-{{ page.legend_position|default:'bottom-left' }}">
@@ -103,18 +105,18 @@
         {% endif %}
 
         {% if page.show_country_cards %}
-        <div class="country-section" style="--map-height: {{ page.mini_map_height|default:500 }}px;">
+        <div class="country-section ui-module-card" style="--map-height: {{ page.mini_map_height|default:500 }}px;">
             <div class="country-section-header">
                 <h2 class="country-section-title" id="country-section-title">{{ page.country_cards_title|default:"Flood Alert Level per Country proportion" }}</h2>
                 <div class="alert-legend-pills">
-                    <span class="alert-pill emergency">{% trans "Emergency" %}</span>
-                    <span class="alert-pill alarm">{% trans "Alarm" %}</span>
-                    <span class="alert-pill warning">{% trans "Warning" %}</span>
+                    <span class="alert-pill emergency ui-status-pill">{% trans "Emergency" %}</span>
+                    <span class="alert-pill alarm ui-status-pill">{% trans "Alarm" %}</span>
+                    <span class="alert-pill warning ui-status-pill ui-status-pill--warning">{% trans "Warning" %}</span>
                 </div>
             </div>
 
             <div class="country-list" id="country-list">
-                <div class="country-loading">
+                <div class="country-loading ui-loading-state">
                     <div class="spinner"></div>
                     <span>{% trans "Loading country data..." %}</span>
                 </div>

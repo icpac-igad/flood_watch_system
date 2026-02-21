@@ -175,11 +175,6 @@ const appendParamsToUrl = (url, params, isFilteredLayer = false) => {
       }
       // Only add backend filter params with actual values
       if (BACKEND_FILTER_PARAMS.includes(key) && value !== undefined && value !== '' && value !== false) {
-        // Keep per-layer admin level from the base URL (admin0/admin1/admin2),
-        // do not override it with the globally selected filter level.
-        if (key === 'admin_level' && existingParams.admin_level !== undefined) {
-          return;
-        }
         existingParams[key] = encodeURIComponent(String(value));
       }
     });
@@ -459,20 +454,76 @@ const applyWHCAFilter = (tileUrl) => {
   return { url: sanitizeTemplateParams(modifiedUrl), sourceLayer: newSourceLayer };
 };
 
+const applyAdminBoundaryZoomBand = (layerConfig, tileUrl = '') => {
+  if (!layerConfig?.render?.layers || !Array.isArray(layerConfig.render.layers)) {
+    return layerConfig;
+  }
+
+  const lowerUrl = String(tileUrl || '').toLowerCase();
+  if (
+    !lowerUrl.includes('tileserv/gha.admin_clipped') &&
+    !lowerUrl.includes('tileserv/gha.admin_whca') &&
+    !lowerUrl.includes('tileserv/gha.admin_by_project')
+  ) {
+    return layerConfig;
+  }
+
+  const levelMatch = lowerUrl.match(/[?&]admin_level=([^&]+)/);
+  const adminLevel = levelMatch?.[1];
+  if (!['0', '1', '2'].includes(adminLevel)) {
+    return layerConfig;
+  }
+
+  const bands = {
+    '0': { minzoom: 0, maxzoom: 5.5 },
+    '1': { minzoom: 5.5, maxzoom: 8 },
+    '2': { minzoom: 8 },
+  };
+  const band = bands[adminLevel];
+
+  return {
+    ...layerConfig,
+    render: {
+      ...layerConfig.render,
+      layers: layerConfig.render.layers.map((renderLayer) => ({
+        ...renderLayer,
+        ...band,
+      })),
+    },
+  };
+};
+
 export const processLayers = (layers, paramInteractions, mapSide) => {
   const filteredLayers = mapSide
     ? layers.filter(l => (l.mapSide && l.mapSide === mapSide) || l.isBoundary)
     : layers;
 
+  const scopeValue = String(paramInteractions?.scope || '').toLowerCase();
+  const hasProjectScope = scopeValue === 'project';
+  const hasWhcaScope = scopeValue === 'whca';
+
   // FloodWatch Custom: Check filter states
   const isProjectFilterActive =
-    isTruthyFlag(paramInteractions?.project_filter) || !!paramInteractions?.project_countries;
-  const isWHCAFilterActive = isTruthyFlag(paramInteractions?.whca_filter);
+    isTruthyFlag(paramInteractions?.project_filter) || !!paramInteractions?.project_countries || hasProjectScope;
+  const isWHCAFilterActive = isTruthyFlag(paramInteractions?.whca_filter) || hasWhcaScope;
   const isAdminFilterActive = isTruthyFlag(paramInteractions?.admin_filter);
   const isBasinFilterActive = isTruthyFlag(paramInteractions?.basin_filter);
 
   // Determine if any filtering is active
   const isFilteringActive = isProjectFilterActive || isWHCAFilterActive || isAdminFilterActive || isBasinFilterActive;
+  const resolvedScope = hasWhcaScope
+    ? 'whca'
+    : hasProjectScope
+      ? 'project'
+      : isWHCAFilterActive
+        ? 'whca'
+        : isProjectFilterActive
+          ? 'project'
+          : 'all';
+  const backendFilterParams = {
+    ...(paramInteractions || {}),
+    scope: resolvedScope,
+  };
 
   return filteredLayers.map(layer => {
     let tiles = layer.layerConfig?.source?.tiles?.[0] || '';
@@ -578,7 +629,7 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
 
     // Add filter params when swapped OR when already on a filtered function source.
     if ((tileSourceSwapped || isAlreadyFilteredLayer) && isFilteringActive) {
-      const updatedTiles = appendParamsToUrl(tiles, paramInteractions, true);
+      const updatedTiles = appendParamsToUrl(tiles, backendFilterParams, true);
 
       // Update the layer config with new tiles URL
       newLayer.layerConfig = {
@@ -613,15 +664,8 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
         region_name: paramInteractions?.region_name || '',
         district_name: paramInteractions?.district_name || '',
         project_countries: paramInteractions?.project_countries || '',
+        scope: resolvedScope,
       };
-
-      if (isWHCAFilterActive) {
-        wmsParams.scope = 'whca';
-      } else if (isProjectFilterActive) {
-        wmsParams.scope = 'project';
-      } else {
-        wmsParams.scope = 'all';
-      }
 
       newLayer.layerConfig = {
         ...newLayer.layerConfig,
@@ -634,6 +678,7 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
 
     if (newLayer.layerConfig) {
       const finalTiles = newLayer.layerConfig?.source?.tiles?.[0] || tiles || originalTiles;
+      newLayer.layerConfig = applyAdminBoundaryZoomBand(newLayer.layerConfig, finalTiles);
       newLayer.layerConfig = normalizeMultimodalPointStyling(newLayer.layerConfig, finalTiles);
     }
 

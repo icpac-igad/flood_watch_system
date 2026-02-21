@@ -87,10 +87,49 @@ jobs:
             echo "jobs=false" >> $GITHUB_OUTPUT
           fi
 
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block forbidden files before production deploy
+        run: |
+          set -euo pipefail
+
+          SHAPEFILE_RE='\.((shp|shx|dbf|prj|cpg|qmd))$'
+          SENSITIVE_ENV_RE='(^|/)\.env$|(^|/)staging\.env$|(^|/)production\.env$'
+          HIGH_RISK_SECRET_RE='(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY-----)'
+
+          tracked_shapefiles="$(git ls-files | grep -E -i "${SHAPEFILE_RE}" || true)"
+          tracked_env_files="$(git ls-files | grep -E "${SENSITIVE_ENV_RE}" || true)"
+          secret_hits="$(git grep -n -I -E "${HIGH_RISK_SECRET_RE}" -- . ':!*.md' ':!*.example' ':!*.sample' || true)"
+
+          if [ -n "${tracked_shapefiles}" ]; then
+            echo "::error::Blocked: shapefile artifacts are tracked in git."
+            echo "${tracked_shapefiles}"
+            exit 1
+          fi
+
+          if [ -n "${tracked_env_files}" ]; then
+            echo "::error::Blocked: raw environment files are tracked in git."
+            echo "${tracked_env_files}"
+            exit 1
+          fi
+
+          if [ -n "${secret_hits}" ]; then
+            echo "::error::Blocked: high-risk secret pattern detected in tracked files."
+            echo "${secret_hits}"
+            exit 1
+          fi
+
+          echo "Security gate passed: no blocked files or high-risk secret patterns."
+
   build-api:
     name: Build API
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.api == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -121,7 +160,7 @@ jobs:
   build-cms:
     name: Build CMS
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.cms == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -153,7 +192,7 @@ jobs:
   build-mapviewer:
     name: Build Mapviewer
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.mapviewer == 'true' || github.event.inputs.force_build == 'true'
     env:
       ANALYTICS_PROPERTY_ID: ${{ secrets.ANALYTICS_PROPERTY_ID }}
@@ -193,7 +232,7 @@ jobs:
   build-mapserver:
     name: Build Mapserver
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.mapserver == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -224,7 +263,7 @@ jobs:
   build-mapcache:
     name: Build Mapcache
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.mapcache == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -255,7 +294,7 @@ jobs:
   build-jobs:
     name: Build Jobs
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.jobs == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -287,7 +326,7 @@ jobs:
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-api, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs]
+    needs: [detect-changes, security-gate, build-api, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs]
     if: always() && !cancelled()
     environment: production
     steps:
@@ -328,7 +367,7 @@ jobs:
           printf '%s\n' "${SSH_KEY}" > "${KEY_FILE}"
           chmod 600 "${KEY_FILE}"
 
-          if timeout 12 ssh -i "${KEY_FILE}" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 "${DEPLOY_USER}@${DEPLOY_HOST}" 'echo ssh-auth-ok' >/dev/null 2>&1; then
+          if timeout 12 ssh -i "${KEY_FILE}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 "${DEPLOY_USER}@${DEPLOY_HOST}" 'echo ssh-auth-ok' >/dev/null 2>&1; then
             echo "auth_ok=true" >> "$GITHUB_OUTPUT"
             echo "SSH auth preflight passed for ${DEPLOY_USER}@${DEPLOY_HOST}"
           else
@@ -402,23 +441,38 @@ jobs:
               exit 1
             fi
 
+            # Use temporary askpass credentials so token is not embedded in git URLs.
+            ASKPASS_FILE="$(mktemp)"
+            cat > "${ASKPASS_FILE}" <<'EOF'
+            #!/bin/sh
+            case "$1" in
+              *Username*) echo "x-access-token" ;;
+              *Password*) echo "${GH_TOKEN}" ;;
+              *) echo "" ;;
+            esac
+            EOF
+            chmod 700 "${ASKPASS_FILE}"
+            export GIT_ASKPASS="${ASKPASS_FILE}"
+            trap 'rm -f "${ASKPASS_FILE}"; unset GIT_ASKPASS' EXIT
+
             # Safe repo update — production uses main branch
             if [ -d "eafw/.git" ]; then
               echo "[$(log_ts)] Updating existing repo..."
               echo "Updating existing repo..."
               cd eafw
+              git remote set-url origin https://github.com/icpac-igad/flood_watch_system.git
               timeout 180 git fetch origin
               timeout 60 git reset --hard origin/main
             elif [ -d "eafw" ]; then
               echo "[$(log_ts)] Existing eafw directory is not a git repo; replacing"
               echo "Directory eafw/ exists but is not a git repo. Renaming and cloning fresh..."
               mv eafw eafw_old_$(date +%Y%m%d%H%M%S)
-              timeout 300 git clone -b main https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
+              timeout 300 git clone -b main https://github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
             else
               echo "[$(log_ts)] Cloning repo..."
               echo "Cloning repo..."
-              timeout 300 git clone -b main https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
+              timeout 300 git clone -b main https://github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
             fi
 
@@ -440,27 +494,79 @@ jobs:
               echo "FIRST DEPLOY: created .env from template"
             fi
 
+            # Upsert .env keys robustly (handles missing keys and leading spaces)
+            upsert_env() {
+              key="$1"
+              value="$2"
+              awk -v key="$key" -v value="$value" '
+                BEGIN { done=0 }
+                {
+                  if ($0 ~ "^[[:space:]]*" key "=") {
+                    if (!done) {
+                      print key "=" value
+                      done=1
+                    }
+                    next
+                  }
+                  print
+                }
+                END {
+                  if (!done) print key "=" value
+                }
+              ' .env > .env.tmp && mv .env.tmp .env
+            }
+
+            # Canonical deployment values
+            upsert_env "CMS_DB_USER" "eafw_user"
+            upsert_env "CMS_DB_NAME" "eafw_db"
+            upsert_env "NGINX_HOST_BIND" "0.0.0.0"
+            upsert_env "NGINX_HOST_PORT" "9068"
+            upsert_env "ALLOWED_HOSTS" "41.139.151.242,floodwatch.icpac.net,10.10.1.13,0.0.0.0,127.0.0.1,localhost"
+            upsert_env "CSRF_TRUSTED_ORIGINS" "http://41.139.151.242,http://41.139.151.242:9068,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net"
+            upsert_env "CORS_ALLOWED_ORIGINS" "http://41.139.151.242,http://41.139.151.242:9068,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net"
+
             # Inject ALL secrets from GitHub Environment into .env
-            sed -i "s|^CMS_DB_PASSWORD=.*|CMS_DB_PASSWORD=${DB_PASSWORD}|" .env
-            sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${DJANGO_SECRET_KEY}|" .env
-            sed -i "s|^SFTP_HOST=.*|SFTP_HOST=${SFTP_HOST}|" .env
-            sed -i "s|^SFTP_USERNAME=.*|SFTP_USERNAME=${SFTP_USERNAME}|" .env
-            sed -i "s|^SFTP_PASSWORD=.*|SFTP_PASSWORD=${SFTP_PASSWORD}|" .env
-            sed -i "s|^FLOODPROOFS_SFTP_HOST=.*|FLOODPROOFS_SFTP_HOST=${FLOODPROOFS_SFTP_HOST}|" .env
-            sed -i "s|^FLOODPROOFS_SFTP_USER=.*|FLOODPROOFS_SFTP_USER=${FLOODPROOFS_SFTP_USER}|" .env
-            sed -i "s|^FLOODPROOFS_SFTP_PASSWORD=.*|FLOODPROOFS_SFTP_PASSWORD=${FLOODPROOFS_SFTP_PASSWORD}|" .env
-            sed -i "s|^ENSEMBLE_FTP_HOST=.*|ENSEMBLE_FTP_HOST=${ENSEMBLE_FTP_HOST}|" .env
-            sed -i "s|^ENSEMBLE_FTP_USER=.*|ENSEMBLE_FTP_USER=${ENSEMBLE_FTP_USER}|" .env
-            sed -i "s|^ENSEMBLE_FTP_PASSWORD=.*|ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}|" .env
-            sed -i "s|^WRF_FTP_HOST=.*|WRF_FTP_HOST=${WRF_FTP_HOST}|" .env
-            sed -i "s|^WRF_FTP_USER=.*|WRF_FTP_USER=${WRF_FTP_USER}|" .env
-            sed -i "s|^WRF_FTP_PASSWORD=.*|WRF_FTP_PASSWORD=${WRF_FTP_PASSWORD}|" .env
-            sed -i "s|^FLOODS_API_KEY=.*|FLOODS_API_KEY=${FLOODS_API_KEY}|" .env
-            sed -i "s|^SMTP_EMAIL_HOST=.*|SMTP_EMAIL_HOST=${SMTP_EMAIL_HOST}|" .env
-            sed -i "s|^SMTP_EMAIL_HOST_USER=.*|SMTP_EMAIL_HOST_USER=${SMTP_EMAIL_HOST_USER}|" .env
-            sed -i "s|^SMTP_EMAIL_HOST_PASSWORD=.*|SMTP_EMAIL_HOST_PASSWORD=${SMTP_EMAIL_HOST_PASSWORD}|" .env
+            upsert_env "CMS_DB_PASSWORD" "${DB_PASSWORD}"
+            upsert_env "SECRET_KEY" "${DJANGO_SECRET_KEY}"
+            upsert_env "SFTP_HOST" "${SFTP_HOST}"
+            upsert_env "SFTP_USERNAME" "${SFTP_USERNAME}"
+            upsert_env "SFTP_PASSWORD" "${SFTP_PASSWORD}"
+            upsert_env "FLOODPROOFS_SFTP_HOST" "${FLOODPROOFS_SFTP_HOST}"
+            upsert_env "FLOODPROOFS_SFTP_USER" "${FLOODPROOFS_SFTP_USER}"
+            upsert_env "FLOODPROOFS_SFTP_PASSWORD" "${FLOODPROOFS_SFTP_PASSWORD}"
+            upsert_env "ENSEMBLE_FTP_HOST" "${ENSEMBLE_FTP_HOST}"
+            upsert_env "ENSEMBLE_FTP_USER" "${ENSEMBLE_FTP_USER}"
+            upsert_env "ENSEMBLE_FTP_PASSWORD" "${ENSEMBLE_FTP_PASSWORD}"
+            upsert_env "WRF_FTP_HOST" "${WRF_FTP_HOST}"
+            upsert_env "WRF_FTP_USER" "${WRF_FTP_USER}"
+            upsert_env "WRF_FTP_PASSWORD" "${WRF_FTP_PASSWORD}"
+            upsert_env "FLOODS_API_KEY" "${FLOODS_API_KEY}"
+            upsert_env "SMTP_EMAIL_HOST" "${SMTP_EMAIL_HOST}"
+            upsert_env "SMTP_EMAIL_HOST_USER" "${SMTP_EMAIL_HOST_USER}"
+            upsert_env "SMTP_EMAIL_HOST_PASSWORD" "${SMTP_EMAIL_HOST_PASSWORD}"
             # Force DEBUG off in production
-            sed -i "s|^CMS_DEBUG=.*|CMS_DEBUG=False|" .env
+            upsert_env "CMS_DEBUG" "False"
+
+            # Pin deployments to this commit when SHA-tagged images exist.
+            GIT_SHA="$(git rev-parse HEAD)"
+            IMAGE_OWNER="ghcr.io/icpac-igad"
+            resolve_image_ref() {
+              image_name="$1"
+              sha_ref="${IMAGE_OWNER}/${image_name}:${GIT_SHA}"
+              latest_ref="${IMAGE_OWNER}/${image_name}:latest"
+              if docker manifest inspect "${sha_ref}" >/dev/null 2>&1; then
+                echo "${sha_ref}"
+              else
+                echo "${latest_ref}"
+              fi
+            }
+
+            upsert_env "API_IMAGE_NAME" "$(resolve_image_ref eafw-api)"
+            upsert_env "WEB_IMAGE_NAME" "$(resolve_image_ref eafw-cms)"
+            upsert_env "MAPVIEWER_IMAGE_NAME" "$(resolve_image_ref eafw-mapviewer)"
+            upsert_env "MAPSERVER_IMAGE_NAME" "$(resolve_image_ref eafw-mapserver)"
+            upsert_env "MAPCACHE_IMAGE_NAME" "$(resolve_image_ref eafw-mapcache)"
+            upsert_env "JOBS_IMAGE_NAME" "$(resolve_image_ref eafw-jobs)"
 
             # Compare checksums to detect secret changes
             ENV_CHECKSUM_AFTER=$(sha256sum .env | cut -d' ' -f1)

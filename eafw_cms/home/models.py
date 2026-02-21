@@ -1,3 +1,5 @@
+import json
+
 from django.conf import settings
 from django.db import models
 from django.urls import reverse
@@ -160,6 +162,96 @@ class Footer(Page):
         help_text=_("Add partner organizations with logos"),
     )
 
+    partners_page_title = models.CharField(
+        max_length=255,
+        default="Our Partners",
+        verbose_name=_("Partners Page Title"),
+        help_text=_("Browser/title text for the dedicated partners page"),
+    )
+
+    partners_page_subtitle = models.TextField(
+        blank=True,
+        default="Working together to monitor and respond to flood risks across the East Africa region.",
+        verbose_name=_("Partners Page Subtitle"),
+        help_text=_("Intro subtitle shown at the top of the partners page"),
+    )
+    show_partners_page_subtitle = models.BooleanField(
+        default=True,
+        verbose_name=_("Show Partners Page Subtitle"),
+        help_text=_("Enable or disable the subtitle on the partners page"),
+    )
+
+    partners_member_countries_title = models.CharField(
+        max_length=255,
+        default="Member Countries",
+        verbose_name=_("Member Countries Section Title"),
+        help_text=_("Heading for the member countries section on partners page"),
+    )
+
+    partners_member_countries_description = models.TextField(
+        blank=True,
+        default="IGAD member countries represented in the Flood Watch platform.",
+        verbose_name=_("Member Countries Section Description"),
+        help_text=_("Description under member countries heading on partners page"),
+    )
+    show_member_countries_intro = models.BooleanField(
+        default=True,
+        verbose_name=_("Show Member Countries Title/Description"),
+        help_text=_("Enable or disable section title and description above member countries"),
+    )
+
+    partners_organizations_title = models.CharField(
+        max_length=255,
+        default="Our Partners",
+        verbose_name=_("Partners Section Title"),
+        help_text=_("Heading for the organizations section on partners page"),
+    )
+
+    partners_organizations_description = models.TextField(
+        blank=True,
+        default="Organizations collaborating with ICPAC on flood monitoring, preparedness, and response.",
+        verbose_name=_("Partners Section Description"),
+        help_text=_("Description under partners heading on partners page"),
+    )
+    show_partners_intro = models.BooleanField(
+        default=True,
+        verbose_name=_("Show Partners Title/Description"),
+        help_text=_("Enable or disable section title and description above partner cards"),
+    )
+
+    partners_cta_title = models.CharField(
+        max_length=255,
+        default="Interested in Partnering?",
+        verbose_name=_("CTA Title"),
+        help_text=_("Title for the partners page call-to-action block"),
+    )
+
+    partners_cta_description = models.TextField(
+        blank=True,
+        default="We welcome collaboration with organizations committed to flood risk management and disaster preparedness in East Africa.",
+        verbose_name=_("CTA Description"),
+        help_text=_("Description text for the call-to-action block"),
+    )
+
+    partners_cta_button_text = models.CharField(
+        max_length=120,
+        default="Contact Us",
+        verbose_name=_("CTA Button Text"),
+        help_text=_("Label for the call-to-action button"),
+    )
+
+    partners_cta_button_url = models.CharField(
+        max_length=255,
+        default="mailto:disaster-risk-management@igad.int",
+        verbose_name=_("CTA Button URL"),
+        help_text=_("Link URL for the call-to-action button (mailto: or https://)"),
+    )
+    show_partners_cta = models.BooleanField(
+        default=True,
+        verbose_name=_("Show CTA Block"),
+        help_text=_("Enable or disable the partners page call-to-action block"),
+    )
+
     copyright_organization = models.CharField(
         max_length=100,
         default="ICPAC",
@@ -186,8 +278,36 @@ class Footer(Page):
             heading=_("Logo & Description"),
         ),
         FieldPanel("sections"),
-        FieldPanel("member_countries"),
-        FieldPanel("partners"),
+        MultiFieldPanel(
+            [
+                FieldPanel("show_member_countries_intro"),
+                FieldPanel("partners_member_countries_title"),
+                FieldPanel("partners_member_countries_description"),
+                FieldPanel("member_countries"),
+            ],
+            heading=_("Member Countries (Partners Page)"),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("show_partners_intro"),
+                FieldPanel("partners_organizations_title"),
+                FieldPanel("partners_organizations_description"),
+                FieldPanel("partners"),
+            ],
+            heading=_("Partners (Partners Page)"),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("show_partners_page_subtitle"),
+                FieldPanel("partners_page_subtitle"),
+                FieldPanel("show_partners_cta"),
+                FieldPanel("partners_cta_title"),
+                FieldPanel("partners_cta_description"),
+                FieldPanel("partners_cta_button_text"),
+                FieldPanel("partners_cta_button_url"),
+            ],
+            heading=_("Partners Page Intro & CTA"),
+        ),
         FieldPanel("copyright_organization"),
         FieldPanel("social_links"),
     ]
@@ -335,18 +455,209 @@ class MapCategory(Orderable):
         help_text=_("Optional: Link to a Geomanager category for layer data"),
     )
 
+    # Layer rendering configuration
+    RENDER_MODE_CHOICES = [
+        ('points', _('GeoJSON Points')),
+        ('wms-raster', _('WMS Raster')),
+        ('impact-score', _('Impact Risk Score')),
+    ]
+    render_mode = models.CharField(
+        max_length=20,
+        choices=RENDER_MODE_CHOICES,
+        default='points',
+        verbose_name=_("Render Mode"),
+        help_text=_("How this layer renders on the map"),
+    )
+    data_url = models.CharField(
+        max_length=500,
+        blank=True,
+        verbose_name=_("Data URL"),
+        help_text=_("GeoJSON endpoint URL (for points mode), e.g. /api/v1/multimodal/geojson/"),
+    )
+    wms_base_url = models.TextField(
+        blank=True,
+        verbose_name=_("WMS Base URL"),
+        help_text=_(
+            "WMS tile URL template (for wms-raster mode). Use {layer} and {bbox-epsg-3857} as placeholders. "
+            "Example: /mapserver/?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png"
+            "&TRANSPARENT=true&LAYERS={layer}&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}"
+        ),
+    )
+    wms_layer_name = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("WMS Layer Name"),
+        help_text=_("MapServer layer name for WMS requests, e.g. wrf_extreme_very_heavy"),
+    )
+    value_field = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name=_("Value Field"),
+        help_text=_("GeoJSON property field for point values, e.g. 'daily_avg'"),
+    )
+    value_label = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name=_("Value Label"),
+        help_text=_("Display label for the value, e.g. 'Discharge'"),
+    )
+    value_unit = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name=_("Value Unit"),
+        help_text=_("Unit for values, e.g. 'm³/s'"),
+    )
+    unavailable_message = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Unavailable Message"),
+        help_text=_("Message shown when this layer's data is unavailable"),
+    )
+    legend_items_json = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Legend Items"),
+        help_text=_('JSON array of legend items, e.g. [{"label": "Emergency", "color": "#d32f2f"}]'),
+    )
+
     panels = [
-        FieldPanel("name"),
-        FieldPanel("icon"),
-        FieldPanel("is_active"),
-        FieldPanel("is_default"),
-        FieldPanel("geomanager_category_id"),
+        MultiFieldPanel(
+            [
+                FieldPanel("name"),
+                FieldPanel("icon"),
+                FieldPanel("is_active"),
+                FieldPanel("is_default"),
+                FieldPanel("geomanager_category_id"),
+            ],
+            heading=_("Basic Settings"),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("render_mode"),
+                FieldPanel("data_url"),
+                FieldPanel("wms_base_url"),
+                FieldPanel("wms_layer_name"),
+            ],
+            heading=_("Layer Data Source"),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("value_field"),
+                FieldPanel("value_label"),
+                FieldPanel("value_unit"),
+                FieldPanel("unavailable_message"),
+                FieldPanel("legend_items_json"),
+            ],
+            heading=_("Display Settings"),
+        ),
     ]
 
     class Meta:
         ordering = ["sort_order"]
         verbose_name = _("Map Category")
         verbose_name_plural = _("Map Categories")
+
+
+class MapScope(Orderable):
+    """CMS-configurable project scope for the homepage map filter (e.g. WHCA Project)."""
+
+    page = ParentalKey("HomePage", related_name="map_scopes")
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name=_("Scope Name"),
+        help_text=_("Button label, e.g. 'WHCA Project'"),
+    )
+    key = models.SlugField(
+        max_length=50,
+        verbose_name=_("Scope Key"),
+        help_text=_("Unique key passed as ?scope= to the API, e.g. 'whca'"),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active"),
+        help_text=_("Whether this scope button is shown"),
+    )
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name=_("Default on Load"),
+        help_text=_("If checked, this scope loads by default instead of 'All Countries'"),
+    )
+
+    # Country filtering
+    country_codes_iso2 = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Country Codes (ISO-2)"),
+        help_text=_("Comma-separated ISO-2 codes for member flag filtering, e.g. 'SD,SS,UG,ET,RW'"),
+    )
+    country_codes_iso3 = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Country Codes (ISO-3)"),
+        help_text=_("Comma-separated ISO-3 codes for admin boundary filtering, e.g. 'ETH,RWA,SSD,SDN,UGA'"),
+    )
+
+    # Partner filtering
+    partner_keys = models.TextField(
+        blank=True,
+        verbose_name=_("Partner Keys"),
+        help_text=_("Comma-separated normalized partner name keys to show, e.g. 'wmo,wateratheart,netherlandsredcross'"),
+    )
+
+    # Display
+    country_section_title = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Country Section Title"),
+        help_text=_("e.g. 'Nile Basin Flood Situation'"),
+    )
+    dashboard_title = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Dashboard Title"),
+        help_text=_("e.g. 'Latest Situation of Nile Basin Flood Conditions'"),
+    )
+
+    # Visual
+    show_basin_overlay = models.BooleanField(
+        default=False,
+        verbose_name=_("Show Basin Overlay"),
+        help_text=_("Show the Nile basin boundary line when this scope is active"),
+    )
+
+    panels = [
+        MultiFieldPanel(
+            [
+                FieldPanel("name"),
+                FieldPanel("key"),
+                FieldPanel("is_active"),
+                FieldPanel("is_default"),
+            ],
+            heading=_("Basic Settings"),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("country_codes_iso2"),
+                FieldPanel("country_codes_iso3"),
+                FieldPanel("partner_keys"),
+            ],
+            heading=_("Country & Partner Filtering"),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("country_section_title"),
+                FieldPanel("dashboard_title"),
+                FieldPanel("show_basin_overlay"),
+            ],
+            heading=_("Display Settings"),
+        ),
+    ]
+
+    class Meta:
+        ordering = ["sort_order"]
+        verbose_name = _("Map Scope")
+        verbose_name_plural = _("Map Scopes")
 
 
 class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
@@ -647,6 +958,13 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
         ),
         MultiFieldPanel(
             [
+                InlinePanel("map_scopes", label=_("Project Scopes"), min_num=0, max_num=10),
+            ],
+            heading=_("Map Scope / Project Filter"),
+            help_text=_("Define project scopes for the map filter (e.g. WHCA Project). 'All Countries' is always available. Mark one as default to load it on page open."),
+        ),
+        MultiFieldPanel(
+            [
                 FieldPanel("legend_title"),
                 FieldPanel("legend_position"),
                 InlinePanel("map_legend_items", label=_("Legend Items"), min_num=0, max_num=10),
@@ -788,6 +1106,7 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
                     "icon_image": map_category.icon,
                     "category_id": linked_category.id if linked_category else map_category.geomanager_category_id,
                     "is_default": map_category.is_default,
+                    "_map_category": map_category,
                 })
                 seen_keys.add(key)
 
@@ -831,9 +1150,71 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
                 {"key": "impact", "title": "Impact", "icon_name": "", "icon_image": None, "category_id": "", "is_default": False},
             ]
 
+        # Build CMS-driven layer configs for JavaScript (keyed by category key)
+        layer_configs = {}
+        for cat_item in mini_map_categories:
+            mc = cat_item.get("_map_category")
+            if not mc:
+                continue
+            key = cat_item["key"]
+            layer_configs[key] = {
+                "key": key,
+                "label": cat_item["title"],
+                "renderMode": mc.render_mode or "points",
+                "dataUrl": mc.data_url or "",
+                "wmsBaseUrl": mc.wms_base_url or "",
+                "wmsLayerName": mc.wms_layer_name or "",
+                "available": True,
+                "valueLabel": mc.value_label or "",
+                "valueField": mc.value_field or "",
+                "valueUnit": mc.value_unit or "",
+                "validationMessage": mc.unavailable_message or "",
+                "legendItems": mc.legend_items_json if mc.legend_items_json else [],
+            }
+
+        # Strip internal _map_category references before passing to template
+        for cat_item in mini_map_categories:
+            cat_item.pop("_map_category", None)
+
         context.update({"dataset_categories": dataset_categories})
         context.update({"mini_map_categories": mini_map_categories})
         context.update({"map_category_svg_sprite": map_category_svg_sprite})
+        context["mini_map_layer_configs_json"] = json.dumps(layer_configs) if layer_configs else "null"
+
+        # Build scope configs from CMS
+        scope_configs = {}
+        default_scope_key = "all"
+        map_scopes_list = []
+
+        for scope_item in self.map_scopes.filter(is_active=True).order_by("sort_order"):
+            key = scope_item.key
+            iso2_list = [c.strip().upper() for c in (scope_item.country_codes_iso2 or "").split(",") if c.strip()]
+            iso3_list = [c.strip().upper() for c in (scope_item.country_codes_iso3 or "").split(",") if c.strip()]
+            partner_list = [
+                p.strip().lower().replace(" ", "")
+                for p in (scope_item.partner_keys or "").split(",")
+                if p.strip()
+            ]
+
+            scope_configs[key] = {
+                "key": key,
+                "label": scope_item.name,
+                "countryCodes": iso2_list,
+                "admin0Codes": iso3_list,
+                "partnerKeys": partner_list,
+                "countrySectionTitle": scope_item.country_section_title or "",
+                "dashboardTitle": scope_item.dashboard_title or "",
+                "showBasinOverlay": scope_item.show_basin_overlay,
+            }
+            map_scopes_list.append({"key": key, "name": scope_item.name})
+
+            if scope_item.is_default:
+                default_scope_key = key
+
+        context["map_scopes_json"] = json.dumps(scope_configs) if scope_configs else "null"
+        context["default_scope_key"] = default_scope_key
+        context["map_scopes"] = map_scopes_list
+
         mapviewer_url = get_full_url(request, reverse("mapview"))
         context.update({"mapviewer_url": mapviewer_url})
 

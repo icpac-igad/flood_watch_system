@@ -183,6 +183,34 @@ class ProjectFilterContainerComponent extends React.Component {
     districts: [],
   };
 
+  getProjectFilterParams = (projectKey = this.state.selectedProject) => {
+    const project = PROJECTS[projectKey];
+    if (!project) {
+      return {
+        scope: 'all',
+        project_filter: false,
+        whca_filter: false,
+        project_countries: '',
+      };
+    }
+
+    if (projectKey === 'WHCA') {
+      return {
+        scope: 'whca',
+        whca_filter: true,
+        project_filter: false,
+        project_countries: '',
+      };
+    }
+
+    return {
+      scope: 'project',
+      project_filter: true,
+      whca_filter: false,
+      project_countries: project.countries.join(','),
+    };
+  };
+
   applyProject = async (projectKey) => {
     const project = PROJECTS[projectKey];
     if (!project) return;
@@ -201,6 +229,10 @@ class ProjectFilterContainerComponent extends React.Component {
         project.countries.includes(item.name)
       );
 
+      // Keep clipping scope explicit in state so both URL-restored and live
+      // interactions drive layer processing consistently.
+      this.props.setParamInteractions(this.getProjectFilterParams(projectKey));
+
       if (projectData.length > 0) {
         let minLeft = Infinity, minBottom = Infinity;
         let maxRight = -Infinity, maxTop = -Infinity;
@@ -213,20 +245,6 @@ class ProjectFilterContainerComponent extends React.Component {
             maxTop = Math.max(maxTop, item.bbox.top);
           }
         });
-
-        // WHCA uses dedicated pg_tileserv function (whca_selected=true)
-        // Other projects use generic project filter with country boundaries
-        // Set param interactions FIRST so layer changes settle before zoom
-        if (projectKey === 'WHCA') {
-          this.props.setParamInteractions({
-            whca_filter: true,
-          });
-        } else {
-          this.props.setParamInteractions({
-            project_filter: true,
-            project_countries: project.countries.join(',')
-          });
-        }
 
         // Zoom to combined project bbox after filter state is applied
         // Use requestAnimationFrame to ensure the map processes the filter
@@ -251,6 +269,7 @@ class ProjectFilterContainerComponent extends React.Component {
       regions: [], districts: []
     });
     this.props.clearParamInteractions();
+    this.props.setParamInteractions(this.getProjectFilterParams(null));
 
     const { initialBbox } = this.props;
     if (initialBbox && initialBbox.length === 4) {
@@ -261,7 +280,6 @@ class ProjectFilterContainerComponent extends React.Component {
   handleCountryChange = async (country) => {
     if (!country) return;
 
-    const project = PROJECTS[this.state.selectedProject];
     this.setState({ selectedCountry: country, selectedRegion: null, selectedDistrict: null, districts: [] });
 
     const regions = await fetchAdminBoundaries(0, country.name, true, {
@@ -274,10 +292,7 @@ class ProjectFilterContainerComponent extends React.Component {
       country, '0', '0', 'Admin',
       { country_name: country.name, region_name: '' }
     );
-    // WHCA uses whca_filter; other projects use project_filter
-    const projectParams = this.state.selectedProject === 'WHCA'
-      ? { whca_filter: true }
-      : { project_filter: true, project_countries: project.countries.join(',') };
+    const projectParams = this.getProjectFilterParams();
     this.props.setParamInteractions({
       ...paramInteractions,
       ...projectParams,
@@ -294,7 +309,6 @@ class ProjectFilterContainerComponent extends React.Component {
   handleRegionChange = async (region) => {
     if (!region) return;
 
-    const project = PROJECTS[this.state.selectedProject];
     this.setState({ selectedRegion: region, selectedDistrict: null });
 
     const districts = await fetchAdminBoundaries(1, region.name, true, {
@@ -308,9 +322,7 @@ class ProjectFilterContainerComponent extends React.Component {
       region, '1', '1', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: region.name }
     );
-    const projectParams = this.state.selectedProject === 'WHCA'
-      ? { whca_filter: true }
-      : { project_filter: true, project_countries: project.countries.join(',') };
+    const projectParams = this.getProjectFilterParams();
     this.props.setParamInteractions({
       ...paramInteractions,
       ...projectParams,
@@ -327,16 +339,13 @@ class ProjectFilterContainerComponent extends React.Component {
   handleDistrictChange = (district) => {
     if (!district) return;
 
-    const project = PROJECTS[this.state.selectedProject];
     this.setState({ selectedDistrict: district });
 
     const paramInteractions = buildParamInteractionsFromBoundary(
       district, '2', '2', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: this.state.selectedRegion.name }
     );
-    const projectParams = this.state.selectedProject === 'WHCA'
-      ? { whca_filter: true }
-      : { project_filter: true, project_countries: project.countries.join(',') };
+    const projectParams = this.getProjectFilterParams();
     this.props.setParamInteractions({
       ...paramInteractions,
       ...projectParams,
@@ -353,9 +362,7 @@ class ProjectFilterContainerComponent extends React.Component {
 
   clearCountry = () => {
     this.setState({ selectedCountry: null, selectedRegion: null, selectedDistrict: null, regions: [], districts: [] });
-    const projectParams = this.state.selectedProject === 'WHCA'
-      ? { whca_filter: true }
-      : { project_filter: true, project_countries: PROJECTS[this.state.selectedProject].countries.join(',') };
+    const projectParams = this.getProjectFilterParams();
     this.props.setParamInteractions({
       ...projectParams,
       country_name: '',
@@ -372,9 +379,7 @@ class ProjectFilterContainerComponent extends React.Component {
       this.state.selectedCountry, '0', '0', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: '' }
     );
-    const projectParams = this.state.selectedProject === 'WHCA'
-      ? { whca_filter: true }
-      : { project_filter: true, project_countries: PROJECTS[this.state.selectedProject].countries.join(',') };
+    const projectParams = this.getProjectFilterParams();
     this.props.setParamInteractions({
       ...paramInteractions,
       ...projectParams,
@@ -390,14 +395,11 @@ class ProjectFilterContainerComponent extends React.Component {
 
   clearDistrict = () => {
     this.setState({ selectedDistrict: null });
-    const project = PROJECTS[this.state.selectedProject];
     const paramInteractions = buildParamInteractionsFromBoundary(
       this.state.selectedRegion, '1', '1', 'Admin',
       { country_name: this.state.selectedCountry.name, region_name: this.state.selectedRegion.name }
     );
-    const projectParams = this.state.selectedProject === 'WHCA'
-      ? { whca_filter: true }
-      : { project_filter: true, project_countries: project.countries.join(',') };
+    const projectParams = this.getProjectFilterParams();
     this.props.setParamInteractions({
       ...paramInteractions,
       ...projectParams,

@@ -76,46 +76,6 @@
       "timeout": 300
     },
     {
-      "name": "wrf_daily_rainfall_source",
-      "type": "wms",
-      "url_ref": "eafw_mapserver",
-      "layers": "wrf_daily_rainfall",
-      "format": "image/png",
-      "transparent": "true",
-      "connection_timeout": 30,
-      "timeout": 300
-    },
-    {
-      "name": "wrf_extreme_heavy_source",
-      "type": "wms",
-      "url_ref": "eafw_mapserver",
-      "layers": "wrf_extreme_heavy",
-      "format": "image/png",
-      "transparent": "true",
-      "connection_timeout": 30,
-      "timeout": 300
-    },
-    {
-      "name": "wrf_extreme_very_heavy_source",
-      "type": "wms",
-      "url_ref": "eafw_mapserver",
-      "layers": "wrf_extreme_very_heavy",
-      "format": "image/png",
-      "transparent": "true",
-      "connection_timeout": 30,
-      "timeout": 300
-    },
-    {
-      "name": "wrf_extreme_extremely_heavy_source",
-      "type": "wms",
-      "url_ref": "eafw_mapserver",
-      "layers": "wrf_extreme_extremely_heavy",
-      "format": "image/png",
-      "transparent": "true",
-      "connection_timeout": 30,
-      "timeout": 300
-    },
-    {
       "name": "flood_extent_rp25_source",
       "type": "wms",
       "url_ref": "eafw_mapserver",
@@ -136,10 +96,20 @@
       "timeout": 300
     },
     {
-      "name": "landscan_population_source",
+      "name": "asap_cropland_source",
       "type": "wms",
       "url_ref": "eafw_mapserver",
-      "layers": "landscan_population",
+      "layers": "asap_cropland",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    },
+    {
+      "name": "asap_rangeland_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "asap_rangeland",
       "format": "image/png",
       "transparent": "true",
       "connection_timeout": 30,
@@ -169,6 +139,36 @@
         "type": "regex",
         "default": "2024-11-28",
         "regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      {
+        "name": "scope",
+        "type": "regex",
+        "default": "all",
+        "regex": "^(all|project|whca)?$"
+      },
+      {
+        "name": "project_countries",
+        "type": "regex",
+        "default": "__none__",
+        "regex": "^(__none__|[A-Za-z ,'-]*)$"
+      },
+      {
+        "name": "country_name",
+        "type": "regex",
+        "default": "__none__",
+        "regex": "^(__none__|[A-Za-z .,'-]*)$"
+      },
+      {
+        "name": "region_name",
+        "type": "regex",
+        "default": "__none__",
+        "regex": "^(__none__|[A-Za-z .,'-]*)$"
+      },
+      {
+        "name": "district_name",
+        "type": "regex",
+        "default": "__none__",
+        "regex": "^(__none__|[A-Za-z .,'-]*)$"
       }
     ]
   },
@@ -179,38 +179,6 @@
       "format_ref": "png_fast",
       "metadata": {
         "title": "Daily HMC Flood Alert Tiles"
-      }
-    },
-    {
-      "name": "wrf_daily_rainfall",
-      "source": "wrf_daily_rainfall_source",
-      "format_ref": "png_fast",
-      "metadata": {
-        "title": "WRF Daily Rainfall Tiles"
-      }
-    },
-    {
-      "name": "wrf_extreme_heavy",
-      "source": "wrf_extreme_heavy_source",
-      "format_ref": "png_fast",
-      "metadata": {
-        "title": "WRF Heavy Rainfall Tiles"
-      }
-    },
-    {
-      "name": "wrf_extreme_very_heavy",
-      "source": "wrf_extreme_very_heavy_source",
-      "format_ref": "png_fast",
-      "metadata": {
-        "title": "WRF Very Heavy Rainfall Tiles"
-      }
-    },
-    {
-      "name": "wrf_extreme_extremely_heavy",
-      "source": "wrf_extreme_extremely_heavy_source",
-      "format_ref": "png_fast",
-      "metadata": {
-        "title": "WRF Extremely Heavy Rainfall Tiles"
       }
     },
     {
@@ -230,12 +198,19 @@
       }
     },
     {
-      "name": "landscan_population",
-      "source": "landscan_population_source",
+      "name": "asap_cropland",
+      "source": "asap_cropland_source",
       "format_ref": "png_fast",
-      "no_dimensions": true,
       "metadata": {
-        "title": "LandScan Global 2024 Population Distribution"
+        "title": "ASAP Cropland Mask v02"
+      }
+    },
+    {
+      "name": "asap_rangeland",
+      "source": "asap_rangeland_source",
+      "format_ref": "png_fast",
+      "metadata": {
+        "title": "ASAP Rangeland Mask v02"
       }
     }
   ],

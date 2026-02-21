@@ -93,7 +93,7 @@ def partners_view(request):
         "cms_languages": cms_languages,
         "current_language": get_language() or "en",
         "theme": theme,
-        "page_title": "Our Partners",
+        "page_title": footer.partners_page_title if footer else "Our Partners",
     }
 
     return render(request, "home/partners_page.html", context)

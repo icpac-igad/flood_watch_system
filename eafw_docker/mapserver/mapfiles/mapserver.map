@@ -3,8 +3,8 @@ MAP
     STATUS ON
     SIZE 800 600
     UNITS DD
-    DEBUG [MS_DEBUGLEVEL]
-    EXTENT [MS_MAP_EXTENT]
+    DEBUG 2
+    EXTENT 21 -12 52 23
     IMAGECOLOR 255 255 255
     IMAGETYPE PNG
     FONTSET "fonts/fonts.txt"
@@ -38,4 +38,6 @@ MAP
     INCLUDE "layers/wrf-daily-rainfall.map"
     INCLUDE "layers/wrf-extreme-rainfall.map"
     INCLUDE "layers/landscan-population.map"
+    INCLUDE "layers/asap-cropland.map"
+    INCLUDE "layers/asap-rangeland.map"
 END

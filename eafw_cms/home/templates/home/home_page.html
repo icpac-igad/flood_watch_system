@@ -4,8 +4,103 @@
 {% block body_class %}homepage{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260219-1">
+<link rel="stylesheet" type="text/css" href="{% static 'css/components/ui-components.css' %}?v=20260220-3">
+<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260220-3">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" />
+<style>
+    /* Hard override for homepage partners strip: non-block flow */
+    body.homepage .home-module--partners .partners-section {
+        padding: 14px 0 22px !important;
+    }
+    body.homepage .home-module--partners .partners-container {
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        gap: 12px !important;
+    }
+    body.homepage .home-module--partners .members-group,
+    body.homepage .home-module--partners .partners-group {
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        gap: 10px !important;
+    }
+    body.homepage .home-module--partners .partners-group-header {
+        margin: 0 !important;
+    }
+    body.homepage .home-module--partners .partners-label {
+        display: block !important;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        min-height: 0 !important;
+        min-width: 0 !important;
+        text-transform: none !important;
+        letter-spacing: 0 !important;
+        font-weight: 700 !important;
+        font-size: clamp(1.45rem, 2.25vw, 2.15rem) !important;
+        line-height: 1.15 !important;
+        text-align: center !important;
+    }
+    body.homepage .home-module--partners .member-flags {
+        border-bottom: 1px solid #c2ced9 !important;
+        padding: 2px 4px 7px !important;
+        justify-content: center !important;
+        gap: 12px !important;
+    }
+    body.homepage .home-module--partners .member-flag {
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        min-width: 0 !important;
+    }
+    body.homepage .home-module--partners .member-flag img {
+        width: 52px !important;
+        height: 34px !important;
+        border-radius: 3px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) !important;
+    }
+    body.homepage .home-module--partners .member-flag-name {
+        display: none !important;
+    }
+    body.homepage .home-module--partners .partners-logos-shell {
+        padding: 2px 0 8px !important;
+    }
+    body.homepage .home-module--partners .partners-logos {
+        justify-content: center !important;
+        gap: clamp(16px, 1.8vw, 26px) !important;
+    }
+    body.homepage .home-module--partners .partner-item {
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        width: auto !important;
+        height: auto !important;
+        padding: 0 !important;
+    }
+    body.homepage .home-module--partners .partner-logo {
+        max-width: 142px !important;
+        max-height: 56px !important;
+    }
+    @media (max-width: 768px) {
+        body.homepage .home-module--partners .member-flags,
+        body.homepage .home-module--partners .partners-logos {
+            justify-content: flex-start !important;
+        }
+        body.homepage .home-module--partners .partner-logo {
+            max-width: 118px !important;
+            max-height: 48px !important;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -46,15 +141,15 @@
     let selectedCountry = null;
     let resizeTimer = null;
     let mapResizeFrame = null;
-    let selectedMapScope = 'all';
-    let selectedMiniMapLayerKey = 'multimodal';
+    let selectedMapScope = '{{ default_scope_key|default:"all" }}';
+    let selectedMiniMapLayerKey = null;
     let mapStatusToastTimer = null;
     let pointLayerEventsBound = false;
     let adminLayerEventsBound = false;
     let admin0FeaturesCache = null;
     let admin1FeaturesCache = null;
     let wrfExtremeRainfallDateCache = null;
-    let scopeBoundsByScope = { all: null, whca: null };
+    let scopeBoundsByScope = {};
     let miniMapDefaultLegendTitle = '';
     let miniMapDefaultLegendItemsHtml = '';
 
@@ -73,56 +168,29 @@
         f95: 'wrf_extreme_very_heavy',
         f99: 'wrf_extreme_extremely_heavy'
     });
-    const WHCA_ADMIN0_CODES = new Set(['ETH', 'RWA', 'SSD', 'SDN', 'UGA']);
-    const WHCA_MEMBER_CODES = new Set(['SD', 'SS', 'UG', 'ET', 'RW']);
-    const WHCA_ALLOWED_PARTNER_KEYS = new Set([
-        'wmo',
-        'worldmeteorologicalorganization',
-        'wateratheart',
-        'wateratheartfoundation',
-        'netherlandsredcross',
-        'thenetherlandsredcross',
-        'nlrc'
-    ]);
+    // CMS-driven scope configuration
+    const _cmsScopeConfigs = {{ map_scopes_json|safe }};
+    const MAP_SCOPE_CONFIG = (function() {
+        const config = {
+            all: { key: 'all', label: 'All Countries', countryCodes: [], admin0Codes: [], partnerKeys: [], countrySectionTitle: '', dashboardTitle: '', showBasinOverlay: false }
+        };
+        if (_cmsScopeConfigs) {
+            Object.keys(_cmsScopeConfigs).forEach(function(k) { config[k] = _cmsScopeConfigs[k]; });
+        }
+        return Object.freeze(config);
+    })();
+    const DEFAULT_SCOPE_KEY = '{{ default_scope_key|default:"all" }}';
+
     const ISO2_TO_ISO3 = Object.freeze({
-        BI: 'BDI',
-        DJ: 'DJI',
-        ER: 'ERI',
-        ET: 'ETH',
-        KE: 'KEN',
-        RW: 'RWA',
-        SD: 'SDN',
-        SO: 'SOM',
-        SS: 'SSD',
-        TZ: 'TZA',
-        UG: 'UGA'
+        BI: 'BDI', DJ: 'DJI', ER: 'ERI', ET: 'ETH', KE: 'KEN',
+        RW: 'RWA', SD: 'SDN', SO: 'SOM', SS: 'SSD', TZ: 'TZA', UG: 'UGA'
     });
     const ISO3_TO_ISO2 = Object.freeze({
-        BDI: 'BI',
-        DJI: 'DJ',
-        ERI: 'ER',
-        ETH: 'ET',
-        KEN: 'KE',
-        RWA: 'RW',
-        SDN: 'SD',
-        SOM: 'SO',
-        SSD: 'SS',
-        TZA: 'TZ',
-        UGA: 'UG'
+        BDI: 'BI', DJI: 'DJ', ERI: 'ER', ETH: 'ET', KEN: 'KE',
+        RWA: 'RW', SDN: 'SD', SOM: 'SO', SSD: 'SS', TZA: 'TZ', UGA: 'UG'
     });
     const BASE_COUNTRY_SECTION_TITLE = '{{ page.country_cards_title|default:"Regional Flood Situation"|escapejs }}';
     const BASE_DASHBOARD_TITLE = '{{ page.dashboard_title|default:"Latest Situation of Flood Conditions"|escapejs }}';
-    const WHCA_COUNTRY_SECTION_TITLE = 'Nile Basin Flood Situation';
-    const WHCA_DASHBOARD_TITLE = 'Latest Situation of Nile Basin Flood Conditions';
-
-    const MAP_SCOPE_CONFIG = {
-        all: {
-            scopeParam: 'all'
-        },
-        whca: {
-            scopeParam: 'whca'
-        }
-    };
     const PREFERRED_LAYER_ORDER = ['multimodal', 'extreme-rainfall', 'impact'];
     const LAYER_VALIDATION_MESSAGE = 'Selected dataset is undergoing validation. It will be available soon.';
     const EXTREME_WRF_VALIDATION_MESSAGE = 'Extreme WRF rainfall data is undergoing validation. It will be available soon.';
@@ -206,7 +274,11 @@
             '/api/v1/risk/risk-majority/'
         ]
     };
-    const miniMapLayerConfig = Object.freeze({
+    // CMS-driven layer config (null when no CMS categories configured)
+    const _cmsLayerConfigs = {{ mini_map_layer_configs_json|safe }};
+
+    // Hardcoded defaults used as fallback when CMS config is not set
+    const _defaultLayerConfig = Object.freeze({
         multimodal: {
             key: 'multimodal',
             label: 'Multimodal',
@@ -239,6 +311,44 @@
             valueUnit: ''
         }
     });
+
+    // Merge CMS config over defaults: CMS fields override, defaults fill gaps
+    const miniMapLayerConfig = (function buildLayerConfig() {
+        if (!_cmsLayerConfigs || Object.keys(_cmsLayerConfigs).length === 0) {
+            return _defaultLayerConfig;
+        }
+        const merged = {};
+        Object.keys(_cmsLayerConfigs).forEach(function(key) {
+            const cms = _cmsLayerConfigs[key];
+            const fallback = _defaultLayerConfig[key] || {};
+            merged[key] = {
+                key: cms.key || key,
+                label: cms.label || fallback.label || key,
+                renderMode: cms.renderMode || fallback.renderMode || 'points',
+                available: cms.available !== false,
+                valueLabel: cms.valueLabel || fallback.valueLabel || '',
+                valueField: cms.valueField || fallback.valueField || '',
+                valueUnit: cms.valueUnit || fallback.valueUnit || '',
+                validationMessage: cms.validationMessage || fallback.validationMessage || LAYER_VALIDATION_MESSAGE,
+                legendItems: Array.isArray(cms.legendItems) && cms.legendItems.length > 0
+                    ? cms.legendItems : (fallback.legendItems || []),
+            };
+            // Points mode: resolve GeoJSON URLs
+            if (merged[key].renderMode === 'points') {
+                const dataUrl = cms.dataUrl || '';
+                merged[key].geojsonUrls = dataUrl
+                    ? [dataUrl, dataUrl.replace(/\/?$/, '/')]
+                    : (fallback.geojsonUrls || apiEndpoints.multimodalGeojson);
+            }
+            // WMS mode: resolve base URL and layer name
+            if (merged[key].renderMode === 'wms-raster') {
+                merged[key].wmsBaseUrl = cms.wmsBaseUrl || fallback.wmsBaseUrl || apiEndpoints.extremeRainfallWmsBaseUrl;
+                merged[key].wmsLayerName = cms.wmsLayerName || '';
+                merged[key].wmsPercentile = fallback.wmsPercentile || DEFAULT_EXTREME_RAINFALL_PERCENTILE;
+            }
+        });
+        return Object.freeze(merged);
+    })();
 
     document.addEventListener('DOMContentLoaded', function() {
         document.body.classList.add('homepage-js-ready');
@@ -302,7 +412,7 @@
         if (!container) return;
 
         // Remove legacy animation clones if present.
-        container.querySelectorAll('.marquee-clone, .partner-clone').forEach((el) => el.remove());
+        container.querySelectorAll('.marquee-clone, .partner-clone, .member-clone').forEach((el) => el.remove());
 
         const seen = new Set();
         container.querySelectorAll(selector).forEach((item) => {
@@ -347,35 +457,55 @@
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
         document.querySelectorAll('.partners-logos').forEach((track) => {
-            const shell = track.closest('.partners-logos-shell');
-            track.querySelectorAll('.partner-clone').forEach((clone) => clone.remove());
-            track.classList.remove('is-animated');
-            track.style.removeProperty('--partners-marquee-duration');
-            if (shell) shell.classList.remove('is-animated');
+            track.classList.remove('is-animated', 'is-static');
+            track.style.removeProperty('--marquee-distance');
+            track.style.removeProperty('--marquee-duration');
+            track.style.removeProperty('transform');
+            const shell = track.closest('.partners-logos-shell') || track.parentElement;
+            const container = shell || track.closest('.partners-group') || track.parentElement;
 
-            if (reduceMotion) return;
+            if (shell) {
+                shell.classList.remove('is-animated', 'is-static');
+            }
+
+            if (reduceMotion || !container) {
+                track.classList.add('is-static');
+                if (shell) shell.classList.add('is-static');
+                return;
+            }
 
             const minItems = Number.parseInt(track.getAttribute('data-slider-threshold') || '5', 10);
             const threshold = Number.isFinite(minItems) && minItems > 1 ? minItems : 5;
-            const visibleBaseItems = Array.from(track.querySelectorAll('.partner-item')).filter((item) => (
+            const visibleItems = Array.from(track.querySelectorAll('.partner-item')).filter((item) => (
                 item.style.display !== 'none'
             ));
 
-            if (visibleBaseItems.length < threshold) return;
+            if (visibleItems.length < threshold) {
+                track.classList.add('is-static');
+                if (shell) shell.classList.add('is-static');
+                return;
+            }
 
-            visibleBaseItems.forEach((item) => {
-                const clone = item.cloneNode(true);
-                clone.classList.remove('partner-item');
-                clone.classList.add('partner-clone');
-                clone.setAttribute('aria-hidden', 'true');
-                clone.setAttribute('tabindex', '-1');
-                track.appendChild(clone);
-            });
+            const marqueeDistance = Math.round(track.scrollWidth - container.clientWidth);
+            if (!Number.isFinite(marqueeDistance) || marqueeDistance < 48) {
+                track.classList.add('is-static');
+                if (shell) shell.classList.add('is-static');
+                return;
+            }
 
-            const durationSeconds = Math.max(20, Math.round(visibleBaseItems.length * 4));
-            track.style.setProperty('--partners-marquee-duration', `${durationSeconds}s`);
+            const durationSeconds = Math.max(18, Math.min(52, marqueeDistance / 68));
+            track.style.setProperty('--marquee-distance', `${marqueeDistance}px`);
+            track.style.setProperty('--marquee-duration', `${durationSeconds}s`);
             track.classList.add('is-animated');
             if (shell) shell.classList.add('is-animated');
+        });
+
+        document.querySelectorAll('.member-flags').forEach((track) => {
+            track.classList.remove('is-animated', 'is-static');
+            track.style.removeProperty('--marquee-distance');
+            track.style.removeProperty('--marquee-duration');
+            track.style.removeProperty('transform');
+            track.classList.add('is-static');
         });
     }
 
@@ -633,38 +763,15 @@
     function getMiniMapLegendDefinition(layerConfig) {
         const layerKey = normalizeLayerKey(layerConfig?.key);
 
-        if (layerKey === 'extreme-rainfall') {
-            const percentile = String(layerConfig?.wmsPercentile || DEFAULT_EXTREME_RAINFALL_PERCENTILE).toLowerCase();
-            if (percentile === 'f90') {
-                return {
-                    title: 'Extreme Rainfall',
-                    items: [{ label: 'Heavy Rainfall', color: '#afeeee' }]
-                };
-            }
-            if (percentile === 'f99') {
-                return {
-                    title: 'Extreme Rainfall',
-                    items: [{ label: 'Extremely Heavy Rainfall', color: '#06008b' }]
-                };
-            }
+        // Use CMS-provided legend items for the active layer
+        if (Array.isArray(layerConfig?.legendItems) && layerConfig.legendItems.length > 0) {
             return {
-                title: 'Extreme Rainfall',
-                items: [{ label: 'Very Heavy Rainfall', color: '#1774cd' }]
+                title: layerConfig.label || layerKey || 'Legend',
+                items: layerConfig.legendItems
             };
         }
 
-        if (layerKey === 'impact') {
-            return {
-                title: 'Impact Risk Score',
-                items: [
-                    { label: 'Emergency', color: alertColors.emergency },
-                    { label: 'Alarm', color: alertColors.alarm },
-                    { label: 'Warning', color: alertColors.warning },
-                    { label: 'Normal', color: alertColors.normal }
-                ]
-            };
-        }
-
+        // No CMS legend items configured — fall back to the default HTML legend from the template
         return {
             title: miniMapDefaultLegendTitle || 'Current Flood Alerts',
             useDefaultItems: true,
@@ -921,7 +1028,17 @@
 
         const previousLayerKey = selectedMiniMapLayerKey;
         const previousButton = getCategoryButtonByLayerKey(previousLayerKey);
-        if (selectedLayerConfig.key === previousLayerKey) return;
+
+        // Toggle: clicking the active category deselects it → basemap only
+        if (selectedLayerConfig.key === previousLayerKey) {
+            selectedMiniMapLayerKey = null;
+            setActiveCategoryButton(null);
+            applyAdminOnlyLayerState();
+            hideMapStatusToast();
+            // Reset legend to default
+            renderMiniMapLegend({ key: null });
+            return;
+        }
 
         categoryButton.classList.add('loading');
         setMapLoadingState(true, `Loading ${selectedLayerConfig.label}...`);
@@ -961,24 +1078,37 @@
         if (!menu) return;
 
         applyPreferredCategoryOrder();
-
-        let activeCategory = menu.querySelector('.menu-category.active');
-        if (!activeCategory) {
-            activeCategory = getCategoryButtonByLayerKey('multimodal') || menu.querySelector('.menu-category');
-        }
-
-        const activeConfig = resolveLayerConfigFromCategory(activeCategory);
-        if (activeConfig) {
-            selectedMiniMapLayerKey = activeConfig.key;
-            setActiveCategoryButton(activeCategory);
-            renderMiniMapLegend(activeConfig);
-        }
+        selectedMiniMapLayerKey = null;
 
         menu.addEventListener('click', async (event) => {
             const categoryButton = event.target.closest('.menu-category');
             if (!categoryButton || !menu.contains(categoryButton)) return;
             await handleCategoryClick(categoryButton);
         });
+    }
+
+    async function autoLoadDefaultCategory() {
+        const allButtons = Array.from(document.querySelectorAll('.c-map-menu .menu-category'));
+        if (!allButtons.length) {
+            console.warn('[autoLoad] No category buttons found');
+            return;
+        }
+
+        const firstButton = allButtons[0];
+        const layerConfig = resolveLayerConfigFromCategory(firstButton);
+        console.log('[autoLoad] First category:', firstButton?.getAttribute('data-layer-key'), 'config:', layerConfig?.key);
+
+        if (!layerConfig) {
+            console.warn('[autoLoad] Could not resolve layer config for first category');
+            return;
+        }
+
+        try {
+            await handleCategoryClick(firstButton);
+            console.log('[autoLoad] Default category loaded:', selectedMiniMapLayerKey);
+        } catch (err) {
+            console.error('[autoLoad] Error loading default category:', err);
+        }
     }
 
     // ========================================
@@ -1018,7 +1148,7 @@
     }
 
     // ========================================
-    // MINI-MAP SCOPE FILTER (ALL / WHCA)
+    // MINI-MAP SCOPE FILTER (CMS-driven project scopes)
     // ========================================
     function initMapScopeControl() {
         const control = document.getElementById('map-scope-control');
@@ -1078,17 +1208,21 @@
         const flags = Array.from(document.querySelectorAll('.member-flag[data-country-code]'));
         if (!flags.length) return;
 
+        const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+        const scopeCountryCodes = new Set(scopeConfig?.countryCodes || []);
+        const hasFilter = scopeCountryCodes.size > 0;
+
         let visibleCount = 0;
         flags.forEach((flag) => {
             const code = (flag.getAttribute('data-country-code') || '').toUpperCase();
-            const isVisible = selectedMapScope !== 'whca' || WHCA_MEMBER_CODES.has(code);
+            const isVisible = !hasFilter || scopeCountryCodes.has(code);
             flag.style.display = isVisible ? '' : 'none';
             if (isVisible) visibleCount += 1;
         });
 
         const label = membersGroup.querySelector('.partners-label');
         if (label) {
-            label.textContent = selectedMapScope === 'whca' ? 'WHCA Countries' : 'Member Countries';
+            label.textContent = label.getAttribute('data-default-label') || 'Member Countries';
         }
 
         membersGroup.style.display = visibleCount > 0 ? '' : 'none';
@@ -1103,17 +1237,16 @@
             .replace(/[^a-z0-9]+/g, '');
     }
 
-    function isWhcaPartner(rawName) {
+    function isScopePartner(rawName, partnerKeysSet) {
+        if (!partnerKeysSet || partnerKeysSet.size === 0) return true;
         const normalizedName = normalizePartnerName(rawName);
         if (!normalizedName) return false;
-        if (WHCA_ALLOWED_PARTNER_KEYS.has(normalizedName)) return true;
-
-        return (
-            normalizedName.includes('worldmeteorologicalorganization') ||
-            normalizedName.includes('wateratheart') ||
-            normalizedName.includes('nlrc') ||
-            (normalizedName.includes('netherlands') && normalizedName.includes('redcross'))
-        );
+        if (partnerKeysSet.has(normalizedName)) return true;
+        // Fuzzy match: check if any partner key is contained in the normalized name
+        for (const key of partnerKeysSet) {
+            if (normalizedName.includes(key)) return true;
+        }
+        return false;
     }
 
     function updatePartnersByScope() {
@@ -1123,6 +1256,10 @@
         const partnerItems = Array.from(partnersGroup.querySelectorAll('.partner-item'));
         if (!partnerItems.length) return;
 
+        const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+        const scopePartnerKeys = new Set(scopeConfig?.partnerKeys || []);
+        const hasPartnerFilter = scopePartnerKeys.size > 0;
+
         let visibleCount = 0;
         partnerItems.forEach((item) => {
             const logo = item.querySelector('.partner-logo');
@@ -1130,14 +1267,14 @@
                 || logo?.getAttribute('alt')
                 || logo?.getAttribute('title')
                 || '';
-            const isVisible = selectedMapScope !== 'whca' || isWhcaPartner(rawName);
+            const isVisible = !hasPartnerFilter || isScopePartner(rawName, scopePartnerKeys);
             item.style.display = isVisible ? '' : 'none';
             if (isVisible) visibleCount += 1;
         });
 
         const label = partnersGroup.querySelector('.partners-label');
         if (label) {
-            label.textContent = selectedMapScope === 'whca' ? 'WHCA Partners' : 'Our Partners';
+            label.textContent = label.getAttribute('data-default-label') || 'Our Partners';
         }
 
         const partnerTrack = partnersGroup.querySelector('.partners-logos');
@@ -1164,15 +1301,13 @@
     }
 
     function getScopePanelTitle() {
-        return selectedMapScope === 'whca'
-            ? WHCA_COUNTRY_SECTION_TITLE
-            : (BASE_COUNTRY_SECTION_TITLE || 'Regional Flood Situation');
+        const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+        return (scopeConfig?.countrySectionTitle) || BASE_COUNTRY_SECTION_TITLE || 'Regional Flood Situation';
     }
 
     function getScopeTickerTitle() {
-        return selectedMapScope === 'whca'
-            ? WHCA_DASHBOARD_TITLE
-            : (BASE_DASHBOARD_TITLE || 'Latest Situation of Flood Conditions');
+        const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+        return (scopeConfig?.dashboardTitle) || BASE_DASHBOARD_TITLE || 'Latest Situation of Flood Conditions';
     }
 
     function updateScopeHeadings() {
@@ -1363,11 +1498,18 @@
         };
     }
 
+    function getActiveScopeAdmin0Filter() {
+        const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+        const codes = scopeConfig?.admin0Codes || [];
+        return codes.length > 0 ? new Set(codes) : null;
+    }
+
     function getScopedAdmin0Features() {
         let features = Array.isArray(admin0FeaturesCache) ? [...admin0FeaturesCache] : [];
-        if (selectedMapScope === 'whca') {
+        const admin0Filter = getActiveScopeAdmin0Filter();
+        if (admin0Filter) {
             features = features.filter((feature) =>
-                WHCA_ADMIN0_CODES.has((feature.properties?.gid_0 || '').toUpperCase())
+                admin0Filter.has((feature.properties?.gid_0 || '').toUpperCase())
             );
         }
         return features;
@@ -1384,7 +1526,9 @@
             );
         }
 
-        if (selectedMapScope === 'whca') {
+        // Show focus mask when scope has an admin0 filter (i.e. not "all")
+        const scopeAdmin0Filter = getActiveScopeAdmin0Filter();
+        if (scopeAdmin0Filter) {
             return scopedFeatures;
         }
 
@@ -1509,16 +1653,18 @@
     function fitMapToScopeBounds(bounds, scope, animate) {
         if (!miniMap) return;
 
-        const isWhcaScope = scope === 'whca';
-        const targetBounds = isWhcaScope
+        // A filtered scope (has admin0Codes) zooms tighter to the project region
+        const scopeConfig = MAP_SCOPE_CONFIG[scope];
+        const isFilteredScope = (scopeConfig?.admin0Codes || []).length > 0;
+        const targetBounds = isFilteredScope
             ? (toBoundsPair(bounds) || mapConfig.bounds)
             : mapConfig.bounds;
-        const padding = isWhcaScope ? 52 : 64;
-        const maxZoom = isWhcaScope ? 5.1 : 4.4;
+        const padding = isFilteredScope ? 52 : 64;
+        const maxZoom = isFilteredScope ? 5.1 : 4.4;
         const expandedBounds = expandBounds(
             targetBounds,
-            isWhcaScope ? 0.16 : 0.24,
-            isWhcaScope ? 0.5 : 1.0
+            isFilteredScope ? 0.16 : 0.24,
+            isFilteredScope ? 0.5 : 1.0
         ) || targetBounds;
 
         scopeBoundsByScope[scope] = targetBounds;
@@ -1605,9 +1751,10 @@
             console.error('Failed to load admin0 boundaries:', error);
         }
 
-        if (selectedMapScope === 'whca') {
+        const admin0Filter = getActiveScopeAdmin0Filter();
+        if (admin0Filter) {
             admin0Features = admin0Features.filter((feature) =>
-                WHCA_ADMIN0_CODES.has((feature.properties?.gid_0 || '').toUpperCase())
+                admin0Filter.has((feature.properties?.gid_0 || '').toUpperCase())
             );
         }
 
@@ -1723,29 +1870,33 @@
             miniMap.on('load', async function() {
                 miniMapReady = true;
 
-                // Load all data while spinner covers the map
-                await loadAdmin0Boundaries();
-                const initialLayerResult = await loadMapPoints(null, { silent: true });
-                if (initialLayerResult?.reason === 'no_data') {
-                    showMapStatusToast(
-                        initialLayerResult?.message || 'No data available for the selected layer.',
-                        { withSpinner: false, autoHideMs: 2200 }
-                    );
-                } else if (!initialLayerResult?.ok) {
-                    showMapStatusToast(initialLayerResult?.message || LAYER_VALIDATION_MESSAGE);
-                }
+                // Load admin boundaries for the default scope
+                const scopeBounds = await loadAdmin0Boundaries();
 
-                // Apply the final default camera once (before revealing the map)
-                // so users don't see an intermediate camera state.
+                // Apply the default scope camera (filtered or full region)
                 miniMap.resize();
-                miniMap.fitBounds(initialBounds, {
-                    padding: mapUiConfig.initialFitPadding,
-                    duration: 0,
-                    maxZoom: mapUiConfig.initialFitMaxZoom
-                });
-                setMapBoundsConstraint(initialBounds, false);
-                scopeBoundsByScope.all = mapConfig.bounds;
+                const hasDefaultScopeFilter = (getActiveScopeAdmin0Filter() !== null);
+                if (hasDefaultScopeFilter && scopeBounds) {
+                    fitMapToScopeBounds(scopeBounds, selectedMapScope, false);
+                } else {
+                    miniMap.fitBounds(initialBounds, {
+                        padding: mapUiConfig.initialFitPadding,
+                        duration: 0,
+                        maxZoom: mapUiConfig.initialFitMaxZoom
+                    });
+                    setMapBoundsConstraint(initialBounds, false);
+                }
+                scopeBoundsByScope[selectedMapScope] = scopeBounds || mapConfig.bounds;
                 miniMapLastHeight = getMiniMapContainerHeight();
+
+                // Apply scope-driven filtering to member flags and partner logos
+                updateMemberCountriesByScope();
+                updatePartnersByScope();
+                updateScopeHeadings();
+                updateMapScopeUI();
+
+                // Auto-load the first available data layer category
+                await autoLoadDefaultCategory();
 
                 document.getElementById('map-loading').style.display = 'none';
             });
@@ -1805,7 +1956,9 @@
 
             const baseUrl = layerConfig.wmsBaseUrl || apiEndpoints.extremeRainfallWmsBaseUrl;
             const percentile = String(layerConfig.wmsPercentile || DEFAULT_EXTREME_RAINFALL_PERCENTILE).toLowerCase();
-            const wmsLayerName = EXTREME_RAINFALL_WMS_LAYER_BY_PERCENTILE[percentile]
+            // CMS wmsLayerName takes priority, then percentile lookup, then default
+            const wmsLayerName = layerConfig.wmsLayerName
+                || EXTREME_RAINFALL_WMS_LAYER_BY_PERCENTILE[percentile]
                 || EXTREME_RAINFALL_WMS_LAYER_BY_PERCENTILE[DEFAULT_EXTREME_RAINFALL_PERCENTILE];
             const resolvedBaseUrl = (baseUrl || '')
                 .replace('{layer}', encodeURIComponent(wmsLayerName))
@@ -1863,9 +2016,10 @@
             ]);
 
             let scopedAdmin1Features = Array.isArray(admin1Features) ? [...admin1Features] : [];
-            if (selectedMapScope === 'whca') {
+            const admin1ScopeFilter = getActiveScopeAdmin0Filter();
+            if (admin1ScopeFilter) {
                 scopedAdmin1Features = scopedAdmin1Features.filter((feature) =>
-                    WHCA_ADMIN0_CODES.has((feature.properties?.gid_0 || '').toUpperCase())
+                    admin1ScopeFilter.has((feature.properties?.gid_0 || '').toUpperCase())
                 );
             }
 
@@ -1986,7 +2140,7 @@
         try {
             const params = {};
             if (mapConfig.pointFilter !== 'all') params.filter = mapConfig.pointFilter;
-            if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+            if (selectedMapScope !== 'all') params.scope = selectedMapScope;
 
             clearExtremeRainfallLayer();
             clearImpactAdmin1Layer();
@@ -2108,7 +2262,7 @@
     async function loadCountryData() {
         try {
             const params = {};
-            if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+            if (selectedMapScope !== 'all') params.scope = selectedMapScope;
             const urls = buildUrlsWithParams(apiEndpoints.countrySummary, params);
             const data = await fetchJsonWithFallback(urls);
             countriesData = data.countries || [];
@@ -2268,7 +2422,7 @@
     async function loadSituationSummary() {
         try {
             const params = {};
-            if (selectedMapScope !== 'all') params.scope = MAP_SCOPE_CONFIG[selectedMapScope].scopeParam;
+            if (selectedMapScope !== 'all') params.scope = selectedMapScope;
             const urls = buildUrlsWithParams(apiEndpoints.situationSummary, params);
             const data = await fetchJsonWithFallback(urls);
 

@@ -1,6 +1,7 @@
 LAYER
     INCLUDE "config/database.map"
     DATA "geom from (select id, flow_level, geom from alerts.get_wrf_streamflow('%time%', NULLIF('%country%', ''))) as subq using unique id using srid=4326"
+    MASK "gha_admin_extent_mask"
     INCLUDE "shared/common-layer-properties.map"
     INCLUDE "classifications/wrf-streamflow.classes.map"
     METADATA

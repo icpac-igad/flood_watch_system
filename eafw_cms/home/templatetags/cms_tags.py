@@ -154,3 +154,30 @@ def unique_partners(stream_value):
         unique_items.append(block)
 
     return unique_items
+
+
+@register.filter
+def homepage_partners(stream_value):
+    """
+    Return partners marked as `show_on_homepage`.
+    If none are marked, return all provided items to avoid an empty homepage strip.
+    """
+    items = _stream_items(stream_value)
+    if not items:
+        return []
+
+    featured_items = []
+    for block in items:
+        value = _block_value(block)
+        if value is None:
+            continue
+
+        if hasattr(value, "get"):
+            show_on_homepage = value.get("show_on_homepage")
+        else:
+            show_on_homepage = getattr(value, "show_on_homepage", False)
+
+        if bool(show_on_homepage):
+            featured_items.append(block)
+
+    return featured_items or items

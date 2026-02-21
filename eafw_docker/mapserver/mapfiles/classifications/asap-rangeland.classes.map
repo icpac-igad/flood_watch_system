@@ -1,0 +1,56 @@
+# ASAP Rangeland Mask v02 classification.
+# Values represent percentage of rangeland cover per ~1 km² pixel (1-200 scale, where 200 = 100%).
+# Grey-to-green gradient matching EA Hazards Watch styling.
+CLASS
+    NAME "0 to 20 %"
+    EXPRESSION ([pixel] >= 1 AND [pixel] <= 20)
+    STYLE
+        COLOR 207 198 201
+        OUTLINECOLOR 207 198 201
+    END
+END
+
+CLASS
+    NAME "20 to 40%"
+    EXPRESSION ([pixel] > 20 AND [pixel] <= 40)
+    STYLE
+        COLOR 255 255 203
+        OUTLINECOLOR 255 255 203
+    END
+END
+
+CLASS
+    NAME "40 to 60 %"
+    EXPRESSION ([pixel] > 40 AND [pixel] <= 80)
+    STYLE
+        COLOR 204 225 172
+        OUTLINECOLOR 204 225 172
+    END
+END
+
+CLASS
+    NAME "60 to 80%"
+    EXPRESSION ([pixel] > 80 AND [pixel] <= 120)
+    STYLE
+        COLOR 152 195 141
+        OUTLINECOLOR 152 195 141
+    END
+END
+
+CLASS
+    NAME "80 to 100 %"
+    EXPRESSION ([pixel] > 120 AND [pixel] <= 160)
+    STYLE
+        COLOR 100 164 110
+        OUTLINECOLOR 100 164 110
+    END
+END
+
+CLASS
+    NAME "80 to 100 %"
+    EXPRESSION ([pixel] > 160)
+    STYLE
+        COLOR 48 134 80
+        OUTLINECOLOR 48 134 80
+    END
+END

@@ -3,18 +3,18 @@ LAYER
     NAME "gha_admin_extent_mask"
     TYPE POLYGON
     STATUS DEFAULT
-    DATA "geom from (select 1 as id, gha.resolve_scope_extent_geom('%scope%', '%project_countries%', '%country_name%', '%region_name%', '%district_name%') as geom) as subq using unique id using srid=4326"
+    DATA "geom from (select 1 as id, gha.resolve_scope_extent_geom('%scope%', NULLIF('%project_countries%', '__none__'), NULLIF('%country_name%', '__none__'), NULLIF('%region_name%', '__none__'), NULLIF('%district_name%', '__none__')) as geom) as subq using unique id using srid=4326"
     VALIDATION
         "scope" "^(|all|project|whca)$"
         "default_scope" "all"
-        "project_countries" "^[A-Za-z ,'-]*$"
-        "default_project_countries" ""
-        "country_name" "^[A-Za-z .,'-]*$"
-        "default_country_name" ""
-        "region_name" "^[A-Za-z .,'-]*$"
-        "default_region_name" ""
-        "district_name" "^[A-Za-z .,'-]*$"
-        "default_district_name" ""
+        "project_countries" "^(__none__|[A-Za-z ,'-]*)$"
+        "default_project_countries" "__none__"
+        "country_name" "^(__none__|[A-Za-z .,'-]*)$"
+        "default_country_name" "__none__"
+        "region_name" "^(__none__|[A-Za-z .,'-]*)$"
+        "default_region_name" "__none__"
+        "district_name" "^(__none__|[A-Za-z .,'-]*)$"
+        "default_district_name" "__none__"
     END
     CLASS
         STYLE

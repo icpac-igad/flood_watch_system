@@ -100,10 +100,49 @@ jobs:
             echo "deploy_only=false" >> $GITHUB_OUTPUT
           fi
 
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block forbidden files from deployment branch
+        run: |
+          set -euo pipefail
+
+          SHAPEFILE_RE='\.((shp|shx|dbf|prj|cpg|qmd))$'
+          SENSITIVE_ENV_RE='(^|/)\.env$|(^|/)staging\.env$|(^|/)production\.env$'
+          HIGH_RISK_SECRET_RE='(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY-----)'
+
+          tracked_shapefiles="$(git ls-files | grep -E -i "${SHAPEFILE_RE}" || true)"
+          tracked_env_files="$(git ls-files | grep -E "${SENSITIVE_ENV_RE}" || true)"
+          secret_hits="$(git grep -n -I -E "${HIGH_RISK_SECRET_RE}" -- . ':!*.md' ':!*.example' ':!*.sample' || true)"
+
+          if [ -n "${tracked_shapefiles}" ]; then
+            echo "::error::Blocked: shapefile artifacts are tracked in git."
+            echo "${tracked_shapefiles}"
+            exit 1
+          fi
+
+          if [ -n "${tracked_env_files}" ]; then
+            echo "::error::Blocked: raw environment files are tracked in git."
+            echo "${tracked_env_files}"
+            exit 1
+          fi
+
+          if [ -n "${secret_hits}" ]; then
+            echo "::error::Blocked: high-risk secret pattern detected in tracked files."
+            echo "${secret_hits}"
+            exit 1
+          fi
+
+          echo "Security gate passed: no blocked files or high-risk secret patterns."
+
   build-api:
     name: Build API
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.api == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -134,7 +173,7 @@ jobs:
   build-cms:
     name: Build CMS
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.cms == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -166,7 +205,7 @@ jobs:
   build-mapviewer:
     name: Build Mapviewer
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.mapviewer == 'true' || github.event.inputs.force_build == 'true'
     env:
       ANALYTICS_PROPERTY_ID: ${{ secrets.STAGING_ANALYTICS_PROPERTY_ID }}
@@ -206,7 +245,7 @@ jobs:
   build-mapserver:
     name: Build Mapserver
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.mapserver == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -237,7 +276,7 @@ jobs:
   build-mapcache:
     name: Build Mapcache
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.mapcache == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -268,7 +307,7 @@ jobs:
   build-jobs:
     name: Build Jobs
     runs-on: ubuntu-latest
-    needs: detect-changes
+    needs: [detect-changes, security-gate]
     if: needs.detect-changes.outputs.jobs == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
@@ -300,7 +339,7 @@ jobs:
   deploy:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-api, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs]
+    needs: [detect-changes, security-gate, build-api, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs]
     if: always() && !cancelled()
     environment: staging
     steps:
@@ -341,7 +380,7 @@ jobs:
           printf '%s\n' "${SSH_KEY}" > "${KEY_FILE}"
           chmod 600 "${KEY_FILE}"
 
-          if timeout 12 ssh -i "${KEY_FILE}" -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 "${DEPLOY_USER}@${DEPLOY_HOST}" 'echo ssh-auth-ok' >/dev/null 2>&1; then
+          if timeout 12 ssh -i "${KEY_FILE}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 "${DEPLOY_USER}@${DEPLOY_HOST}" 'echo ssh-auth-ok' >/dev/null 2>&1; then
             echo "auth_ok=true" >> "$GITHUB_OUTPUT"
             echo "SSH auth preflight passed for ${DEPLOY_USER}@${DEPLOY_HOST}"
           else
@@ -409,23 +448,38 @@ jobs:
               exit 1
             fi
 
+            # Use temporary askpass credentials so token is not embedded in git URLs.
+            ASKPASS_FILE="$(mktemp)"
+            cat > "${ASKPASS_FILE}" <<'EOF'
+            #!/bin/sh
+            case "$1" in
+              *Username*) echo "x-access-token" ;;
+              *Password*) echo "${GH_TOKEN}" ;;
+              *) echo "" ;;
+            esac
+            EOF
+            chmod 700 "${ASKPASS_FILE}"
+            export GIT_ASKPASS="${ASKPASS_FILE}"
+            trap 'rm -f "${ASKPASS_FILE}"; unset GIT_ASKPASS' EXIT
+
             # Safe repo update
             if [ -d "eafw/.git" ]; then
               echo "[$(log_ts)] Updating existing repo..."
               echo "Updating existing repo..."
               cd eafw
+              git remote set-url origin https://github.com/icpac-igad/flood_watch_system.git
               timeout 180 git fetch origin
               timeout 60 git reset --hard origin/eafw
             elif [ -d "eafw" ]; then
               echo "[$(log_ts)] Existing eafw directory is not a git repo; replacing"
               echo "Directory eafw/ exists but is not a git repo. Renaming and cloning fresh..."
               mv eafw eafw_old_$(date +%Y%m%d%H%M%S)
-              timeout 300 git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
+              timeout 300 git clone -b eafw https://github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
             else
               echo "[$(log_ts)] Cloning repo..."
               echo "Cloning repo..."
-              timeout 300 git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git eafw
+              timeout 300 git clone -b eafw https://github.com/icpac-igad/flood_watch_system.git eafw
               cd eafw
             fi
 
@@ -498,6 +552,27 @@ jobs:
             upsert_env "SMTP_EMAIL_HOST_PASSWORD" "${SMTP_EMAIL_HOST_PASSWORD}"
             # Force DEBUG off on staging
             upsert_env "CMS_DEBUG" "False"
+
+            # Pin deployments to this commit when SHA-tagged images exist.
+            GIT_SHA="$(git rev-parse HEAD)"
+            IMAGE_OWNER="ghcr.io/icpac-igad"
+            resolve_image_ref() {
+              image_name="$1"
+              sha_ref="${IMAGE_OWNER}/${image_name}:${GIT_SHA}"
+              latest_ref="${IMAGE_OWNER}/${image_name}:latest"
+              if docker manifest inspect "${sha_ref}" >/dev/null 2>&1; then
+                echo "${sha_ref}"
+              else
+                echo "${latest_ref}"
+              fi
+            }
+
+            upsert_env "API_IMAGE_NAME" "$(resolve_image_ref eafw-api)"
+            upsert_env "WEB_IMAGE_NAME" "$(resolve_image_ref eafw-cms)"
+            upsert_env "MAPVIEWER_IMAGE_NAME" "$(resolve_image_ref eafw-mapviewer)"
+            upsert_env "MAPSERVER_IMAGE_NAME" "$(resolve_image_ref eafw-mapserver)"
+            upsert_env "MAPCACHE_IMAGE_NAME" "$(resolve_image_ref eafw-mapcache)"
+            upsert_env "JOBS_IMAGE_NAME" "$(resolve_image_ref eafw-jobs)"
 
             # Compare checksums to detect secret changes
             ENV_CHECKSUM_AFTER=$(sha256sum .env | cut -d' ' -f1)

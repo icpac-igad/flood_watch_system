@@ -26,6 +26,7 @@ import MultimodalClusterLayer from "./components/multimodal-cluster";
 import AlertPulse from "./components/emergency-pulse";
 import EmergencyClusterPulse from "./components/emergency-cluster-pulse";
 import BasinLayer from "./components/basin-layer";
+import NileBasinLayer from "./components/nile-basin-layer";
 // import { pulsingDot } from "./mapImages";
 
 import mapStyleForNoStyle from "./style";
@@ -95,6 +96,7 @@ class RenderMap extends PureComponent {
 
             {/* Basin Layer - Auto-loads basin boundary when clicking forecast points */}
             <BasinLayer map={map} />
+            <NileBasinLayer map={map} />
 
             {!mapSide && (
               <>

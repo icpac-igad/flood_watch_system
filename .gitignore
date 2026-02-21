@@ -57,6 +57,14 @@ backups/
 # Large GeoJSON files
 *.geojson
 
+# Shapefile and QGIS sidecar artifacts (large binary data; keep out of git)
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.qmd
+
 # OS files
 .DS_Store
 Thumbs.db
