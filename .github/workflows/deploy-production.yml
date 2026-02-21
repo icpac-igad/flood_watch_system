@@ -699,14 +699,16 @@ jobs:
             echo "Waiting for CMS to be ready..."
             CMS_READY=0
             CMS_PROBE_TIMEOUT_SECONDS=8
-            for i in $(seq 1 30); do
+            CMS_READY_MAX_CHECKS=120
+            CMS_READY_INTERVAL_SECONDS=5
+            for i in $(seq 1 "${CMS_READY_MAX_CHECKS}"); do
               if timeout "${CMS_PROBE_TIMEOUT_SECONDS}" docker exec eafw-cms curl -fsS --connect-timeout 2 --max-time 4 http://localhost:8000/ >/dev/null 2>&1; then
                 CMS_READY=1
-                echo "CMS ready after $((i*5))s"
+                echo "CMS ready after $((i*CMS_READY_INTERVAL_SECONDS))s"
                 break
               fi
-              [ $((i % 6)) -eq 0 ] && echo "  Still waiting for CMS ($i/30)..."
-              sleep 5
+              [ $((i % 12)) -eq 0 ] && echo "  Still waiting for CMS ($i/${CMS_READY_MAX_CHECKS})..."
+              sleep "${CMS_READY_INTERVAL_SECONDS}"
             done
 
             if [ "$CMS_READY" -eq 1 ]; then
@@ -719,7 +721,7 @@ jobs:
               docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/homepage-layout*.css >/dev/null"
               docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/geomanagerweb*.css >/dev/null"
             else
-              echo "FATAL: CMS not ready; cannot verify migrations/static safely"
+              echo "FATAL: CMS not ready after $((CMS_READY_MAX_CHECKS*CMS_READY_INTERVAL_SECONDS))s; cannot verify migrations/static safely"
               exit 1
             fi
 
