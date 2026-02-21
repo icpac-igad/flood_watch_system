@@ -712,13 +712,17 @@ jobs:
             if [ "$CMS_READY" -eq 1 ]; then
               echo "Running Django migrations..."
               docker exec eafw-cms /opt/venv/bin/python manage.py migrate --noinput 2>&1
-              echo "Collecting static files..."
-              docker exec eafw-cms /opt/venv/bin/python manage.py collectstatic --clear --no-input 2>&1
               echo "Verifying homepage static assets..."
+              # collectstatic already runs in CMS container startup entrypoint.
+              # Running collectstatic again after Gunicorn boots can desync in-memory
+              # manifest hashes from files served by nginx.
               docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/homepage-layout*.css >/dev/null"
               docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/geomanagerweb*.css >/dev/null"
+              docker exec eafw-cms sh -lc "test -f /opt/eafw_cms/static/staticfiles.json"
+              docker exec eafw-cms sh -lc "grep -q '\"css/homepage-layout.css\"' /opt/eafw_cms/static/staticfiles.json"
+              docker exec eafw-cms sh -lc "grep -q '\"css/geomanagerweb.css\"' /opt/eafw_cms/static/staticfiles.json"
             else
-              echo "FATAL: CMS not ready; cannot run migrations/collectstatic safely"
+              echo "FATAL: CMS not ready; cannot verify migrations/static safely"
               exit 1
             fi
 
