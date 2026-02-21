@@ -15,11 +15,13 @@
                 <div class="c-menu-control {% if page.category_menu_style == 'card_list' %}card-style{% endif %}">
                     <div class="c-map-menu" style="--menu-bg: {{ page.category_menu_bg_color|default:'rgba(68, 65, 65, 0.84)' }}; --menu-active: {{ page.category_menu_active_color|default:'#f7a600' }};">
                         {% for category in mini_map_categories %}
+                        {% if category.key != "impact" %}
                         <div
                             class="menu-category"
                             data-category-id="{{ category.category_id|default:'' }}"
                             data-layer-name="{{ category.title }}"
                             data-layer-key="{{ category.key }}"
+                            data-is-default="{% if category.is_default %}1{% else %}0{% endif %}"
                         >
                             <div class="category-icon">
                                 {% if category.icon_name %}
@@ -37,6 +39,7 @@
                                 <div>{{ category.title }}</div>
                             </div>
                         </div>
+                        {% endif %}
                         {% endfor %}
                     </div>
                 </div>

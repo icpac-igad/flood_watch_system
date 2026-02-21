@@ -99,7 +99,7 @@ human_size() {
 # ── Pre-flight checks ───────────────────────────────────────────────────────
 log "Pre-flight checks..."
 
-if $DO_DUMP; then
+if $DO_DUMP && $DO_DB; then
   if ! docker ps --format '{{.Names}}' | grep -q "^${LOCAL_DB_CONTAINER}$"; then
     err "Local DB container '${LOCAL_DB_CONTAINER}' is not running"
     err "Start it with: docker compose up -d eafw_db"
@@ -217,8 +217,9 @@ if $DO_RESTORE; then
 set -euo pipefail
 cd ${STAGING_DIR}
 
-# Source staging env for DB credentials
-export \$(grep -E '^(CMS_DB_USER|CMS_DB_NAME|CMS_DB_PASSWORD)=' .env | xargs)
+# Source staging env for DB credentials and public base URL
+export \$(grep -E '^(CMS_DB_USER|CMS_DB_NAME|CMS_DB_PASSWORD|CMS_BASE_URL)=' .env | xargs)
+TARGET_BASE_URL="\${CMS_BASE_URL:-http://41.139.151.242:9068}"
 
 echo "  Stopping services that use the DB..."
 docker stop ${STAGING_CMS_CONTAINER} eafw-api eafw-jobs eafw-tileserv 2>/dev/null || true
@@ -246,7 +247,65 @@ docker start ${STAGING_CMS_CONTAINER} eafw-api eafw-jobs eafw-tileserv
 sleep 10
 
 echo "  Running Django migrations (in case of schema drift)..."
-docker exec ${STAGING_CMS_CONTAINER} python manage.py migrate --noinput 2>&1 | tail -5
+docker exec ${STAGING_CMS_CONTAINER} /opt/venv/bin/python manage.py migrate --noinput 2>&1 | tail -5
+
+echo "  Aligning Wagtail default Site with \${TARGET_BASE_URL}..."
+docker exec -e TARGET_BASE_URL="\${TARGET_BASE_URL}" ${STAGING_CMS_CONTAINER} /opt/venv/bin/python - <<'PY'
+from urllib.parse import urlparse
+import os
+from wagtail.models import Site
+
+base = os.environ.get("TARGET_BASE_URL", "http://127.0.0.1:9068")
+parsed = urlparse(base)
+host = parsed.hostname
+port = parsed.port or (443 if parsed.scheme == "https" else 80)
+if host:
+    site = Site.objects.get(is_default_site=True)
+    site.hostname = host
+    site.port = port
+    site.save(update_fields=["hostname", "port"])
+    print(f"default-site={site.hostname}:{site.port}")
+else:
+    print(f"WARN: could not parse hostname from TARGET_BASE_URL={base}")
+PY
+
+echo "  Rewriting localhost/loopback layer URLs to \${TARGET_BASE_URL}..."
+docker exec ${STAGING_DB_CONTAINER} psql -U \${CMS_DB_USER} -d \${CMS_DB_NAME} -c "
+  UPDATE cms.geomanager_vectortilelayer
+  SET base_url = replace(replace(replace(replace(base_url,'http://127.0.0.1:9068','${TARGET_BASE_URL}'),'http://localhost:9068','${TARGET_BASE_URL}'),'http://127.0.0.1:8180','${TARGET_BASE_URL}'),'http://localhost:8180','${TARGET_BASE_URL}')
+  WHERE base_url LIKE '%127.0.0.1%' OR base_url LIKE '%localhost%';
+
+  UPDATE cms.geomanager_vectortilelayer
+  SET tile_json_url = replace(replace(replace(replace(tile_json_url,'http://127.0.0.1:9068','${TARGET_BASE_URL}'),'http://localhost:9068','${TARGET_BASE_URL}'),'http://127.0.0.1:8180','${TARGET_BASE_URL}'),'http://localhost:8180','${TARGET_BASE_URL}')
+  WHERE tile_json_url LIKE '%127.0.0.1%' OR tile_json_url LIKE '%localhost%';
+
+  UPDATE cms.geomanager_rastertilelayer
+  SET base_url = replace(replace(replace(replace(base_url,'http://127.0.0.1:9068','${TARGET_BASE_URL}'),'http://localhost:9068','${TARGET_BASE_URL}'),'http://127.0.0.1:8180','${TARGET_BASE_URL}'),'http://localhost:8180','${TARGET_BASE_URL}')
+  WHERE base_url LIKE '%127.0.0.1%' OR base_url LIKE '%localhost%';
+
+  UPDATE cms.geomanager_rastertilelayer
+  SET tile_json_url = replace(replace(replace(replace(tile_json_url,'http://127.0.0.1:9068','${TARGET_BASE_URL}'),'http://localhost:9068','${TARGET_BASE_URL}'),'http://127.0.0.1:8180','${TARGET_BASE_URL}'),'http://localhost:8180','${TARGET_BASE_URL}')
+  WHERE tile_json_url LIKE '%127.0.0.1%' OR tile_json_url LIKE '%localhost%';
+
+  UPDATE cms.geomanager_wmslayer
+  SET base_url = replace(replace(replace(replace(base_url,'http://127.0.0.1:9068','${TARGET_BASE_URL}'),'http://localhost:9068','${TARGET_BASE_URL}'),'http://127.0.0.1:8180','${TARGET_BASE_URL}'),'http://localhost:8180','${TARGET_BASE_URL}')
+  WHERE base_url LIKE '%127.0.0.1%' OR base_url LIKE '%localhost%';
+
+  UPDATE cms.geomanager_wmslayer
+  SET custom_get_capabilities_url = replace(replace(replace(replace(custom_get_capabilities_url,'http://127.0.0.1:9068','${TARGET_BASE_URL}'),'http://localhost:9068','${TARGET_BASE_URL}'),'http://127.0.0.1:8180','${TARGET_BASE_URL}'),'http://localhost:8180','${TARGET_BASE_URL}')
+  WHERE custom_get_capabilities_url LIKE '%127.0.0.1%' OR custom_get_capabilities_url LIKE '%localhost%';
+
+  UPDATE cms.home_mapcategory
+  SET data_url = replace(replace(replace(replace(data_url,'http://127.0.0.1:9068','${TARGET_BASE_URL}'),'http://localhost:9068','${TARGET_BASE_URL}'),'http://127.0.0.1:8180','${TARGET_BASE_URL}'),'http://localhost:8180','${TARGET_BASE_URL}')
+  WHERE data_url LIKE '%127.0.0.1%' OR data_url LIKE '%localhost%';
+
+  UPDATE cms.home_mapcategory
+  SET wms_base_url = replace(replace(replace(replace(wms_base_url,'http://127.0.0.1:9068','${TARGET_BASE_URL}'),'http://localhost:9068','${TARGET_BASE_URL}'),'http://127.0.0.1:8180','${TARGET_BASE_URL}'),'http://localhost:8180','${TARGET_BASE_URL}')
+  WHERE wms_base_url LIKE '%127.0.0.1%' OR wms_base_url LIKE '%localhost%';
+"
+
+echo "  Clearing Django cache..."
+docker exec ${STAGING_CMS_CONTAINER} /opt/venv/bin/python manage.py shell -c "from django.core.cache import caches; caches['default'].clear(); print('cache-cleared')" 2>&1 | tail -3
 
 echo "  DB restore complete."
 REMOTE_DB
@@ -267,7 +326,7 @@ echo "  Setting permissions..."
 docker exec ${STAGING_CMS_CONTAINER} chown -R nobody:nogroup /opt/eafw_cms/media 2>/dev/null || true
 
 echo "  Collecting static files..."
-docker exec ${STAGING_CMS_CONTAINER} python manage.py collectstatic --noinput 2>&1 | tail -3
+docker exec ${STAGING_CMS_CONTAINER} /opt/venv/bin/python manage.py collectstatic --noinput 2>&1 | tail -3
 
 echo "  Media restore complete."
 REMOTE_MEDIA
@@ -283,7 +342,9 @@ cd ${STAGING_DIR}
 
 echo "  Extracting mapfiles..."
 mkdir -p data/mapfiles
-tar xzf ${REMOTE_DUMP_DIR}/eafw_mapfiles.tar.gz -C data/mapfiles/
+tar xzf ${REMOTE_DUMP_DIR}/eafw_mapfiles.tar.gz \
+  --no-overwrite-dir --no-same-owner --no-same-permissions \
+  -C data/mapfiles/
 
 echo "  Restarting map services..."
 docker restart eafw-mapserver eafw-mapcache 2>/dev/null || true

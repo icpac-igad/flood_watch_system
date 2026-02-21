@@ -51,8 +51,11 @@ def _build_request_base_url(request):
     if not request:
         return None
 
+    # Prefer the host seen by Django first; some proxies send X-Forwarded-Host
+    # without the non-default port, which breaks generated API URLs.
+    request_host = (request.get_host() or "").split(",")[0].strip()
     forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
-    host = forwarded_host or request.get_host()
+    host = request_host or forwarded_host
     if not host:
         return None
 
@@ -60,11 +63,13 @@ def _build_request_base_url(request):
     scheme = forwarded_proto or request.scheme or "http"
 
     forwarded_port = (request.headers.get("x-forwarded-port") or "").split(",")[0].strip()
-    if forwarded_port and ":" not in host:
-        is_default_http = scheme == "http" and forwarded_port == "80"
-        is_default_https = scheme == "https" and forwarded_port == "443"
+    request_port = (request.get_port() or "").strip()
+    effective_port = forwarded_port or request_port
+    if effective_port and ":" not in host:
+        is_default_http = scheme == "http" and effective_port == "80"
+        is_default_https = scheme == "https" and effective_port == "443"
         if not (is_default_http or is_default_https):
-            host = f"{host}:{forwarded_port}"
+            host = f"{host}:{effective_port}"
 
     return f"{scheme}://{host}"
 

@@ -1076,7 +1076,7 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
                 "extreme-rainfall": "Extreme Rainfall",
                 "impact": "Impact",
             }
-            preferred_order = ["multimodal", "extreme-rainfall", "impact"]
+            preferred_order = ["multimodal", "extreme-rainfall"]
 
             geomanager_by_id = {cat.id: cat for cat in categories}
             geomanager_by_key = {}
@@ -1097,6 +1097,8 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
                 source_name = linked_category.title if linked_category else map_category.name
                 key = normalize_menu_key(source_name)
                 if not key or key in seen_keys:
+                    continue
+                if key == "impact":
                     continue
 
                 mini_map_categories.append({
@@ -1147,7 +1149,6 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
             mini_map_categories = [
                 {"key": "multimodal", "title": "Multimodal", "icon_name": "", "icon_image": None, "category_id": "", "is_default": True},
                 {"key": "extreme-rainfall", "title": "Extreme Rainfall", "icon_name": "", "icon_image": None, "category_id": "", "is_default": False},
-                {"key": "impact", "title": "Impact", "icon_name": "", "icon_image": None, "category_id": "", "is_default": False},
             ]
 
         # Build CMS-driven layer configs for JavaScript (keyed by category key)

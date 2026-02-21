@@ -190,7 +190,7 @@
     });
     const BASE_COUNTRY_SECTION_TITLE = '{{ page.country_cards_title|default:"Regional Flood Situation"|escapejs }}';
     const BASE_DASHBOARD_TITLE = '{{ page.dashboard_title|default:"Latest Situation of Flood Conditions"|escapejs }}';
-    const PREFERRED_LAYER_ORDER = ['multimodal', 'extreme-rainfall', 'impact'];
+    const PREFERRED_LAYER_ORDER = ['multimodal', 'extreme-rainfall'];
     const LAYER_VALIDATION_MESSAGE = 'Selected dataset is undergoing validation. It will be available soon.';
     const EXTREME_WRF_VALIDATION_MESSAGE = 'Extreme WRF rainfall data is undergoing validation. It will be available soon.';
     const IMPACT_VALIDATION_MESSAGE = 'Impact data is undergoing validation. It will be available soon.';
@@ -1092,17 +1092,24 @@
             return;
         }
 
-        const firstButton = allButtons[0];
-        const layerConfig = resolveLayerConfigFromCategory(firstButton);
-        console.log('[autoLoad] First category:', firstButton?.getAttribute('data-layer-key'), 'config:', layerConfig?.key);
+        const multimodalButton = allButtons.find((button) => {
+            const config = resolveLayerConfigFromCategory(button);
+            return config?.key === 'multimodal';
+        });
+        const cmsDefaultButton = allButtons.find((button) => (
+            String(button.getAttribute('data-is-default') || '') === '1'
+        ));
+        const defaultButton = multimodalButton || cmsDefaultButton || allButtons[0];
+        const layerConfig = resolveLayerConfigFromCategory(defaultButton);
+        console.log('[autoLoad] Default category:', defaultButton?.getAttribute('data-layer-key'), 'config:', layerConfig?.key);
 
         if (!layerConfig) {
-            console.warn('[autoLoad] Could not resolve layer config for first category');
+            console.warn('[autoLoad] Could not resolve layer config for default category');
             return;
         }
 
         try {
-            await handleCategoryClick(firstButton);
+            await handleCategoryClick(defaultButton);
             console.log('[autoLoad] Default category loaded:', selectedMiniMapLayerKey);
         } catch (err) {
             console.error('[autoLoad] Error loading default category:', err);

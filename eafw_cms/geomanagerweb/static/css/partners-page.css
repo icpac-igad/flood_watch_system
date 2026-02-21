@@ -1,0 +1,33 @@
+.partners-page {
+  padding: 2rem 1rem;
+}
+
+.partners-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.partners-header,
+.section-head {
+  margin-bottom: 1rem;
+}
+
+.partners-grid,
+.countries-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.partner-card-container,
+.country-card-container {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.partner-logo {
+  max-height: 52px;
+  max-width: 100%;
+  object-fit: contain;
+}
