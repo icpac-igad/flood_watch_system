@@ -699,35 +699,44 @@ jobs:
               WHERE ST_Within(cp.geom, a0.geom) AND cp.country_code IS NULL;
             " 2>/dev/null || true
 
-            # Wait for CMS to be ready
-            echo "Waiting for CMS to be ready..."
-            CMS_READY=0
-            CMS_PROBE_TIMEOUT_SECONDS=8
-            CMS_READY_MAX_CHECKS=120
-            CMS_READY_INTERVAL_SECONDS=5
-            for i in $(seq 1 "${CMS_READY_MAX_CHECKS}"); do
-              if timeout "${CMS_PROBE_TIMEOUT_SECONDS}" docker exec eafw-cms curl -fsS --connect-timeout 2 --max-time 4 http://localhost:8000/ >/dev/null 2>&1; then
-                CMS_READY=1
-                echo "CMS ready after $((i*CMS_READY_INTERVAL_SECONDS))s"
+            echo "Running Django migrations (with retries while CMS starts)..."
+            MIGRATE_OK=0
+            MIGRATE_MAX_ATTEMPTS=24
+            MIGRATE_RETRY_SECONDS=10
+            for i in $(seq 1 "${MIGRATE_MAX_ATTEMPTS}"); do
+              if timeout 120 docker exec eafw-cms /opt/venv/bin/python manage.py migrate --noinput 2>&1; then
+                MIGRATE_OK=1
+                echo "Migrations completed on attempt ${i}/${MIGRATE_MAX_ATTEMPTS}"
                 break
               fi
-              [ $((i % 12)) -eq 0 ] && echo "  Still waiting for CMS ($i/${CMS_READY_MAX_CHECKS})..."
-              sleep "${CMS_READY_INTERVAL_SECONDS}"
+              echo "WARN: migrate attempt ${i}/${MIGRATE_MAX_ATTEMPTS} failed; retrying in ${MIGRATE_RETRY_SECONDS}s..."
+              [ $((i % 6)) -eq 0 ] && docker logs eafw-cms 2>&1 | tail -20 || true
+              sleep "${MIGRATE_RETRY_SECONDS}"
             done
-
-            if [ "$CMS_READY" -ne 1 ]; then
-              echo "WARN: CMS HTTP probe not ready after $((CMS_READY_MAX_CHECKS*CMS_READY_INTERVAL_SECONDS))s; continuing with management-command checks"
-              docker logs eafw-cms 2>&1 | tail -40 || true
+            if [ "$MIGRATE_OK" -ne 1 ]; then
+              echo "FATAL: unable to run Django migrations after ${MIGRATE_MAX_ATTEMPTS} attempts"
+              docker logs eafw-cms 2>&1 | tail -80 || true
+              exit 1
             fi
 
-            echo "Running Django migrations..."
-            docker exec eafw-cms /opt/venv/bin/python manage.py migrate --noinput 2>&1
-            echo "Verifying homepage static assets..."
-            # collectstatic already runs in CMS container startup entrypoint.
-            # Running collectstatic again after Gunicorn boots can desync in-memory
-            # manifest hashes from files served by nginx.
-            docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/homepage-layout*.css >/dev/null"
-            docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/geomanagerweb*.css >/dev/null"
+            echo "Verifying homepage static assets (with retries)..."
+            ASSET_OK=0
+            ASSET_MAX_CHECKS=24
+            ASSET_RETRY_SECONDS=5
+            for i in $(seq 1 "${ASSET_MAX_CHECKS}"); do
+              if docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/homepage-layout*.css >/dev/null" \
+                && docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/geomanagerweb*.css >/dev/null"; then
+                ASSET_OK=1
+                echo "Static assets ready on check ${i}/${ASSET_MAX_CHECKS}"
+                break
+              fi
+              sleep "${ASSET_RETRY_SECONDS}"
+            done
+            if [ "$ASSET_OK" -ne 1 ]; then
+              echo "FATAL: homepage static assets missing after retries"
+              docker logs eafw-cms 2>&1 | tail -80 || true
+              exit 1
+            fi
 
             # Reload nginx
             echo "Reloading nginx config..."
