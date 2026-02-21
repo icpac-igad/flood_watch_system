@@ -718,6 +718,9 @@ jobs:
               exit 1
             fi
 
+            echo "Clearing Django cache to avoid stale rendered homepage assets..."
+            docker exec eafw-cms /opt/venv/bin/python manage.py shell -c "from django.core.cache import caches; caches['default'].clear(); print('cache-cleared')" 2>&1 || echo "WARN: cache clear failed"
+
             echo "Verifying homepage static assets (with retries)..."
             ASSET_OK=0
             ASSET_MAX_CHECKS=24
@@ -735,6 +738,19 @@ jobs:
               echo "FATAL: homepage static assets missing after retries"
               docker logs eafw-cms 2>&1 | tail -80 || true
               exit 1
+            fi
+
+            echo "Verifying rendered homepage references an available CSS asset..."
+            HOME_HTML="$(curl -fsS --max-time 12 http://127.0.0.1:9068/ || true)"
+            HOME_CSS_PATH="$(printf '%s' "$HOME_HTML" | grep -o '/static/css/homepage-layout[^\"]*' | head -n1 || true)"
+            if [ -n "$HOME_CSS_PATH" ]; then
+              HOME_CSS_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 "http://127.0.0.1:9068${HOME_CSS_PATH}")"
+              if [ "$HOME_CSS_CODE" != "200" ]; then
+                echo "FATAL: homepage references missing CSS (${HOME_CSS_PATH} -> ${HOME_CSS_CODE})"
+                exit 1
+              fi
+            else
+              echo "WARN: could not detect homepage-layout CSS path in rendered homepage HTML"
             fi
 
             # Reload nginx
