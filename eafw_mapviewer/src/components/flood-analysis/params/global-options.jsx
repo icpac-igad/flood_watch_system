@@ -31,7 +31,6 @@ const PROJECTS = [
 const DEFAULT_COUNTRIES = [
   { code: "Burundi", name: "Burundi" },
   { code: "Djibouti", name: "Djibouti" },
-  { code: "Eritrea", name: "Eritrea" },
   { code: "Ethiopia", name: "Ethiopia" },
   { code: "Kenya", name: "Kenya" },
   { code: "Rwanda", name: "Rwanda" },

@@ -23,11 +23,11 @@
       {% if footer.show_member_countries_intro %}
       <div class="section-head">
         {% if footer.partners_member_countries_title %}
-        <h2 class="section-title">{{ footer.partners_member_countries_title|default:"Member Countries" }}</h2>
+        <h2 class="section-title">{{ footer.partners_member_countries_title|default:"ICPAC Partner Countries" }}</h2>
         {% endif %}
         {% if footer.partners_member_countries_description %}
         <p class="section-description">
-          {{ footer.partners_member_countries_description|default:"IGAD member countries represented in the Flood Watch platform." }}
+          {{ footer.partners_member_countries_description|default:"ICPAC partner countries represented in the Flood Watch platform." }}
         </p>
         {% endif %}
       </div>
@@ -56,7 +56,7 @@
               <div class="country-card-back">
                 <div class="country-card-back-content">
                   <h3 class="country-back-name">{{ item.country|country_name }}</h3>
-                  <p class="country-back-description">{% trans "IGAD Member State in the Flood Watch platform." %}</p>
+                  <p class="country-back-description">{% trans "ICPAC Partner Country in the Flood Watch platform." %}</p>
                 </div>
                 {% if item.url %}
                 <span class="country-more-btn">{% trans "View Country" %}</span>

@@ -10,7 +10,6 @@ const WHCA_COUNTRY_CODES = new Set(["SD", "SS", "UG", "ET", "RW"]);
 const COUNTRY_NAME_TO_CODE = {
   burundi: "BI",
   djibouti: "DJ",
-  eritrea: "ER",
   ethiopia: "ET",
   kenya: "KE",
   rwanda: "RW",

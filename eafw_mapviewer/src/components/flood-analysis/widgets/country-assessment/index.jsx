@@ -17,7 +17,6 @@ import "./styles.scss";
 const GHA_COUNTRIES = [
   { code: "BDI", name: "Burundi", flag: "🇧🇮" },
   { code: "DJI", name: "Djibouti", flag: "🇩🇯" },
-  { code: "ERI", name: "Eritrea", flag: "🇪🇷" },
   { code: "ETH", name: "Ethiopia", flag: "🇪🇹" },
   { code: "KEN", name: "Kenya", flag: "🇰🇪" },
   { code: "RWA", name: "Rwanda", flag: "🇷🇼" },

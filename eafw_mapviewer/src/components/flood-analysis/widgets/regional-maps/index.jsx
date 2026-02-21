@@ -16,7 +16,6 @@ import "./styles.scss";
 const GHA_COUNTRIES = [
   { code: "Burundi", name: "Burundi", adminPrefix: "BI", bounds: [[28.9, -4.5], [30.9, -2.3]], color: "#1976d2" },
   { code: "Djibouti", name: "Djibouti", adminPrefix: "DJ", bounds: [[41.7, 10.9], [43.5, 12.8]], color: "#388e3c" },
-  { code: "Eritrea", name: "Eritrea", adminPrefix: "ER", bounds: [[36.4, 12.3], [43.2, 18.1]], color: "#f57c00" },
   { code: "Ethiopia", name: "Ethiopia", adminPrefix: "ET", bounds: [[33.0, 3.4], [48.0, 15.0]], color: "#7b1fa2" },
   { code: "Kenya", name: "Kenya", adminPrefix: "KE", bounds: [[33.9, -4.7], [42.0, 5.0]], color: "#c62828" },
   { code: "Rwanda", name: "Rwanda", adminPrefix: "RW", bounds: [[28.8, -2.9], [30.9, -1.0]], color: "#00838f" },
@@ -31,7 +30,6 @@ const WHCA_COUNTRIES = new Set(["Ethiopia", "Rwanda", "South Sudan", "Sudan", "U
 const ISO2_TO_COUNTRY_NAME = {
   BI: "Burundi",
   DJ: "Djibouti",
-  ER: "Eritrea",
   ET: "Ethiopia",
   KE: "Kenya",
   RW: "Rwanda",

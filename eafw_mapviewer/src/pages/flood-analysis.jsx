@@ -208,7 +208,7 @@ const FloodAnalysisPage = () => {
           <div className="logo-container">
             <img
               src="/favicon/logo.png"
-              alt="IGAD ICPAC"
+              alt="ICPAC"
               className="icpac-logo"
               onError={(e) => { e.target.style.display = 'none'; }}
             />

@@ -5,10 +5,10 @@
     "defaultlanguage": "eng",
     "fees": "No fees for this service",
     "accessconstraints": "No access restrictions",
-    "providername": "IGAD Climate Prediction and Applications Center - ICPAC",
+    "providername": "ICPAC Climate Prediction and Applications Centre",
     "providerurl": "https://www.icpac.net/",
     "contactorganization": "disaster-risk-management@igad.int",
-    "contactname": "IGAD DRM Programme",
+    "contactname": "ICPAC Disaster Risk Management Programme",
     "contactcountry": "Kenya",
     "contactcity": "Nairobi",
     "url": "${SERVICE_URL}"

@@ -183,14 +183,14 @@ class Footer(Page):
 
     partners_member_countries_title = models.CharField(
         max_length=255,
-        default="Member Countries",
+        default="ICPAC Partner Countries",
         verbose_name=_("Member Countries Section Title"),
         help_text=_("Heading for the member countries section on partners page"),
     )
 
     partners_member_countries_description = models.TextField(
         blank=True,
-        default="IGAD member countries represented in the Flood Watch platform.",
+        default="ICPAC partner countries represented in the Flood Watch platform.",
         verbose_name=_("Member Countries Section Description"),
         help_text=_("Description under member countries heading on partners page"),
     )
@@ -1393,7 +1393,7 @@ class MapserverConfig(BaseGenericSetting):
     )
     service_provider: str = models.CharField(
         max_length=200,
-        default=_("IGAD Climate Prediction and Applications Center (ICPAC)"),
+        default=_("ICPAC Climate Prediction and Applications Centre"),
         help_text=_("Name of service provider"),
     )
     provider_url: str = models.CharField(
@@ -1419,7 +1419,7 @@ class MapserverConfig(BaseGenericSetting):
     )
     contact_name: str = models.CharField(
         max_length=200,
-        default=_("IGAD DRM Programme"),
+        default=_("ICPAC Disaster Risk Management Programme"),
         help_text=_("Name of contact division, unit or department within data proverder's organization"),
     )
     default_language: str = models.CharField(

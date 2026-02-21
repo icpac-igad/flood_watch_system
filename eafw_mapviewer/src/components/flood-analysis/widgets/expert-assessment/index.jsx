@@ -35,7 +35,6 @@ const COUNTRY_CODE_TO_NAME = {
   BD: "Burundi",
   BI: "Burundi",
   DJ: "Djibouti",
-  ER: "Eritrea",
   ET: "Ethiopia",
   KE: "Kenya",
   RW: "Rwanda",
@@ -50,7 +49,6 @@ const COUNTRY_CODE_TO_NAME = {
 const COUNTRY_NAME_TO_CODE = {
   burundi: "BI",
   djibouti: "DJ",
-  eritrea: "ER",
   ethiopia: "ET",
   kenya: "KE",
   rwanda: "RW",

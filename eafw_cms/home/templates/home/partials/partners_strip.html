@@ -7,7 +7,7 @@
         <div class="partners-container">
             {% if footer and footer.member_countries %}
             <div class="members-group">
-                <h3 class="partners-label" data-default-label="{{ footer.partners_member_countries_title|default:"Member Countries"|escape }}">{{ footer.partners_member_countries_title|default:"Member Countries" }}</h3>
+                <h3 class="partners-label" data-default-label="{{ footer.partners_member_countries_title|default:"ICPAC Partner Countries"|escape }}">{{ footer.partners_member_countries_title|default:"ICPAC Partner Countries" }}</h3>
                 <div class="member-flags">
                     {% for block in footer.member_countries|sort_member_countries|unique_member_countries %}
                     {% with block.value as item %}

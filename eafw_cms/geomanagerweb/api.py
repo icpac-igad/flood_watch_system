@@ -15,7 +15,6 @@ WHCA_SCOPE_SQL_CONDITION = (
 COUNTRY_NAME_TO_ISO2 = {
     "burundi": "BD",
     "djibouti": "DJ",
-    "eritrea": "ER",
     "ethiopia": "ET",
     "kenya": "KE",
     "rwanda": "RW",
@@ -32,7 +31,6 @@ COUNTRY_NAME_TO_ISO2 = {
 ISO2_TO_COUNTRY_NAME = {
     "BD": "Burundi",
     "DJ": "Djibouti",
-    "ER": "Eritrea",
     "ET": "Ethiopia",
     "KE": "Kenya",
     "RW": "Rwanda",
@@ -1454,14 +1452,18 @@ class AdminBoundaryView(View):
                                    ST_XMax(ST_Envelope(geom)) as right,
                                    ST_YMax(ST_Envelope(geom)) as top
                             FROM gha.admin0
-                            WHERE country IS NOT NULL AND country != ''
+                            WHERE country IS NOT NULL
+                              AND country != ''
+                              AND LOWER(TRIM(country)) != 'eritrea'
                             ORDER BY country
                         """)
                     else:
                         cursor.execute("""
                             SELECT country as code, country as name
                             FROM gha.admin0
-                            WHERE country IS NOT NULL AND country != ''
+                            WHERE country IS NOT NULL
+                              AND country != ''
+                              AND LOWER(TRIM(country)) != 'eritrea'
                             ORDER BY country
                         """)
                 elif admin_level == '0':
@@ -1474,14 +1476,20 @@ class AdminBoundaryView(View):
                                    ST_XMax(ST_Envelope(geom)) as right,
                                    ST_YMax(ST_Envelope(geom)) as top
                             FROM gha.admin1
-                            WHERE country = %s AND name_1 IS NOT NULL AND name_1 != ''
+                            WHERE country = %s
+                              AND name_1 IS NOT NULL
+                              AND name_1 != ''
+                              AND LOWER(TRIM(country)) != 'eritrea'
                             ORDER BY name_1
                         """, [unit_id])
                     else:
                         cursor.execute("""
                             SELECT name_1 as code, name_1 as name
                             FROM gha.admin1
-                            WHERE country = %s AND name_1 IS NOT NULL AND name_1 != ''
+                            WHERE country = %s
+                              AND name_1 IS NOT NULL
+                              AND name_1 != ''
+                              AND LOWER(TRIM(country)) != 'eritrea'
                             ORDER BY name_1
                         """, [unit_id])
                 elif admin_level == '1':
@@ -1497,7 +1505,11 @@ class AdminBoundaryView(View):
                                        ST_XMax(ST_Envelope(geom)) as right,
                                        ST_YMax(ST_Envelope(geom)) as top
                                 FROM gha.admin2
-                                WHERE country = %s AND name_1 = %s AND name_2 IS NOT NULL AND name_2 != ''
+                                WHERE country = %s
+                                  AND name_1 = %s
+                                  AND name_2 IS NOT NULL
+                                  AND name_2 != ''
+                                  AND LOWER(TRIM(country)) != 'eritrea'
                                 ORDER BY name_2
                             """, [country_id, unit_id])
                         else:
@@ -1508,7 +1520,10 @@ class AdminBoundaryView(View):
                                        ST_XMax(ST_Envelope(geom)) as right,
                                        ST_YMax(ST_Envelope(geom)) as top
                                 FROM gha.admin2
-                                WHERE name_1 = %s AND name_2 IS NOT NULL AND name_2 != ''
+                                WHERE name_1 = %s
+                                  AND name_2 IS NOT NULL
+                                  AND name_2 != ''
+                                  AND LOWER(TRIM(country)) != 'eritrea'
                                 ORDER BY name_2
                             """, [unit_id])
                     else:
@@ -1516,14 +1531,21 @@ class AdminBoundaryView(View):
                             cursor.execute("""
                                 SELECT name_2 as code, name_2 as name
                                 FROM gha.admin2
-                                WHERE country = %s AND name_1 = %s AND name_2 IS NOT NULL AND name_2 != ''
+                                WHERE country = %s
+                                  AND name_1 = %s
+                                  AND name_2 IS NOT NULL
+                                  AND name_2 != ''
+                                  AND LOWER(TRIM(country)) != 'eritrea'
                                 ORDER BY name_2
                             """, [country_id, unit_id])
                         else:
                             cursor.execute("""
                                 SELECT name_2 as code, name_2 as name
                                 FROM gha.admin2
-                                WHERE name_1 = %s AND name_2 IS NOT NULL AND name_2 != ''
+                                WHERE name_1 = %s
+                                  AND name_2 IS NOT NULL
+                                  AND name_2 != ''
+                                  AND LOWER(TRIM(country)) != 'eritrea'
                                 ORDER BY name_2
                             """, [unit_id])
                 else:
@@ -1855,7 +1877,7 @@ class CountrySummaryWithBoundsView(View):
                             COALESCE(
                                 CASE
                                     WHEN UPPER(SUBSTRING(COALESCE(pd.admin_name, '') FROM 1 FOR 2)) IN (
-                                        'ET', 'KE', 'UG', 'SD', 'SS', 'TZ', 'RW', 'BI', 'SO', 'DJ', 'ER'
+                                        'ET', 'KE', 'UG', 'SD', 'SS', 'TZ', 'RW', 'BI', 'SO', 'DJ'
                                     ) THEN UPPER(SUBSTRING(pd.admin_name FROM 1 FOR 2))
                                     ELSE NULL
                                 END,
@@ -1871,7 +1893,6 @@ class CountrySummaryWithBoundsView(View):
                                         WHEN LOWER(TRIM(a0.country)) = 'burundi' THEN 'BI'
                                         WHEN LOWER(TRIM(a0.country)) = 'somalia' THEN 'SO'
                                         WHEN LOWER(TRIM(a0.country)) = 'djibouti' THEN 'DJ'
-                                        WHEN LOWER(TRIM(a0.country)) = 'eritrea' THEN 'ER'
                                         ELSE 'UN'
                                     END
                                     FROM gha.admin0 a0
@@ -1930,7 +1951,6 @@ class CountrySummaryWithBoundsView(View):
                                     WHEN LOWER(TRIM(a0.country)) = 'burundi' THEN 'BI'
                                     WHEN LOWER(TRIM(a0.country)) = 'somalia' THEN 'SO'
                                     WHEN LOWER(TRIM(a0.country)) = 'djibouti' THEN 'DJ'
-                                    WHEN LOWER(TRIM(a0.country)) = 'eritrea' THEN 'ER'
                                     ELSE 'UN'
                                 END as country_code,
                                 a0.geom
@@ -1963,7 +1983,7 @@ class CountrySummaryWithBoundsView(View):
                     'ET': 'Ethiopia', 'KE': 'Kenya', 'UG': 'Uganda',
                     'SD': 'Sudan', 'SS': 'South Sudan', 'TZ': 'Tanzania',
                     'RW': 'Rwanda', 'BI': 'Burundi', 'SO': 'Somalia',
-                    'DJ': 'Djibouti', 'ER': 'Eritrea', 'UN': 'Unknown'
+                    'DJ': 'Djibouti', 'UN': 'Unknown'
                 }
 
                 for row in cursor.fetchall():

@@ -4,8 +4,8 @@
 {% block body_class %}homepage{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/components/ui-components.css' %}?v=20260220-3">
-<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}?v=20260220-3">
+<link rel="stylesheet" type="text/css" href="{% static 'css/components/ui-components.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" />
 <style>
     /* Hard override for homepage partners strip: non-block flow */
@@ -182,11 +182,11 @@
     const DEFAULT_SCOPE_KEY = '{{ default_scope_key|default:"all" }}';
 
     const ISO2_TO_ISO3 = Object.freeze({
-        BI: 'BDI', DJ: 'DJI', ER: 'ERI', ET: 'ETH', KE: 'KEN',
+        BI: 'BDI', DJ: 'DJI', ET: 'ETH', KE: 'KEN',
         RW: 'RWA', SD: 'SDN', SO: 'SOM', SS: 'SSD', TZ: 'TZA', UG: 'UGA'
     });
     const ISO3_TO_ISO2 = Object.freeze({
-        BDI: 'BI', DJI: 'DJ', ERI: 'ER', ETH: 'ET', KEN: 'KE',
+        BDI: 'BI', DJI: 'DJ', ETH: 'ET', KEN: 'KE',
         RWA: 'RW', SDN: 'SD', SOM: 'SO', SSD: 'SS', TZA: 'TZ', UGA: 'UG'
     });
     const BASE_COUNTRY_SECTION_TITLE = '{{ page.country_cards_title|default:"Regional Flood Situation"|escapejs }}';
@@ -232,7 +232,6 @@
         'TZ': 'https://flagcdn.com/w80/tz.png',
         'SO': 'https://flagcdn.com/w80/so.png',
         'DJ': 'https://flagcdn.com/w80/dj.png',
-        'ER': 'https://flagcdn.com/w80/er.png',
         'BI': 'https://flagcdn.com/w80/bi.png'
     };
 
