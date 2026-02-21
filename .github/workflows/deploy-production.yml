@@ -670,6 +670,9 @@ jobs:
               exit 1
             fi
 
+            echo "Restarting CMS service to refresh runtime static manifest cache..."
+            docker compose -f docker-compose.staging.yml --env-file .env restart eafw_cms 2>&1 || docker restart eafw-cms 2>&1 || echo "WARN: CMS restart failed"
+
             # Run DB migrations
             echo "Running DB migrations..."
             docker exec eafw-pgdb psql -U eafw_user -d eafw_db -c "
