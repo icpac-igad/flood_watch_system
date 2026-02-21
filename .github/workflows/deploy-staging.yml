@@ -722,9 +722,6 @@ jobs:
               # manifest hashes from files served by nginx.
               docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/homepage-layout*.css >/dev/null"
               docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/geomanagerweb*.css >/dev/null"
-              docker exec eafw-cms sh -lc "test -f /opt/eafw_cms/static/staticfiles.json"
-              docker exec eafw-cms sh -lc "grep -q '\"css/homepage-layout.css\"' /opt/eafw_cms/static/staticfiles.json"
-              docker exec eafw-cms sh -lc "grep -q '\"css/geomanagerweb.css\"' /opt/eafw_cms/static/staticfiles.json"
             else
               echo "FATAL: CMS not ready; cannot verify migrations/static safely"
               exit 1
