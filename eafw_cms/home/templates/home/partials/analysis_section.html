@@ -118,11 +118,14 @@
                 </div>
             </div>
 
-            <div class="country-list" id="country-list">
-                <div class="country-loading ui-loading-state">
-                    <div class="spinner"></div>
-                    <span>{% trans "Loading country data..." %}</span>
+            <div class="country-panel-body">
+                <div class="country-list" id="country-list">
+                    <div class="country-loading ui-loading-state">
+                        <div class="spinner"></div>
+                        <span>{% trans "Loading country data..." %}</span>
+                    </div>
                 </div>
+                <div class="country-summary-table" id="country-summary-table"></div>
             </div>
         </div>
         {% endif %}

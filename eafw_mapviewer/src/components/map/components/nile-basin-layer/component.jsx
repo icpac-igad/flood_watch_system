@@ -44,8 +44,8 @@ const NileBasinLayer = ({ map, paramInteractions }) => {
         type: 'line',
         source: NILE_SOURCE_ID,
         paint: {
-          'line-color': '#333333',
-          'line-width': 3,
+          'line-color': '#032eb0',
+          'line-width': 1.5,
           'line-dasharray': [6, 4],
           'line-opacity': 0.9,
         },

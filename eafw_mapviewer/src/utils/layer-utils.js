@@ -102,6 +102,8 @@ const SAFE_TILE_TEMPLATE_VALUES = new Set([
   '{{ratio}}',
   '{s}',
   '{{s}}',
+  '{time}',
+  '{{time}}',
 ]);
 
 const decodeUrlComponentSafe = (value = '') => {
@@ -475,7 +477,7 @@ const applyAdminBoundaryZoomBand = (layerConfig, tileUrl = '') => {
   }
 
   const bands = {
-    '0': { minzoom: 0, maxzoom: 5.5 },
+    '0': { minzoom: 0 },
     '1': { minzoom: 5.5, maxzoom: 8 },
     '2': { minzoom: 8 },
   };

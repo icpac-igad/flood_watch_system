@@ -181,3 +181,28 @@ def homepage_partners(stream_value):
             featured_items.append(block)
 
     return featured_items or items
+
+
+@register.simple_tag
+def safe_image_url(image, spec="original"):
+    """
+    Resolve a Wagtail image URL without hard-failing template rendering.
+    Returns an empty string when the image/rendition cannot be resolved.
+    """
+    if not image:
+        return ""
+
+    try:
+        mode = str(spec or "original").strip().lower()
+        if mode in {"original", "source", "full"}:
+            image_file = getattr(image, "file", None)
+            return image_file.url if image_file else ""
+        return image.get_rendition(spec).url
+    except Exception as exc:
+        logger.warning(
+            "Failed to resolve image URL (image_id=%s, spec=%s): %s",
+            getattr(image, "id", "unknown"),
+            spec,
+            exc,
+        )
+        return ""

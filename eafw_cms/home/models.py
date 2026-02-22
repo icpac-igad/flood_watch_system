@@ -606,6 +606,13 @@ class MapScope(Orderable):
     )
 
     # Display
+    site_title = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Site Title Override"),
+        help_text=_("Footer / site title when this scope is active, e.g. 'Nile River Basin Watch'. "
+                     "Leave blank to keep 'East Africa Flood Watch'."),
+    )
     country_section_title = models.CharField(
         max_length=200,
         blank=True,
@@ -646,6 +653,7 @@ class MapScope(Orderable):
         ),
         MultiFieldPanel(
             [
+                FieldPanel("site_title"),
                 FieldPanel("country_section_title"),
                 FieldPanel("dashboard_title"),
                 FieldPanel("show_basin_overlay"),
@@ -1203,6 +1211,7 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
                 "countryCodes": iso2_list,
                 "admin0Codes": iso3_list,
                 "partnerKeys": partner_list,
+                "siteTitle": scope_item.site_title or "",
                 "countrySectionTitle": scope_item.country_section_title or "",
                 "dashboardTitle": scope_item.dashboard_title or "",
                 "showBasinOverlay": scope_item.show_basin_overlay,

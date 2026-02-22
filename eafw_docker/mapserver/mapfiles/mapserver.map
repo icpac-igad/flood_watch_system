@@ -5,7 +5,7 @@ MAP
     UNITS DD
     DEBUG 2
     EXTENT 21 -12 52 23
-    IMAGECOLOR 255 255 255
+    IMAGECOLOR 0 0 0
     IMAGETYPE PNG
     FONTSET "fonts/fonts.txt"
     SYMBOLSET "symbols/symbols.sym"

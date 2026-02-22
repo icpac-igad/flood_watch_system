@@ -135,13 +135,10 @@ const MapLegendContent = ({
 
         let latestDateText = null;
         if (initializedDate && latestDate) {
-          const initializedLabel = dFormatter(initializedDate, "dd MMM yyyy");
-          const latestLabel = dFormatter(latestDate, "dd MMM yyyy");
-          if (initializedDate === latestDate) {
-            latestDateText = `Latest: ${latestLabel} (Initialized ${initializedLabel})`;
-          } else {
-            latestDateText = `Latest: ${initializedLabel} To ${latestLabel} (Initialized ${initializedLabel})`;
-          }
+          // availableDates are sorted ASC (oldest first), so last = latest run
+          const newestDate = availableDates[availableDates.length - 1];
+          const newestLabel = dFormatter(newestDate, "dd MMM yyyy");
+          latestDateText = `Latest: ${newestLabel}`;
         }
 
         const selectedDateText = selectedDate

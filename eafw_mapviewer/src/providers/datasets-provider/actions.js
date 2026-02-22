@@ -30,16 +30,15 @@ export const fetchDatasets = createThunkAction(
         const initialVisibleDatasets = apiDatasets.filter(
           (d) => d.initialVisible
         );
-        // Ensure all admin boundary levels are available for zoom-based rendering.
-        const adminBoundaryDatasets = apiDatasets.filter((d) =>
-          /^admin level [0-2] boundary$/i.test(d?.name || "")
+        // Only force Admin Level 0 (country borders) on by default.
+        // Level 1 and 2 are available but users toggle them manually.
+        const admin0Dataset = apiDatasets.find((d) =>
+          /^admin level 0 boundary$/i.test(d?.name || "")
         );
         const defaultVisibleDatasets = [...initialVisibleDatasets];
-        adminBoundaryDatasets.forEach((dataset) => {
-          if (!defaultVisibleDatasets.some((d) => d.id === dataset.id)) {
-            defaultVisibleDatasets.push(dataset);
-          }
-        });
+        if (admin0Dataset && !defaultVisibleDatasets.some((d) => d.id === admin0Dataset.id)) {
+          defaultVisibleDatasets.push(admin0Dataset);
+        }
 
         const datasetsWithAnalysis = apiDatasets.reduce(
           (allDatasets, dataset) => {
@@ -156,26 +155,25 @@ export const fetchDatasets = createThunkAction(
           dispatch(setMapSettings({ datasets: newDatasets }));
         }
 
-        // Backward compatibility for shared URLs that only include admin0:
-        // always ensure admin boundary datasets are present in map settings.
-        if (adminBoundaryDatasets.length) {
+        // Backward compatibility for shared URLs: ensure admin0 boundary is present.
+        if (admin0Dataset) {
           const currentMapDatasets = getState().map?.settings?.datasets || [];
-          const missingAdminDatasets = adminBoundaryDatasets.filter(
-            (dataset) =>
-              !currentMapDatasets.some((active) => active.dataset === dataset.id)
+          const hasAdmin0 = currentMapDatasets.some(
+            (active) => active.dataset === admin0Dataset.id
           );
 
-          if (missingAdminDatasets.length) {
-            const nextDatasets = [...currentMapDatasets];
-            missingAdminDatasets.forEach((dataset) => {
-              nextDatasets.push({
-                dataset: dataset.id,
-                layers: dataset.layers.map((l) => l.id),
-                opacity: 1,
-                visibility: true,
-              });
-            });
-            dispatch(setMapSettings({ datasets: nextDatasets }));
+          if (!hasAdmin0) {
+            dispatch(setMapSettings({
+              datasets: [
+                ...currentMapDatasets,
+                {
+                  dataset: admin0Dataset.id,
+                  layers: admin0Dataset.layers.map((l) => l.id),
+                  opacity: 1,
+                  visibility: true,
+                },
+              ],
+            }));
           }
         }
 

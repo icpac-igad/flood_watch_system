@@ -2,8 +2,11 @@ LAYER
     INCLUDE "config/database.map"
     NAME "gha_admin_extent_mask"
     TYPE POLYGON
-    STATUS DEFAULT
-    DATA "geom from (select 1 as id, gha.resolve_scope_extent_geom('%scope%', NULLIF('%project_countries%', '__none__'), NULLIF('%country_name%', '__none__'), NULLIF('%region_name%', '__none__'), NULLIF('%district_name%', '__none__')) as geom) as subq using unique id using srid=4326"
+    STATUS ON
+    DATA "geom from (select 1 as id, ST_Transform(gha.resolve_scope_extent_geom('%scope%', NULLIF('%project_countries%', '__none__'), NULLIF('%country_name%', '__none__'), NULLIF('%region_name%', '__none__'), NULLIF('%district_name%', '__none__')), 3857) as geom) as subq using unique id using srid=3857"
+    PROJECTION
+        "init=epsg:3857"
+    END
     VALIDATION
         "scope" "^(|all|project|whca)$"
         "default_scope" "all"

@@ -4,101 +4,245 @@
 {% block body_class %}homepage{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/homepage-layout.css' %}">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" />
 <style>
-    /* Hard override for homepage partners strip: non-block flow */
-    body.homepage .home-module--partners .partners-section {
-        padding: 14px 0 22px !important;
-    }
-    body.homepage .home-module--partners .partners-container {
-        background: transparent !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        gap: 12px !important;
-    }
-    body.homepage .home-module--partners .members-group,
-    body.homepage .home-module--partners .partners-group {
-        background: transparent !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        padding: 0 !important;
-        gap: 10px !important;
-    }
-    body.homepage .home-module--partners .partners-group-header {
-        margin: 0 !important;
-    }
-    body.homepage .home-module--partners .partners-label {
-        display: block !important;
-        background: transparent !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        padding: 0 !important;
-        min-height: 0 !important;
-        min-width: 0 !important;
-        text-transform: none !important;
-        letter-spacing: 0 !important;
-        font-weight: 700 !important;
-        font-size: clamp(1.45rem, 2.25vw, 2.15rem) !important;
-        line-height: 1.15 !important;
-        text-align: center !important;
-    }
-    body.homepage .home-module--partners .member-flags {
-        border-bottom: 1px solid #c2ced9 !important;
-        padding: 2px 4px 7px !important;
-        justify-content: center !important;
-        gap: 12px !important;
-    }
-    body.homepage .home-module--partners .member-flag {
-        background: transparent !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        padding: 0 !important;
-        min-width: 0 !important;
-    }
-    body.homepage .home-module--partners .member-flag img {
-        width: 52px !important;
-        height: 34px !important;
-        border-radius: 3px !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) !important;
-    }
-    body.homepage .home-module--partners .member-flag-name {
-        display: none !important;
-    }
-    body.homepage .home-module--partners .partners-logos-shell {
-        padding: 2px 0 8px !important;
-    }
-    body.homepage .home-module--partners .partners-logos {
-        justify-content: center !important;
-        gap: clamp(16px, 1.8vw, 26px) !important;
-    }
-    body.homepage .home-module--partners .partner-item {
-        background: transparent !important;
-        border: 0 !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        width: auto !important;
-        height: auto !important;
-        padding: 0 !important;
-    }
-    body.homepage .home-module--partners .partner-logo {
-        max-width: 142px !important;
-        max-height: 56px !important;
-    }
-    @media (max-width: 768px) {
-        body.homepage .home-module--partners .member-flags,
-        body.homepage .home-module--partners .partners-logos {
-            justify-content: flex-start !important;
-        }
-        body.homepage .home-module--partners .partner-logo {
-            max-width: 118px !important;
-            max-height: 48px !important;
-        }
-    }
+/* Reset section spacing */
+.home-wireframe { margin: 0; padding: 0; }
+.home-module { margin: 0; padding: 0; }
+/* Hero banner — pushed below fixed navbar */
+.hero-banner { position: relative; min-height: 300px; overflow: hidden; display: flex; align-items: center; margin-top: 0; padding-top: 64px; }
+.hero-slides { position: absolute; inset: 0; z-index: 0; }
+.hero-slide { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0; transition: opacity 1s ease-in-out; }
+.hero-slide.active { opacity: 1; }
+.hero-slide::after { content: ""; position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
+.hero-content { position: relative; z-index: 2; max-width: 1320px; margin: 0 auto; padding: 3rem 2rem; color: #fff; }
+.hero-title { font-size: 2.4rem; font-weight: 600; line-height: 1.2; margin-bottom: 0.75rem; text-shadow: 1px 2px 3px rgba(0,0,0,0.3); }
+.hero-subtitle { font-size: 1.1rem; line-height: 1.5; max-width: 42rem; opacity: 0.92; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); }
+.hero-indicators { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; gap: 8px; }
+.hero-indicator { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.5); cursor: pointer; transition: background 0.3s; }
+.hero-indicator.active { background: #fff; }
+.hero-explore-btn { margin-top: 1.25rem; background-color: var(--button-primary-bg, #198754); color: var(--button-primary-text, #fff); border-color: var(--button-primary-bg, #198754); font-weight: 600; padding: 0.6rem 1.8rem; transition: background-color 0.3s ease; }
+.hero-explore-btn:hover { background-color: var(--accent-color, #fbc02d); color: var(--secondary-text-color, #333); border-color: var(--accent-color, #fbc02d); }
+
+/* Dashboard grid: map + country panel side by side */
+.dashboard-container { max-width: 1320px; padding: 1rem; margin: 0 auto; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: clamp(12px, 1.8vw, 20px); width: 100%; align-items: stretch; }
+.map-section, .country-section { min-width: 0; overflow: hidden; --home-map-min-height: clamp(390px, 53vh, 600px); --home-panel-offset-height: 44px; --home-panel-height: calc(max(var(--map-height, 0px), var(--home-map-min-height)) + var(--home-panel-offset-height)); }
+.map-section { display: flex; flex-direction: column; height: var(--home-panel-height); min-height: var(--home-panel-height); position: relative; z-index: 1; }
+.map-wrapper { position: relative; min-height: 0; height: auto; flex: 1 1 auto; --map-cta-bottom: 14px; --map-cta-right: 14px; }
+#mini-map { width: 100%; height: 100%; min-height: 0; }
+.map-wrapper > #mini-map { position: absolute; inset: 0; }
+.map-wrapper .maplibregl-map, .map-wrapper .maplibregl-canvas-container, .map-wrapper .maplibregl-canvas { width: 100% !important; height: 100% !important; }
+
+/* Map loading spinner */
+.map-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #666; z-index: 5; background: #f0f4f8; }
+.map-loading .spinner, .country-loading .spinner { width: 34px; height: 34px; border: 3px solid #e3eaf2; border-top-color: #1976d2; border-radius: 50%; animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Category menu (map overlay) */
+.c-menu-control { position: absolute; z-index: 99; left: 12px; top: 12px; }
+.c-menu-control .c-map-menu { position: relative; }
+.c-menu-control .c-map-menu::before { position: absolute; top: -3px; bottom: -3px; right: 0; left: 0; content: " "; width: 34px; background-color: var(--menu-bg, rgba(68, 65, 65, 0.84)); border-radius: 22px; }
+.c-menu-control .c-map-menu .menu-category { position: relative; padding: 11px 0; display: flex; align-items: center; cursor: pointer; }
+.c-menu-control .c-map-menu .menu-category .category-icon { height: 34px; width: 34px; display: flex; align-items: center; justify-content: center; border-radius: 50%; overflow: hidden; transition: background-color 0.2s, box-shadow 0.2s; }
+.c-menu-control .c-map-menu .menu-category .category-icon img { padding: 3px; width: 26px; height: 26px; object-fit: contain; filter: brightness(0) invert(1); }
+.c-menu-control .c-map-menu .menu-category .category-icon .category-svg-icon { width: 22px; height: 22px; fill: #fff; }
+.c-menu-control .c-map-menu .menu-category .category-icon .category-initial { color: #fff; font-size: 14px; font-weight: 700; text-transform: uppercase; }
+.c-menu-control .c-map-menu .menu-category .layer-title { position: absolute; left: 42px; cursor: pointer; width: max-content; padding: 2px 12px 3px; font-size: 13px; text-shadow: none; border-radius: 18px; background-color: rgba(106, 110, 116, 0.92); box-shadow: 0 2px 8px rgba(8, 30, 52, 0.18); color: #fff; font-weight: 500; opacity: 0; transition: opacity 0.2s, background-color 0.2s, transform 0.2s; transform: translateX(-4px); pointer-events: none; }
+.c-menu-control .c-map-menu .menu-category.active .category-icon { background-color: var(--menu-active, #f7a600); box-shadow: 0 0 4px 0 black; }
+.c-menu-control .c-map-menu .menu-category.active .category-icon img { filter: none; }
+.c-menu-control .c-map-menu .menu-category.active .category-icon .category-svg-icon { fill: #fff; }
+.c-menu-control .c-map-menu .menu-category.active .layer-title, .c-menu-control .c-map-menu .menu-category:hover .layer-title { opacity: 1; transform: translateX(0); }
+.c-menu-control.card-style { left: 15px; top: 15px; }
+.c-menu-control.card-style .c-map-menu { background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15); overflow: hidden; min-width: 180px; }
+.c-menu-control.card-style .c-map-menu::before { display: none; }
+.c-menu-control.card-style .menu-category { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; gap: 12px; }
+.c-menu-control.card-style .menu-category:last-child { border-bottom: none; }
+.c-menu-control.card-style .menu-category:hover { background: #f5f5f5; }
+.c-menu-control.card-style .menu-category.active { background: #fff3e0; }
+.c-menu-control.card-style .menu-category .category-icon { width: 32px; height: 32px; }
+.c-menu-control.card-style .menu-category .category-icon img { filter: none; width: 100%; height: 100%; }
+.c-menu-control.card-style .menu-category .category-icon .category-svg-icon { width: 18px; height: 18px; fill: #4b5b6a; }
+.c-menu-control.card-style .menu-category .layer-title { position: static; opacity: 1; padding: 0; text-shadow: none; font-size: 0.9rem; }
+.c-menu-control.card-style .menu-category.active .layer-title { background: none; color: #e65100; font-weight: 600; }
+.c-menu-control .c-map-menu .menu-category.loading .category-icon { opacity: 0.6; }
+
+/* Map status toast */
+.map-status-toast { position: absolute; top: 62px; left: 50%; transform: translateX(-50%); max-width: min(86%, 420px); z-index: 140; display: inline-flex; align-items: center; gap: 8px; background: rgba(10, 37, 58, 0.94); color: #fff; border: 1px solid rgba(255, 193, 7, 0.5); border-radius: 8px; padding: 8px 12px; font-size: 0.74rem; line-height: 1.35; box-shadow: 0 6px 18px rgba(8, 30, 52, 0.3); }
+.map-status-toast.with-spinner::before { content: ""; width: 12px; height: 12px; border: 2px solid rgba(255, 255, 255, 0.35); border-top-color: #fff; border-radius: 50%; animation: spin 0.85s linear infinite; flex-shrink: 0; }
+.map-status-toast[hidden] { display: none !important; }
+
+/* ICPAC logo on map */
+.c-map-logo { position: absolute; bottom: 25px; left: 15px; z-index: 99; height: 45px; width: 65px; background: rgba(255, 255, 255, 0.9); border-radius: 6px; padding: 4px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+.c-map-logo img { width: 100%; height: 100%; object-fit: contain; }
+
+/* Map scope control */
+.map-scope-control { position: absolute; z-index: 120; top: 12px; right: 86px; display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(18, 49, 72, 0.25); border-radius: 7px; padding: 4px; box-shadow: 0 2px 8px rgba(7, 27, 46, 0.16); }
+.map-scope-btn { appearance: none; border: 1px solid transparent; background: transparent; color: #1f3f5e; border-radius: 5px; padding: 4px 8px; font-size: 0.72rem; font-weight: 600; cursor: pointer; line-height: 1.2; transition: background-color 0.2s, color 0.2s, border-color 0.2s; }
+.map-scope-btn:hover { background: rgba(25, 118, 210, 0.1); }
+.map-scope-btn.active { background: #1976d2; color: #fff; border-color: #1565c0; }
+
+/* Legend */
+.c-legend { position: absolute; z-index: 100; max-width: 220px; min-width: 160px; width: fit-content; background-color: #fff; padding: 10px 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); border-radius: 8px; bottom: calc(var(--map-cta-bottom) + 42px); right: 15px; }
+.c-legend.legend-bottom-left { bottom: calc(var(--map-cta-bottom) + 42px); left: 15px; right: auto; }
+.c-legend.legend-bottom-right { bottom: calc(var(--map-cta-bottom) + 42px); right: var(--map-cta-right); left: auto; }
+.c-legend.legend-top-left { top: 15px; left: 15px; bottom: auto; right: auto; }
+.c-legend.legend-top-right { top: 15px; right: 15px; bottom: auto; left: auto; }
+.c-legend .c-legend-title { font-size: 0.75rem; font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid #eee; margin-bottom: 6px; color: #333; }
+.c-legend-basic { list-style: none; margin: 0; padding: 0; }
+.c-legend-basic .c-legend-item { margin: 5px 0; display: flex; align-items: center; }
+.c-legend-basic .c-legend-item .c-legend-item-icon { width: 16px; height: 12px; margin-right: 8px; border: 0.5px solid rgba(19, 21, 41, 0.3); border-radius: 2px; }
+.c-legend-basic .c-legend-item .c-legend-item-icon.emergency { background-color: #d32f2f; }
+.c-legend-basic .c-legend-item .c-legend-item-icon.alarm { background-color: #ff9800; }
+.c-legend-basic .c-legend-item .c-legend-item-icon.warning { background-color: #ffc107; }
+.c-legend-basic .c-legend-item .c-legend-item-icon.normal { background-color: #b0b0b0; }
+.c-legend-basic .c-legend-item img.c-legend-item-icon { width: 20px; height: 20px; object-fit: contain; border: none; }
+.c-legend-basic .c-legend-item .c-legend-item-label { font-size: 0.8rem; color: #555; }
+
+/* Go to mapviewer button */
+.map-cta-btn { position: absolute; bottom: var(--map-cta-bottom); right: var(--map-cta-right); background: #1976d2; color: #fff; padding: 7px 14px; border-radius: 6px; font-size: 0.74rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; z-index: 99; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22); transition: background 0.2s; }
+.map-cta-btn:hover { background: var(--accent-color, #fbc02d); color: var(--button-accent-text, #333); }
+.map-cta-btn svg { width: 14px; height: 14px; fill: currentColor; }
+
+/* Map attribution */
+.map-attribution { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: #666; z-index: 10; background: rgba(255, 255, 255, 0.74); padding: 2px 6px; border-radius: 3px; }
+.map-attribution a { color: #666; }
+
+/* Country panel */
+.country-section { display: flex; flex-direction: column; height: var(--home-panel-height); min-height: var(--home-panel-height); }
+.country-section-header { padding: 10px 12px 8px; border-bottom: 1px solid #e5ebf2; flex-shrink: 0; }
+.country-section-title { font-size: 0.98rem; font-weight: 600; color: #213244; margin: 0 0 8px; line-height: 1.35; }
+.alert-legend-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+.alert-pill { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; color: #fff; }
+.alert-pill.emergency { background: #d32f2f; }
+.alert-pill.alarm { background: #ff9800; }
+.alert-pill.warning { background: #ffc107; color: #333; }
+.country-panel-body { flex: 1 1 0; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; }
+.country-list { flex: 0 0 auto; }
+.country-item { display: flex; align-items: center; padding: 6px 10px; border-bottom: 1px solid #edf2f7; cursor: pointer; transition: background 0.15s; }
+.country-item:hover { background: #f7faff; }
+.country-item:last-child { border-bottom: none; }
+.country-item.selected { background: #e7f0fb; }
+.country-flag { width: 24px; height: 24px; border-radius: 999px; overflow: hidden; margin-right: 8px; flex-shrink: 0; border: 2px solid #e0e0e0; display: flex; align-items: center; justify-content: center; background: #f5f5f5; }
+.country-flag img { width: 100%; height: 100%; object-fit: cover; }
+.country-info { flex: 1; min-width: 0; }
+.country-name { font-size: 0.84rem; font-weight: 500; color: #2e3c49; margin-bottom: 3px; line-height: 1.1; }
+.country-bar { display: flex; height: 4px; background: #e8e8e8; border-radius: 3px; overflow: hidden; }
+.country-bar-segment { height: 100%; transition: width 0.3s ease; }
+.country-bar-segment.emergency { background: #d32f2f; }
+.country-bar-segment.alarm { background: #ff9800; }
+.country-bar-segment.warning { background: #ffc107; }
+.country-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px 15px; color: #5b6b7c; }
+
+/* Country summary table */
+.country-summary-table { padding: 0 10px 6px; flex: 0 0 auto; border-top: 1px solid #e5ebf2; margin-top: 0; }
+.summary-table-title { font-size: 0.78rem; font-weight: 600; color: #213244; padding: 6px 0 2px; }
+.summary-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; margin-top: 4px; }
+.summary-table th, .summary-table td { padding: 3px 6px; text-align: center; }
+.summary-table th { font-weight: 600; color: #5b6b7c; border-bottom: 1px solid #e5ebf2; font-size: 0.68rem; text-transform: uppercase; }
+.summary-table th:first-child, .summary-table td:first-child { text-align: left; }
+.summary-table td.emergency { color: #d32f2f; }
+.summary-table td.alarm { color: #ff9800; }
+.summary-table td.warning { color: #c79100; }
+.summary-table th.emergency { color: #d32f2f; }
+.summary-table th.alarm { color: #ff9800; }
+.summary-table th.warning { color: #c79100; }
+.summary-totals { border-top: 1px solid #e5ebf2; }
+
+/* Risk ticker */
+.risk-ticker-container { min-height: 44px; display: flex; align-items: center; overflow: hidden; background: linear-gradient(90deg, #0c1f3e 0%, #17315f 100%); }
+.risk-ticker { width: max-content; display: flex; align-items: center; will-change: transform; --ticker-duration: 26s; --ticker-shift: 700px; animation: ticker-scroll var(--ticker-duration) linear infinite; }
+.ticker-content { width: max-content; display: flex; align-items: center; gap: 18px; white-space: nowrap; padding: 0 18px; flex-shrink: 0; }
+.ticker-content.is-clone { pointer-events: none; }
+.ticker-title { color: #fff; font-size: 0.84rem; font-weight: 600; }
+.ticker-separator { color: rgba(255, 255, 255, 0.45); font-size: 1.15rem; }
+.ticker-item { display: inline-flex; align-items: center; gap: 5px; color: #fff; font-size: 0.8rem; font-weight: 500; }
+.ticker-dot { width: 9px; height: 9px; border-radius: 999px; animation: pulse 1.5s ease-in-out infinite; }
+.ticker-item.emergency .ticker-dot { background: #d32f2f; }
+.ticker-item.alarm .ticker-dot { background: #ff9800; }
+.ticker-item.warning .ticker-dot { background: #ffc107; }
+.ticker-item.normal .ticker-dot { background: #b0b0b0; }
+.ticker-label { color: rgba(255, 255, 255, 0.8); }
+.ticker-count { font-weight: 700; }
+.ticker-item.emergency .ticker-count { color: #ff6b6b; }
+.ticker-item.alarm .ticker-count { color: #ffbe6b; }
+.ticker-item.warning .ticker-count { color: #ffef88; }
+.ticker-item.normal .ticker-count { color: #c0c0c0; }
+@keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(calc(-1 * var(--ticker-shift))); } }
+@keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.2); } }
+
+/* MapLibre overrides */
+.maplibregl-ctrl-attrib { display: none !important; }
+.maplibregl-ctrl-group { border-radius: 4px !important; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important; }
+.maplibregl-ctrl-group button { width: 30px !important; height: 30px !important; }
+.maplibregl-popup-content { padding: 10px 14px; border-radius: 6px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15); font-size: 0.85rem; }
+.popup-title { font-weight: 600; color: #333; margin-bottom: 6px; }
+.popup-value { font-size: 0.8rem; color: #666; }
+.popup-value span { font-weight: 600; }
+.popup-value span.emergency { color: #d32f2f; }
+.popup-value span.alarm { color: #ff9800; }
+.popup-value span.warning { color: #c79100; }
+
+/* Partners / Members section */
+.home-module--partners { padding: 0; }
+.partners-section { padding: 0; }
+.partners-container { max-width: 1320px; margin: 0 auto; padding: 0 1rem; }
+.partners-label { font-size: 20px; font-weight: 600; color: var(--secondary-text-color, #333); text-transform: none; letter-spacing: normal; padding: 0; border-left: none; background: none; border-radius: 0; min-width: auto; text-align: center; }
+.members-group, .partners-group { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 1.25rem 0; background-color: color-mix(in srgb, var(--background-color, #fff) 98%, black); }
+.member-flags { display: flex; justify-content: center; align-items: stretch; gap: 1.25rem; flex-wrap: wrap; overflow: visible; margin-top: 0.75rem; }
+.member-flag { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: inherit; padding: 0.6rem; background-color: var(--background-color, #fff); border-radius: 8px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08); transition: transform 0.2s ease, box-shadow 0.2s ease; width: 130px; height: 90px; }
+.member-flag:hover { transform: translateY(-2px); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12); }
+.member-flag img { width: 80px; height: 52px; object-fit: cover; border-radius: 3px; box-shadow: none; border: 1px solid rgba(51, 51, 51, 0.12); }
+.member-flag-name { display: block; font-size: 13px; font-weight: 500; color: var(--secondary-text-color, #333); text-align: center; margin-top: 0.35rem; }
+.partners-group-header { margin-bottom: 0.25rem; }
+.partners-logos-shell { overflow: hidden; width: 100%; margin: 0.5rem 0; position: relative; }
+.partners-logos { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; width: 100%; }
+.partners-logos a, .partner-item { flex-shrink: 0; display: flex; align-items: center; justify-content: center; text-decoration: none; padding: 0.5rem; background-color: var(--background-color, #fff); border-radius: 8px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08); transition: transform 0.2s ease, box-shadow 0.2s ease; height: 90px; width: 130px; }
+.partner-item:hover { transform: translateY(-2px); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12); }
+.partner-logo { max-width: 120px; max-height: 80px; width: auto; height: auto; object-fit: contain; display: block; }
+.partners-more-wrap { margin-top: 0.5rem; text-align: center; }
+.partners-more-link { display: inline-block; background-color: var(--primary-color, #034930); color: var(--primary-text-color, #fff); border-radius: 9999px; padding: 0.35rem 1.2rem; font-size: 0.75rem; font-weight: 600; text-decoration: none; transition: background-color 0.3s ease; }
+.partners-more-link:hover { background-color: var(--accent-color, #fbc02d); color: var(--secondary-text-color, #333); text-decoration: none; }
+
+/* Responsive */
+@media screen and (max-width: 1200px) {
+  .dashboard-grid { grid-template-columns: minmax(0, 1fr) 300px; }
+}
+@media screen and (max-width: 1024px) {
+  .dashboard-grid { grid-template-columns: minmax(0, 1fr) 280px; gap: 10px; }
+}
+@media screen and (max-width: 768px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .map-section, .country-section { height: 320px; min-height: 320px; }
+  #mini-map, .map-wrapper { height: 100%; min-height: 0; }
+  .map-wrapper { --map-cta-bottom: 10px; --map-cta-right: 10px; }
+  .c-map-logo { bottom: 0; left: 0; border-radius: 0 6px 0 0; }
+  .map-scope-control { top: 10px; right: 44px; left: auto; flex-direction: column; padding: 3px; gap: 2px; border-radius: 6px; background: rgba(255, 255, 255, 0.94); }
+  .map-scope-btn { font-size: 0.62rem; padding: 4px 6px; }
+  .c-menu-control .c-map-menu::before { width: 30px; border-radius: 18px; }
+  .c-menu-control .c-map-menu .menu-category { padding: 9px 0; }
+  .c-menu-control .c-map-menu .menu-category .category-icon { width: 30px; height: 30px; }
+  .c-menu-control .c-map-menu .menu-category .category-icon .category-svg-icon { width: 18px; height: 18px; }
+  .c-menu-control .c-map-menu .menu-category .layer-title { left: 36px; font-size: 0.68rem; }
+  .c-legend { max-width: none; min-width: 0; width: auto; padding: 5px 8px; right: var(--map-cta-right); left: auto; bottom: calc(var(--map-cta-bottom) + 34px); border-radius: 6px; }
+  .c-legend.legend-bottom-left, .c-legend.legend-bottom-right { right: var(--map-cta-right); left: auto; bottom: calc(var(--map-cta-bottom) + 34px); }
+  .c-legend .c-legend-title { font-size: 0.66rem; }
+  .c-legend-basic .c-legend-item .c-legend-item-icon { width: 10px; height: 8px; margin-right: 5px; }
+  .c-legend-basic .c-legend-item .c-legend-item-label { font-size: 0.62rem; }
+  .map-cta-btn { font-size: 0.66rem; padding: 5px 10px; gap: 4px; }
+  .map-cta-btn svg { width: 11px; height: 11px; }
+  .risk-ticker-container { min-height: 38px; }
+  .ticker-title { font-size: 0.74rem; }
+  .ticker-item { font-size: 0.72rem; }
+  .member-flags { flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
+  .member-flag { width: 100px; height: 72px; }
+  .member-flag img { width: 64px; height: 42px; }
+  .member-flag-name { font-size: 11px; }
+  .partners-logos { gap: 0.75rem; }
+  .partner-item, .partners-logos a { height: 72px; width: 100px; padding: 0.4rem; }
+  .partner-logo { max-width: 80px; max-height: 52px; }
+  .partners-label { font-size: 16px; }
+}
 </style>
 {% endblock %}
 
@@ -148,6 +292,7 @@
     let admin0FeaturesCache = null;
     let admin1FeaturesCache = null;
     let wrfExtremeRainfallDateCache = null;
+    let situationRiskCounts = null;
     let scopeBoundsByScope = {};
     let miniMapDefaultLegendTitle = '';
     let miniMapDefaultLegendItemsHtml = '';
@@ -188,6 +333,7 @@
         BDI: 'BI', DJI: 'DJ', ETH: 'ET', KEN: 'KE',
         RWA: 'RW', SDN: 'SD', SOM: 'SO', SSD: 'SS', TZA: 'TZ', UGA: 'UG'
     });
+    const BASE_SITE_TITLE = '{{ page.banner_title|default:"East Africa Flood Watch"|escapejs }}';
     const BASE_COUNTRY_SECTION_TITLE = '{{ page.country_cards_title|default:"Regional Flood Situation"|escapejs }}';
     const BASE_DASHBOARD_TITLE = '{{ page.dashboard_title|default:"Latest Situation of Flood Conditions"|escapejs }}';
     const PREFERRED_LAYER_ORDER = ['multimodal', 'extreme-rainfall'];
@@ -237,8 +383,7 @@
     // FastAPI v1 endpoints for homepage widgets.
     const apiEndpoints = {
         multimodalGeojson: [
-            '/api/v1/multimodal/geojson',
-            '/api/v1/multimodal/geojson/'
+            '/api/v1/multimodal/geojson'
         ],
         // Match mapserver layer names used by mapviewer for Extreme Rainfall.
         extremeRainfallWmsBaseUrl: (
@@ -248,28 +393,22 @@
             + '&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}'
         ),
         wrfExtremeRainfallDates: [
-            '/api/v1/wrf/extreme-rainfall/dates',
-            '/api/v1/wrf/extreme-rainfall/dates/'
+            '/api/v1/wrf/extreme-rainfall/dates'
         ],
         countrySummary: [
-            '/api/v1/multimodal/country-summary-with-bounds/',
             '/api/v1/multimodal/country-summary-with-bounds'
         ],
         situationSummary: [
-            '/api/v1/multimodal/situation-summary/',
             '/api/v1/multimodal/situation-summary'
         ],
         admin0: [
-            '/api/v1/boundaries/admin0',
-            '/api/v1/boundaries/admin0/'
+            '/api/v1/boundaries/admin0'
         ],
         admin1: [
-            '/api/v1/boundaries/admin1',
-            '/api/v1/boundaries/admin1/'
+            '/api/v1/boundaries/admin1'
         ],
         riskMajority: [
-            '/api/v1/risk/risk-majority',
-            '/api/v1/risk/risk-majority/'
+            '/api/v1/risk/risk-majority'
         ]
     };
     // CMS-driven layer config (null when no CMS categories configured)
@@ -1227,7 +1366,7 @@
 
         const label = membersGroup.querySelector('.partners-label');
         if (label) {
-            label.textContent = label.getAttribute('data-default-label') || 'Member Countries';
+            label.textContent = label.getAttribute('data-default-label') || 'Partner Countries';
         }
 
         membersGroup.style.display = visibleCount > 0 ? '' : 'none';
@@ -1315,6 +1454,11 @@
         return (scopeConfig?.dashboardTitle) || BASE_DASHBOARD_TITLE || 'Latest Situation of Flood Conditions';
     }
 
+    function getScopeSiteTitle() {
+        const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+        return (scopeConfig?.siteTitle) || BASE_SITE_TITLE || 'East Africa Flood Watch';
+    }
+
     function updateScopeHeadings() {
         const countryTitleEl = document.getElementById('country-section-title');
         const countryName = getCountryNameByCode(selectedCountry);
@@ -1328,6 +1472,31 @@
         document.querySelectorAll('[id="dashboard-title-text"]').forEach((el) => {
             el.textContent = tickerTitle;
         });
+
+        // Update hero and footer site title based on scope
+        const siteTitle = getScopeSiteTitle();
+        const heroTitleEl = document.getElementById('hero-site-title');
+        if (heroTitleEl) heroTitleEl.textContent = siteTitle;
+        const footerTitleEl = document.getElementById('footer-site-title');
+        if (footerTitleEl) footerTitleEl.textContent = siteTitle;
+        // Update footer description — replace base title reference with scope title
+        const footerDescEl = document.getElementById('footer-site-desc');
+        if (footerDescEl && footerDescEl.getAttribute('data-original') === null) {
+            footerDescEl.setAttribute('data-original', footerDescEl.textContent);
+        }
+        if (footerDescEl) {
+            const original = footerDescEl.getAttribute('data-original') || footerDescEl.textContent;
+            footerDescEl.textContent = original.replace(BASE_SITE_TITLE, siteTitle);
+        }
+        // Update hero subtitle — replace base title reference with scope title
+        const heroSubEl = document.getElementById('hero-subtitle');
+        if (heroSubEl && heroSubEl.getAttribute('data-original') === null) {
+            heroSubEl.setAttribute('data-original', heroSubEl.textContent);
+        }
+        if (heroSubEl) {
+            const original = heroSubEl.getAttribute('data-original') || heroSubEl.textContent;
+            heroSubEl.textContent = original.replace(BASE_SITE_TITLE, siteTitle);
+        }
     }
 
     function toBoundsPair(bounds) {
@@ -1900,8 +2069,8 @@
                 updateScopeHeadings();
                 updateMapScopeUI();
 
-                // Auto-load the first available data layer category
-                await autoLoadDefaultCategory();
+                // Always load multimodal data on map init
+                await forceLoadMultimodal();
 
                 document.getElementById('map-loading').style.display = 'none';
             });
@@ -2116,6 +2285,81 @@
         }
     }
 
+    async function forceLoadMultimodal() {
+        if (!miniMap) { console.error('[forceLoad] No miniMap'); return; }
+        const config = miniMapLayerConfig.multimodal || _defaultLayerConfig.multimodal;
+        console.log('[forceLoad] Config:', config?.key, 'geojsonUrls:', config?.geojsonUrls);
+        try {
+            const params = {};
+            if (mapConfig.pointFilter !== 'all') params.filter = mapConfig.pointFilter;
+            if (selectedMapScope !== 'all') params.scope = selectedMapScope;
+            const urls = config.geojsonUrls.map(u => {
+                const q = new URLSearchParams(params).toString();
+                return q ? `${u}?${q}` : u;
+            });
+            console.log('[forceLoad] Fetching:', urls[0]);
+            const response = await fetch(urls[0], { headers: { 'Accept': 'application/json' } });
+            console.log('[forceLoad] Response status:', response.status);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const geojson = await response.json();
+            console.log('[forceLoad] Features:', geojson?.features?.length);
+            if (!geojson?.features?.length) { console.warn('[forceLoad] No features'); return; }
+
+            const thresholds = {
+                warning: {{ multimodal_settings.warning_threshold|default:300 }},
+                alarm: {{ multimodal_settings.alarm_threshold|default:500 }},
+                emergency: {{ multimodal_settings.emergency_threshold|default:750 }}
+            };
+            geojson.features.forEach(f => {
+                const p = f.properties || {};
+                const val = Number(p.daily_avg);
+                let al = String(p.alert_level || '').toLowerCase();
+                if (!['emergency','alarm','warning','normal'].includes(al)) {
+                    if (Number.isFinite(val)) {
+                        if (val >= thresholds.emergency) al = 'emergency';
+                        else if (val >= thresholds.alarm) al = 'alarm';
+                        else if (val >= thresholds.warning) al = 'warning';
+                        else al = 'normal';
+                    } else al = 'normal';
+                }
+                f.properties.alert_level = al;
+            });
+
+            if (miniMap.getLayer('forecast-points-layer')) miniMap.removeLayer('forecast-points-layer');
+            if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
+
+            miniMap.addSource('forecast-points', { type: 'geojson', data: geojson });
+            miniMap.addLayer({
+                id: 'forecast-points-layer',
+                type: 'circle',
+                source: 'forecast-points',
+                paint: {
+                    'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 4, 8, 7, 12, 10],
+                    'circle-color': ['match', ['get', 'alert_level'],
+                        'emergency', alertColors.emergency,
+                        'alarm', alertColors.alarm,
+                        'warning', alertColors.warning,
+                        alertColors.normal],
+                    'circle-stroke-width': 1.5,
+                    'circle-stroke-color': 'white',
+                    'circle-opacity': 0.9
+                }
+            });
+
+            if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) {
+                miniMap.moveLayer('forecast-points-layer');
+            }
+
+            selectedMiniMapLayerKey = 'multimodal';
+            const btn = getCategoryButtonByLayerKey('multimodal');
+            if (btn) setActiveCategoryButton(btn);
+            renderMiniMapLegend(config);
+            console.log('[forceLoad] SUCCESS - Points rendered:', geojson.features.length);
+        } catch (err) {
+            console.error('[forceLoad] ERROR:', err);
+        }
+    }
+
     async function loadMapPoints(selectedLayerConfig = null, options = {}) {
         if (!miniMap) {
             return { ok: false, reason: 'map_not_initialized' };
@@ -2166,7 +2410,7 @@
                 return { ok: false, reason: 'no_data', message: noDataMessage };
             }
 
-            // Add alert_level based on thresholds when endpoint doesn't provide one.
+            // Always apply alert thresholds to all points
             const thresholds = {
                 warning: {{ multimodal_settings.warning_threshold|default:300 }},
                 alarm: {{ multimodal_settings.alarm_threshold|default:500 }},
@@ -2200,6 +2444,12 @@
             if (miniMap.getLayer('forecast-points-layer')) miniMap.removeLayer('forecast-points-layer');
             if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
 
+            const circleColor = ['match', ['get', 'alert_level'],
+                    'emergency', alertColors.emergency,
+                    'alarm', alertColors.alarm,
+                    'warning', alertColors.warning,
+                    alertColors.normal];
+
             miniMap.addSource('forecast-points', { type: 'geojson', data: geojson });
             miniMap.addLayer({
                 id: 'forecast-points-layer',
@@ -2207,18 +2457,16 @@
                 source: 'forecast-points',
                 paint: {
                     'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 4, 8, 7, 12, 10],
-                    'circle-color': [
-                        'match', ['get', 'alert_level'],
-                        'emergency', alertColors.emergency,
-                        'alarm', alertColors.alarm,
-                        'warning', alertColors.warning,
-                        alertColors.normal
-                    ],
+                    'circle-color': circleColor,
                     'circle-stroke-width': 1.5,
                     'circle-stroke-color': 'white',
                     'circle-opacity': 0.9
                 }
             });
+
+            // Always show alert legend
+            const legendEl = document.querySelector('.c-legend');
+            if (legendEl) legendEl.style.display = '';
 
             if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) {
                 miniMap.moveLayer('forecast-points-layer');
@@ -2267,6 +2515,7 @@
     async function loadCountryData() {
         try {
             const params = {};
+            // WHCA (default) shows all data; other scopes filter per CMS config
             if (selectedMapScope !== 'all') params.scope = selectedMapScope;
             const urls = buildUrlsWithParams(apiEndpoints.countrySummary, params);
             const data = await fetchJsonWithFallback(urls);
@@ -2297,6 +2546,19 @@
         updateAll('ticker-alarm', riskCounts.alarm || 0);
         updateAll('ticker-warning', riskCounts.warning || 0);
         updateAll('ticker-normal', riskCounts.normal || 0);
+    }
+
+    function updateSummaryTotalsRow() {
+        if (!situationRiskCounts) return;
+        const row = document.querySelector('.summary-totals');
+        if (!row) return;
+        const rc = situationRiskCounts;
+        const tEmg = rc.emergency || 0;
+        const tAlm = rc.alarm || 0;
+        const tWrn = rc.warning || 0;
+        const tNrm = rc.normal || 0;
+        const tTotal = rc.total || (tEmg + tAlm + tWrn + tNrm);
+        row.innerHTML = `<td><strong>Total</strong></td><td class="emergency"><strong>${tEmg}</strong></td><td class="alarm"><strong>${tAlm}</strong></td><td class="warning"><strong>${tWrn}</strong></td><td><strong>${tNrm}</strong></td><td><strong>${tTotal}</strong></td>`;
     }
 
     // ========================================
@@ -2366,6 +2628,35 @@
         });
 
         container.innerHTML = html;
+
+        // Render summary statistics table
+        const summaryTable = document.getElementById('country-summary-table');
+        if (summaryTable) {
+            const displayed = countries.slice(0, cardLimit);
+            let tableHtml = '<div class="summary-table-title">Summary</div><table class="summary-table"><thead><tr><th>Country</th><th class="emergency">Emg</th><th class="alarm">Alm</th><th class="warning">Wrn</th><th>Nrm</th><th>Total</th></tr></thead><tbody>';
+            let totals = { emergency: 0, alarm: 0, warning: 0, normal: 0 };
+            displayed.forEach(c => {
+                const tp = c.total_points || 0;
+                const aboveThreshold = (c.emergency || 0) + (c.alarm || 0) + (c.warning || 0);
+                const normal = tp > 0 ? tp - aboveThreshold : 0;
+                totals.emergency += (c.emergency || 0);
+                totals.alarm += (c.alarm || 0);
+                totals.warning += (c.warning || 0);
+                totals.normal += normal;
+                tableHtml += `<tr><td>${c.name || c.code}</td><td class="emergency">${c.emergency || 0}</td><td class="alarm">${c.alarm || 0}</td><td class="warning">${c.warning || 0}</td><td>${normal}</td><td><strong>${tp || aboveThreshold}</strong></td></tr>`;
+            });
+            // Use situation-summary risk_counts for totals row (includes normal-only countries)
+            const rc = situationRiskCounts;
+            const tEmg = rc ? (rc.emergency || 0) : totals.emergency;
+            const tAlm = rc ? (rc.alarm || 0) : totals.alarm;
+            const tWrn = rc ? (rc.warning || 0) : totals.warning;
+            const tNrm = rc ? (rc.normal || 0) : totals.normal;
+            const tTotal = rc ? (rc.total || (tEmg + tAlm + tWrn + tNrm)) : (totals.emergency + totals.alarm + totals.warning + totals.normal);
+            tableHtml += `<tr class="summary-totals"><td><strong>Total</strong></td><td class="emergency"><strong>${tEmg}</strong></td><td class="alarm"><strong>${tAlm}</strong></td><td class="warning"><strong>${tWrn}</strong></td><td><strong>${tNrm}</strong></td><td><strong>${tTotal}</strong></td></tr>`;
+            tableHtml += '</tbody></table>';
+            summaryTable.innerHTML = tableHtml;
+        }
+
         updateScopeHeadings();
         initRiskTickerLoop();
         scheduleMiniMapResize(mapUiConfig.listResizeDelayMs);
@@ -2427,6 +2718,7 @@
     async function loadSituationSummary() {
         try {
             const params = {};
+            // WHCA (default) shows all data; other scopes filter per CMS config
             if (selectedMapScope !== 'all') params.scope = selectedMapScope;
             const urls = buildUrlsWithParams(apiEndpoints.situationSummary, params);
             const data = await fetchJsonWithFallback(urls);
@@ -2451,7 +2743,9 @@
 
             // Update ticker with correct risk counts from API
             if (data.risk_counts) {
+                situationRiskCounts = data.risk_counts;
                 updateRiskTicker(data.risk_counts);
+                updateSummaryTotalsRow();
             }
 
         } catch (error) {

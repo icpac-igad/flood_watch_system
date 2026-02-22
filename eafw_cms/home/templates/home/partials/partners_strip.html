@@ -7,7 +7,7 @@
         <div class="partners-container">
             {% if footer and footer.member_countries %}
             <div class="members-group">
-                <h3 class="partners-label" data-default-label="{{ footer.partners_member_countries_title|default:"ICPAC Partner Countries"|escape }}">{{ footer.partners_member_countries_title|default:"ICPAC Partner Countries" }}</h3>
+                <h3 class="partners-label" data-default-label="{{ footer.partners_member_countries_title|default:"Partner Countries"|escape }}">{{ footer.partners_member_countries_title|default:"Partner Countries" }}</h3>
                 <div class="member-flags">
                     {% for block in footer.member_countries|sort_member_countries|unique_member_countries %}
                     {% with block.value as item %}
@@ -21,7 +21,7 @@
                         data-country-name="{{ item.country|country_name|escape }}"
                         title="{{ item.country|country_name }}"
                     >
-                        <img src="https://flagcdn.com/w40/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
+                        <img src="https://flagcdn.com/w160/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
                         <span class="member-flag-name">{{ item.country|country_name }}</span>
                     </a>
                     {% else %}
@@ -31,7 +31,7 @@
                         data-country-name="{{ item.country|country_name|escape }}"
                         title="{{ item.country|country_name }}"
                     >
-                        <img src="https://flagcdn.com/w40/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
+                        <img src="https://flagcdn.com/w160/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
                         <span class="member-flag-name">{{ item.country|country_name }}</span>
                     </div>
                     {% endif %}
@@ -59,7 +59,7 @@
                             data-partner-name="{{ partner.name|default:''|escape }}"
                             {% if partner.url %}target="_blank" rel="noopener"{% endif %}
                         >
-                            {% image partner.image height-52 as partner_logo %}
+                            {% image partner.image height-120 as partner_logo %}
                             <img src="{{ partner_logo.url }}" alt="{{ partner.name }}" class="partner-logo" title="{{ partner.name }}">
                         </a>
                         {% endif %}
