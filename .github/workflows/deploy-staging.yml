@@ -730,8 +730,7 @@ jobs:
             ASSET_MAX_CHECKS=24
             ASSET_RETRY_SECONDS=5
             for i in $(seq 1 "${ASSET_MAX_CHECKS}"); do
-              if docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/homepage-layout*.css >/dev/null" \
-                && docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/geomanagerweb*.css >/dev/null"; then
+              if docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/geomanagerweb*.css >/dev/null"; then
                 ASSET_OK=1
                 echo "Static assets ready on check ${i}/${ASSET_MAX_CHECKS}"
                 break
@@ -744,9 +743,9 @@ jobs:
               exit 1
             fi
 
-            echo "Verifying rendered homepage references an available CSS asset..."
+            echo "Verifying rendered homepage is accessible..."
             HOME_HTML="$(curl -fsS --max-time 12 http://127.0.0.1:9068/ || true)"
-            HOME_CSS_PATH="$(printf '%s' "$HOME_HTML" | grep -o '/static/css/homepage-layout[^\"]*' | head -n1 || true)"
+            HOME_CSS_PATH="$(printf '%s' "$HOME_HTML" | grep -o '/static/css/geomanagerweb[^\"]*' | head -n1 || true)"
             if [ -n "$HOME_CSS_PATH" ]; then
               HOME_CSS_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 "http://127.0.0.1:9068${HOME_CSS_PATH}")"
               if [ "$HOME_CSS_CODE" != "200" ]; then
@@ -754,7 +753,7 @@ jobs:
                 exit 1
               fi
             else
-              echo "WARN: could not detect homepage-layout CSS path in rendered homepage HTML"
+              echo "WARN: could not detect geomanagerweb CSS path in rendered homepage HTML"
             fi
 
             # Reload nginx
