@@ -833,10 +833,17 @@ jobs:
             # Fix hardcoded localhost URLs from local DB dump
             echo "Fixing localhost tile URLs in CMS layers..."
             docker exec eafw-pgdb psql -U eafw_user -d eafw_db -c "
+              -- Fix base_url fields
               UPDATE geomanager_vectortilelayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:9068', '') WHERE base_url LIKE '%127.0.0.1:9068%';
               UPDATE geomanager_rastertilelayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:9068', '') WHERE base_url LIKE '%127.0.0.1:9068%';
               UPDATE geomanager_wmslayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:9068', '') WHERE base_url LIKE '%127.0.0.1:9068%';
               UPDATE geomanager_vectortilelayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:8180', '') WHERE base_url LIKE '%127.0.0.1:8180%';
+              UPDATE geomanager_rastertilelayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:8180', '') WHERE base_url LIKE '%127.0.0.1:8180%';
+              -- Fix tile_json_url fields
+              UPDATE geomanager_vectortilelayer SET tile_json_url = REPLACE(tile_json_url, 'http://127.0.0.1:9068', '') WHERE tile_json_url LIKE '%127.0.0.1:9068%';
+              UPDATE geomanager_vectortilelayer SET tile_json_url = REPLACE(tile_json_url, 'http://127.0.0.1:8180', '') WHERE tile_json_url LIKE '%127.0.0.1:8180%';
+              UPDATE geomanager_rastertilelayer SET tile_json_url = REPLACE(tile_json_url, 'http://127.0.0.1:9068', '') WHERE tile_json_url LIKE '%127.0.0.1:9068%';
+              UPDATE geomanager_rastertilelayer SET tile_json_url = REPLACE(tile_json_url, 'http://127.0.0.1:8180', '') WHERE tile_json_url LIKE '%127.0.0.1:8180%';
             " 2>&1 || echo "WARN: localhost URL fix failed (tables may not exist yet)"
 
             echo "Running Django migrations (with retries while CMS starts)..."
