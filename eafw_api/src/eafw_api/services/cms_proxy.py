@@ -4,6 +4,7 @@ Helpers for proxying compatibility endpoints to the Django CMS API.
 from __future__ import annotations
 
 from typing import Any, Iterable
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from fastapi import HTTPException, Request
@@ -13,6 +14,21 @@ from eafw_api.config import get_settings
 settings = get_settings()
 
 DEFAULT_TIMEOUT = httpx.Timeout(connect=10.0, read=45.0, write=45.0, pool=45.0)
+URL_PREFIXES_TO_ABSOLUTIZE = (
+    "/api/",
+    "/pg/",
+    "/mapserver/",
+    "/mapcache/",
+    "/cog-tiles/",
+    "/stac/",
+    "/stac-browser/",
+    "/stac-assets/",
+    "/stac-cogs/",
+    "/stac-rasters/",
+    "/media/",
+    "/static/",
+    "/mapviewer/",
+)
 
 
 def _normalize_api_base(url: str) -> str:
@@ -70,6 +86,67 @@ def _proxy_headers(source_request: Request | None = None) -> dict[str, str]:
     return headers
 
 
+def _request_base_url(source_request: Request | None = None) -> str:
+    if not source_request:
+        return ""
+
+    host = (
+        source_request.headers.get("x-forwarded-host")
+        or source_request.headers.get("host")
+        or source_request.url.netloc
+        or ""
+    ).split(",")[0].strip()
+    if not host:
+        return ""
+
+    scheme = (
+        source_request.headers.get("x-forwarded-proto")
+        or source_request.url.scheme
+        or "http"
+    ).split(",")[0].strip()
+
+    return f"{scheme}://{host}"
+
+
+def _normalize_string_url(value: str, request_base_url: str) -> str:
+    if not value or not request_base_url:
+        return value
+
+    if value.startswith(("http://", "https://")):
+        parsed = urlsplit(value)
+        hostname = (parsed.hostname or "").lower()
+        if hostname in {"127.0.0.1", "localhost", "0.0.0.0", "::1"}:
+            replacement = urlsplit(request_base_url)
+            return urlunsplit(
+                (
+                    replacement.scheme,
+                    replacement.netloc,
+                    parsed.path,
+                    parsed.query,
+                    parsed.fragment,
+                )
+            )
+        return value
+
+    if value.startswith(URL_PREFIXES_TO_ABSOLUTIZE):
+        return f"{request_base_url.rstrip('/')}{value}"
+
+    return value
+
+
+def _normalize_payload_urls(payload: Any, request_base_url: str) -> Any:
+    if isinstance(payload, dict):
+        return {
+            key: _normalize_payload_urls(value, request_base_url)
+            for key, value in payload.items()
+        }
+    if isinstance(payload, list):
+        return [_normalize_payload_urls(item, request_base_url) for item in payload]
+    if isinstance(payload, str):
+        return _normalize_string_url(payload, request_base_url)
+    return payload
+
+
 async def proxy_cms_json(
     path: str,
     query_items: Iterable[tuple[str, str]] | None = None,
@@ -83,6 +160,8 @@ async def proxy_cms_json(
     endpoint_path = path if path.startswith("/") else f"/{path}"
     params = list(query_items or [])
     last_error = "unknown"
+
+    request_base_url = _request_base_url(source_request)
 
     async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT, follow_redirects=True) as client:
         for api_base in _candidate_api_bases():
@@ -103,7 +182,8 @@ async def proxy_cms_json(
                 continue
 
             try:
-                return response.json()
+                payload = response.json()
+                return _normalize_payload_urls(payload, request_base_url)
             except ValueError as exc:
                 raise HTTPException(
                     status_code=502,

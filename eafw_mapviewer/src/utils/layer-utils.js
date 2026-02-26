@@ -104,8 +104,6 @@ const SAFE_TILE_TEMPLATE_VALUES = new Set([
   '{{ratio}}',
   '{s}',
   '{{s}}',
-  '{time}',
-  '{{time}}',
 ]);
 
 const decodeUrlComponentSafe = (value = '') => {
@@ -143,7 +141,7 @@ const sanitizeTemplateParams = (url) => {
       }
 
       // Remove unresolved placeholders like date={{time}} that can break SQL casts,
-      // but preserve map tile placeholders needed by maplibre/mapcache/titiler.
+      // but preserve map coordinate placeholders needed by maplibre/mapcache/titiler.
       if (isTemplateToken(normalizedValue) && !SAFE_TILE_TEMPLATE_VALUES.has(normalizedValue)) {
         return false;
       }
@@ -153,6 +151,45 @@ const sanitizeTemplateParams = (url) => {
 
   const sanitizedQuery = keptQueryParts.join('&');
   return sanitizedQuery ? `${baseUrl}?${sanitizedQuery}` : baseUrl;
+};
+
+const getBrowserOrigin = () => {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return '';
+};
+
+const absolutizeRuntimeUrl = (url = '') => {
+  if (!url || typeof url !== 'string') return url;
+
+  const normalized = url.trim();
+  const origin = getBrowserOrigin();
+  if (!origin) return normalized;
+
+  if (normalized.startsWith('//') && window.location?.protocol) {
+    return `${window.location.protocol}${normalized}`;
+  }
+
+  if (normalized.startsWith('/')) {
+    return `${origin}${normalized}`;
+  }
+
+  if (!/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    const loopbackHosts = new Set(['127.0.0.1', 'localhost', '0.0.0.0', '::1']);
+    if (loopbackHosts.has(parsed.hostname)) {
+      return `${origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+  } catch (error) {
+    return normalized;
+  }
+
+  return normalized;
 };
 
 const appendParamsToUrl = (url, params, isFilteredLayer = false) => {
@@ -537,6 +574,18 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
     const newLayer = { ...layer };
 
     if (tiles) {
+      const absoluteTiles = absolutizeRuntimeUrl(tiles);
+      if (absoluteTiles !== tiles && newLayer.layerConfig?.source) {
+        tiles = absoluteTiles;
+        newLayer.layerConfig = {
+          ...newLayer.layerConfig,
+          source: {
+            ...newLayer.layerConfig.source,
+            tiles: [absoluteTiles],
+          },
+        };
+      }
+
       // Resolve URL templates for raster tile sources too (e.g. {time} in TiTiler item ids).
       const templateParams = {
         ...(newLayer.params || {}),
@@ -584,6 +633,8 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
     // Resolve URL templates for GeoJSON string sources
     const sourceData = newLayer.layerConfig?.source?.data;
     if (typeof sourceData === 'string') {
+      const absoluteSourceData = absolutizeRuntimeUrl(sourceData);
+
       // Merge layer params with global interactions so project/admin/WHCA
       // clipping applies to modular GeoJSON model endpoints too.
       const params = {
@@ -591,7 +642,7 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
         ...(paramInteractions || {}),
       };
       const resolvedSourceData = appendGeojsonParamsToUrl(
-        resolveTemplateUrlParams(sourceData, params),
+        resolveTemplateUrlParams(absoluteSourceData, params),
         params
       );
 
