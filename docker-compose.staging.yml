@@ -197,6 +197,7 @@ services:
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     volumes:
       - ${MS_MAPFILES_VOLUME:-./data/mapfiles}:/opt/mapfiles:z
+      - ./raster-data/source:/opt/mapfiles/data:ro,z
 
   eafw_mapcache:
     image: ${MAPCACHE_IMAGE_NAME:-ghcr.io/icpac-igad/eafw-mapcache:latest}
