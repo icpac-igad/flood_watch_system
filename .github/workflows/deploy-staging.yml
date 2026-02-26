@@ -756,16 +756,31 @@ jobs:
             fi
 
             # ─── DEPLOY ──────────────────────────────────────────
-            # Pull latest images
-            echo "[$(log_ts)] Pulling images"
-            if ! timeout 900 docker compose -f docker-compose.staging.yml --env-file .env pull --ignore-pull-failures; then
-              echo "WARN: image pull failed or timed out after 900s; continuing with locally cached images"
+            # Pull images in two passes: core services first, then large STAC images
+            echo "[$(log_ts)] Pulling core images"
+            if ! timeout 600 docker compose -f docker-compose.staging.yml --env-file .env pull --ignore-pull-failures \
+                eafw_pgdb eafw_pgbouncer eafw_cms eafw_api eafw_mapviewer eafw_nginx eafw_jobs \
+                eafw_mapserver eafw_mapcache eafw_tileserv eafw_memcached; then
+              echo "WARN: core image pull failed or timed out; continuing with cached images"
             fi
 
-            # Deploy services
-            echo "[$(log_ts)] Starting services"
-            if ! timeout 900 docker compose -f docker-compose.staging.yml --env-file .env up -d; then
-              echo "WARN: docker compose up failed or timed out after 900s; proceeding to readiness checks"
+            echo "[$(log_ts)] Pulling STAC/eoAPI images (may be large)"
+            if ! timeout 1200 docker compose -f docker-compose.staging.yml --env-file .env pull --ignore-pull-failures \
+                eafw_stac eafw_titiler eafw_stac_browser; then
+              echo "WARN: STAC image pull failed or timed out; continuing with cached images"
+            fi
+
+            # Start core services first, then STAC
+            echo "[$(log_ts)] Starting core services"
+            if ! timeout 300 docker compose -f docker-compose.staging.yml --env-file .env up -d \
+                eafw_pgdb eafw_pgbouncer eafw_memcached; then
+              echo "WARN: DB services start failed"
+            fi
+            sleep 5
+
+            echo "[$(log_ts)] Starting application services"
+            if ! timeout 600 docker compose -f docker-compose.staging.yml --env-file .env up -d; then
+              echo "WARN: docker compose up failed or timed out; proceeding to readiness checks"
             fi
 
             # Wait for DB to be ready (init loads 60MB+ on first deploy)
@@ -880,12 +895,20 @@ jobs:
             echo "Waiting 30s for services to stabilize..."
             sleep 30
             FAILED=0
-            for svc in eafw-pgdb eafw-pgbouncer eafw-cms eafw-api eafw-mapviewer eafw-nginx eafw-mapserver eafw-mapcache eafw-tileserv eafw-stac eafw-titiler eafw-stac-browser; do
+            # Core services — must be running
+            for svc in eafw-pgdb eafw-pgbouncer eafw-cms eafw-api eafw-mapviewer eafw-nginx eafw-mapserver eafw-mapcache eafw-tileserv; do
               STATUS=$(docker inspect --format='{{.State.Status}}' $svc 2>/dev/null)
               if [ "$STATUS" != "running" ]; then
-                echo "WARN: $svc is $STATUS"
+                echo "FAIL: $svc is $STATUS"
                 docker logs $svc 2>&1 | tail -5
                 FAILED=1
+              fi
+            done
+            # STAC services — warn but don't fail deploy (images may still be pulling)
+            for svc in eafw-stac eafw-titiler eafw-stac-browser; do
+              STATUS=$(docker inspect --format='{{.State.Status}}' $svc 2>/dev/null || echo "not_found")
+              if [ "$STATUS" != "running" ]; then
+                echo "WARN: $svc is $STATUS (non-fatal, STAC services may need manual pull on first deploy)"
               fi
             done
 
