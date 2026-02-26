@@ -9,7 +9,10 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from eafw_api.db import get_connection
-from ._helpers import resolve_filter_geometry_ewkt
+from ._helpers import (
+    resolve_filter_geometry_ewkt,
+    WHCA_SCOPE_SQL_CONDITION as _HELPERS_WHCA_SCOPE_SQL_CONDITION,
+)
 
 router = APIRouter()
 
@@ -77,7 +80,8 @@ POINT_COUNTRY_CODE_SQL = (
     "WHERE ST_Within(cp.geom, a0.geom) LIMIT 1), "
     "'UN')"
 )
-WHCA_SCOPE_SQL_CONDITION = "(COALESCE(cp.whca_selected, FALSE) IS TRUE)"
+# Use the unified condition from _helpers (includes country-code fallback)
+WHCA_SCOPE_SQL_CONDITION = _HELPERS_WHCA_SCOPE_SQL_CONDITION
 
 
 def _normalize_country_code(country: Optional[str]) -> Optional[str]:

@@ -22,9 +22,16 @@ const mergeDatasetsWithConfig = (datasets = [], configDatasets = []) => {
 };
 
 export const getApiDatasets = async () => {
+  const cacheBust = Date.now();
   const [datasetsResult, configResult] = await Promise.allSettled([
-    request.get(DATASETS_ENDPOINT),
-    request.get(MAPVIEWER_CONFIG_ENDPOINT),
+    request.get(DATASETS_ENDPOINT, {
+      params: { _ts: cacheBust },
+      headers: { "Cache-Control": "no-cache" },
+    }),
+    request.get(MAPVIEWER_CONFIG_ENDPOINT, {
+      params: { _ts: cacheBust },
+      headers: { "Cache-Control": "no-cache" },
+    }),
   ]);
 
   if (datasetsResult.status !== "fulfilled") {

@@ -1,0 +1,70 @@
+{
+  "type": "Collection",
+  "id": "multimodal-points-gha",
+  "stac_version": "1.0.0",
+  "title": "Multimodal Points (GHA Region)",
+  "description": "Operational multimodal flood forecast points across the Greater Horn of Africa (GHA).",
+  "license": "CC-BY-4.0",
+  "keywords": [
+    "multimodal",
+    "points",
+    "transport",
+    "accessibility",
+    "floodwatch",
+    "gha"
+  ],
+  "providers": [
+    {
+      "name": "ICPAC",
+      "description": "IGAD Climate Prediction and Applications Centre",
+      "roles": [
+        "producer",
+        "host"
+      ],
+      "url": "https://www.icpac.net"
+    }
+  ],
+  "extent": {
+    "spatial": {
+      "bbox": [
+        [
+          24.055,
+          -12.780902,
+          50.819288,
+          23.339656
+        ]
+      ]
+    },
+    "temporal": {
+      "interval": [
+        [
+          "2026-02-16T00:00:00Z",
+          null
+        ]
+      ]
+    }
+  },
+  "summaries": {
+    "proj:epsg": [
+      4326
+    ],
+    "geometry_type": [
+      "Point"
+    ],
+    "feature_count": [
+      3151
+    ]
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "./multimodal_points.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "preview",
+      "href": "/stac-assets/thumbnails/multimodal_points_gha_thumb.svg",
+      "title": "Multimodal GHA Preview"
+    }
+  ]
+}

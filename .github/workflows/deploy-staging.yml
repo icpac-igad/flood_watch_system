@@ -411,6 +411,24 @@ jobs:
           SMTP_EMAIL_HOST: ${{ secrets.SMTP_EMAIL_HOST }}
           SMTP_EMAIL_HOST_USER: ${{ secrets.SMTP_EMAIL_HOST_USER }}
           SMTP_EMAIL_HOST_PASSWORD: ${{ secrets.SMTP_EMAIL_HOST_PASSWORD }}
+          SMTP_EMAIL_PORT: ${{ secrets.SMTP_EMAIL_PORT }}
+          SMTP_EMAIL_USE_TLS: ${{ secrets.SMTP_EMAIL_USE_TLS }}
+          STAC_API_KEY: ${{ secrets.STAC_API_KEY }}
+          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
+          SYNC_SOURCE: ${{ secrets.SYNC_SOURCE }}
+          SYNC_INTERVAL: ${{ secrets.SYNC_INTERVAL }}
+          SYNC_DAYS: ${{ secrets.SYNC_DAYS }}
+          FLOODPROOFS_REMOTE_DIR: ${{ secrets.FLOODPROOFS_REMOTE_DIR }}
+          ENSEMBLE_REMOTE_DIR: ${{ secrets.ENSEMBLE_REMOTE_DIR }}
+          WRF_REMOTE_DIR: ${{ secrets.WRF_REMOTE_DIR }}
+          GOOGLE_FLOOD_REGION_CODES: ${{ secrets.GOOGLE_FLOOD_REGION_CODES }}
+          GOOGLE_FLOOD_PAGE_SIZE: ${{ secrets.GOOGLE_FLOOD_PAGE_SIZE }}
+          RECAPTCHA_PUBLIC_KEY: ${{ secrets.RECAPTCHA_PUBLIC_KEY }}
+          RECAPTCHA_PRIVATE_KEY: ${{ secrets.RECAPTCHA_PRIVATE_KEY }}
+          GOOGLE_SEARCH_API_KEY: ${{ secrets.GOOGLE_SEARCH_API_KEY }}
+          GOOGLE_CUSTOM_SEARCH_CX: ${{ secrets.GOOGLE_CUSTOM_SEARCH_CX }}
+          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
+          ANALYTICS_PROPERTY_ID: ${{ secrets.ANALYTICS_PROPERTY_ID }}
           SKIP_BACKUP: ${{ github.event.inputs.skip_backup }}
         with:
           host: ${{ secrets.DEPLOY_HOST || secrets.STAGING_HOST }}
@@ -418,7 +436,7 @@ jobs:
           key: ${{ secrets.SSH_KEY || secrets.STAGING_SSH_KEY }}
           port: 22
           command_timeout: 35m
-          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,SFTP_HOST,SFTP_USERNAME,SFTP_PASSWORD,FLOODPROOFS_SFTP_HOST,FLOODPROOFS_SFTP_USER,FLOODPROOFS_SFTP_PASSWORD,ENSEMBLE_FTP_HOST,ENSEMBLE_FTP_USER,ENSEMBLE_FTP_PASSWORD,WRF_FTP_HOST,WRF_FTP_USER,WRF_FTP_PASSWORD,FLOODS_API_KEY,SMTP_EMAIL_HOST,SMTP_EMAIL_HOST_USER,SMTP_EMAIL_HOST_PASSWORD,SKIP_BACKUP
+          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,SFTP_HOST,SFTP_USERNAME,SFTP_PASSWORD,FLOODPROOFS_SFTP_HOST,FLOODPROOFS_SFTP_USER,FLOODPROOFS_SFTP_PASSWORD,FLOODPROOFS_REMOTE_DIR,ENSEMBLE_FTP_HOST,ENSEMBLE_FTP_USER,ENSEMBLE_FTP_PASSWORD,ENSEMBLE_REMOTE_DIR,WRF_FTP_HOST,WRF_FTP_USER,WRF_FTP_PASSWORD,WRF_REMOTE_DIR,FLOODS_API_KEY,SMTP_EMAIL_HOST,SMTP_EMAIL_HOST_USER,SMTP_EMAIL_HOST_PASSWORD,SMTP_EMAIL_PORT,SMTP_EMAIL_USE_TLS,STAC_API_KEY,DRIVE_FOLDER_ID,SYNC_SOURCE,SYNC_INTERVAL,SYNC_DAYS,GOOGLE_FLOOD_REGION_CODES,GOOGLE_FLOOD_PAGE_SIZE,RECAPTCHA_PUBLIC_KEY,RECAPTCHA_PRIVATE_KEY,GOOGLE_SEARCH_API_KEY,GOOGLE_CUSTOM_SEARCH_CX,BITLY_TOKEN,ANALYTICS_PROPERTY_ID,SKIP_BACKUP
           script: |
             set -euo pipefail
             export GIT_TERMINAL_PROMPT=0
@@ -550,6 +568,29 @@ jobs:
             upsert_env "SMTP_EMAIL_HOST" "${SMTP_EMAIL_HOST}"
             upsert_env "SMTP_EMAIL_HOST_USER" "${SMTP_EMAIL_HOST_USER}"
             upsert_env "SMTP_EMAIL_HOST_PASSWORD" "${SMTP_EMAIL_HOST_PASSWORD}"
+            upsert_env "SMTP_EMAIL_PORT" "${SMTP_EMAIL_PORT}"
+            upsert_env "SMTP_EMAIL_USE_TLS" "${SMTP_EMAIL_USE_TLS}"
+            # STAC / eoAPI
+            upsert_env "STAC_API_KEY" "${STAC_API_KEY}"
+            # Google Drive sync
+            upsert_env "DRIVE_FOLDER_ID" "${DRIVE_FOLDER_ID}"
+            upsert_env "SYNC_SOURCE" "${SYNC_SOURCE}"
+            upsert_env "SYNC_INTERVAL" "${SYNC_INTERVAL}"
+            upsert_env "SYNC_DAYS" "${SYNC_DAYS}"
+            # Remote directories for data ingestion
+            upsert_env "FLOODPROOFS_REMOTE_DIR" "${FLOODPROOFS_REMOTE_DIR}"
+            upsert_env "ENSEMBLE_REMOTE_DIR" "${ENSEMBLE_REMOTE_DIR}"
+            upsert_env "WRF_REMOTE_DIR" "${WRF_REMOTE_DIR}"
+            # Google Flood API config
+            upsert_env "GOOGLE_FLOOD_REGION_CODES" "${GOOGLE_FLOOD_REGION_CODES}"
+            upsert_env "GOOGLE_FLOOD_PAGE_SIZE" "${GOOGLE_FLOOD_PAGE_SIZE}"
+            # Optional integrations
+            upsert_env "RECAPTCHA_PUBLIC_KEY" "${RECAPTCHA_PUBLIC_KEY}"
+            upsert_env "RECAPTCHA_PRIVATE_KEY" "${RECAPTCHA_PRIVATE_KEY}"
+            upsert_env "GOOGLE_SEARCH_API_KEY" "${GOOGLE_SEARCH_API_KEY}"
+            upsert_env "GOOGLE_CUSTOM_SEARCH_CX" "${GOOGLE_CUSTOM_SEARCH_CX}"
+            upsert_env "BITLY_TOKEN" "${BITLY_TOKEN}"
+            upsert_env "ANALYTICS_PROPERTY_ID" "${ANALYTICS_PROPERTY_ID}"
             # Force DEBUG off on staging
             upsert_env "CMS_DEBUG" "False"
 

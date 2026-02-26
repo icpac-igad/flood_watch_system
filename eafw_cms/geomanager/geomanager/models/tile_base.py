@@ -1,3 +1,6 @@
+import hashlib
+import json
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django_extensions.db.models import TimeStampedModel
@@ -154,6 +157,20 @@ class BaseTileLayer(TimeStampedModel, ClusterableModel, BaseLayer):
         static_params = self.get_static_params()
         if static_params:
             query_params.update(static_params)
+
+        # Deterministic cache-busting key so URL changes whenever tile source
+        # settings change (even when save/update flows do not bump modified).
+        version_payload = {
+            "base_url": self.base_url,
+            "time_parameter_name": self.time_parameter_name or "time",
+            "has_time": self.has_time,
+            "static_params": static_params or {},
+            "selectable_params": self.get_selectable_params() or {},
+        }
+        version_key = hashlib.md5(
+            json.dumps(version_payload, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:12]
+        query_params.update({"_v": version_key})
 
         query_str = "&".join([f"{key}={value}" for key, value in query_params.items()])
 

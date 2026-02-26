@@ -11,7 +11,7 @@ import {
 } from '@/components/map/actions';
 import { buildParamInteractionsFromBoundary } from '@/utils/params';
 import { fetchAdminBoundaries } from '@/utils/boundary-utils';
-import { selectBoundaryData } from '@/components/map/selectors';
+import { selectBoundaryData, selectCmsScopes, selectDefaultScope } from '@/components/map/selectors';
 import Dropdown from '@/components/ui/dropdown';
 
 const selectInitialBbox = (state) => state.map?.data?.initialBbox || null;
@@ -145,7 +145,9 @@ const mapStateToProps = (state) => ({
   },
   boundaryData: selectBoundaryData(state),
   initialBbox: selectInitialBbox(state),
-  initialParamInteractions: selectInitialParamInteractions(state)
+  initialParamInteractions: selectInitialParamInteractions(state),
+  cmsScopes: selectCmsScopes(state),
+  defaultScope: selectDefaultScope(state),
 });
 
 const mapDispatchToProps = {
@@ -164,12 +166,8 @@ const mapDispatchToProps = {
 // Selecting a project scopes the map to those countries, then allows
 // drilling down through Country → Region → District.
 // =============================================================================
-const PROJECTS = {
-  WHCA: {
-    label: 'WHCA',
-    countries: ['Uganda', 'Rwanda', 'South Sudan', 'Ethiopia', 'Sudan'],
-  },
-};
+// Projects are now loaded from CMS via Redux (selectCmsScopes).
+// Each scope object: { key, label, countries, country_codes_iso2, ... }
 
 class ProjectFilterContainerComponent extends React.Component {
   state = {
@@ -183,9 +181,35 @@ class ProjectFilterContainerComponent extends React.Component {
     districts: [],
   };
 
-  getProjectFilterParams = (projectKey = this.state.selectedProject) => {
-    const project = PROJECTS[projectKey];
-    if (!project) {
+  componentDidMount() {
+    this.maybeApplyDefaultScope();
+  }
+
+  componentDidUpdate(prevProps) {
+    // When CMS scopes arrive (async), auto-apply default if no project selected
+    if (prevProps.cmsScopes !== this.props.cmsScopes && this.props.cmsScopes.length > 0) {
+      this.maybeApplyDefaultScope();
+    }
+  }
+
+  maybeApplyDefaultScope = () => {
+    const { cmsScopes = [], defaultScope } = this.props;
+    const { selectedProject } = this.state;
+
+    // Only auto-apply if no project is currently selected and CMS has scopes
+    if (!selectedProject && cmsScopes.length > 0 && defaultScope && defaultScope !== 'all') {
+      this.applyProject(defaultScope);
+    }
+  };
+
+  getScopeByKey = (key) => {
+    const { cmsScopes = [] } = this.props;
+    return cmsScopes.find(s => s.key === key);
+  };
+
+  getProjectFilterParams = (scopeKey = this.state.selectedProject) => {
+    const scope = this.getScopeByKey(scopeKey);
+    if (!scope) {
       return {
         scope: 'all',
         project_filter: false,
@@ -194,7 +218,7 @@ class ProjectFilterContainerComponent extends React.Component {
       };
     }
 
-    if (projectKey === 'WHCA') {
+    if (scopeKey === 'whca') {
       return {
         scope: 'whca',
         whca_filter: true,
@@ -207,12 +231,12 @@ class ProjectFilterContainerComponent extends React.Component {
       scope: 'project',
       project_filter: true,
       whca_filter: false,
-      project_countries: project.countries.join(','),
+      project_countries: scope.countries.join(','),
     };
   };
 
   applyProject = async (projectKey) => {
-    const project = PROJECTS[projectKey];
+    const project = this.getScopeByKey(projectKey);
     if (!project) return;
 
     this.setState({ loading: true, selectedProject: projectKey,
@@ -268,9 +292,22 @@ class ProjectFilterContainerComponent extends React.Component {
       selectedCountry: null, selectedRegion: null, selectedDistrict: null,
       regions: [], districts: []
     });
-    this.props.clearParamInteractions();
-    this.props.setParamInteractions(this.getProjectFilterParams(null));
 
+    // Fully reset to whole-region view — clear scope and Nile Basin overlay
+    this.props.setParamInteractions({
+      scope: 'all',
+      whca_filter: false,
+      project_filter: false,
+      project_countries: '',
+      basin_filter: false,
+      basin_id: '',
+      country_name: '',
+      region_name: '',
+      district_name: '',
+      admin_filter: false,
+    });
+
+    // Zoom back to full region
     const { initialBbox } = this.props;
     if (initialBbox && initialBbox.length === 4) {
       this.props.setMapSettings({ canBound: true, bbox: [...initialBbox] });
@@ -417,11 +454,12 @@ class ProjectFilterContainerComponent extends React.Component {
     const { loading, selectedProject, projectCountriesData,
       selectedCountry, selectedRegion, selectedDistrict, regions, districts } = this.state;
 
+    const { cmsScopes = [] } = this.props;
     const projectOptions = [
       { label: '+ Select project', value: '' },
-      ...Object.keys(PROJECTS).map(key => ({
-        label: PROJECTS[key].label,
-        value: key
+      ...cmsScopes.map(scope => ({
+        label: scope.label,
+        value: scope.key
       }))
     ];
 
@@ -442,7 +480,7 @@ class ProjectFilterContainerComponent extends React.Component {
             <h3>Project Name</h3>
             <div className="filter-container">
               {selectedProject && (
-                <FilterItem label={PROJECTS[selectedProject].label} onClear={this.clearProject} />
+                <FilterItem label={this.getScopeByKey(selectedProject)?.label || selectedProject} onClear={this.clearProject} />
               )}
               <Dropdown
                 className="boundary-dropdown"

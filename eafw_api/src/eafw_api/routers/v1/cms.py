@@ -279,6 +279,71 @@ async def get_enabled_languages():
         }
 
 
+# ISO-2 → country name mapping for scope country resolution
+_ISO2_TO_COUNTRY = {
+    "BI": "Burundi", "DJ": "Djibouti", "ER": "Eritrea", "ET": "Ethiopia",
+    "KE": "Kenya", "RW": "Rwanda", "SD": "Sudan", "SO": "Somalia",
+    "SS": "South Sudan", "TZ": "Tanzania", "UG": "Uganda",
+}
+
+
+@router.get("/scopes")
+async def get_map_scopes():
+    """
+    Get CMS-configured map scopes (project filters).
+    Returns all active scopes with their country codes, partner keys, and display settings.
+    Used by the mapviewer and flood-analysis page to drive global scope selection.
+    """
+    async with get_connection() as conn:
+        homepage = await conn.fetchrow(
+            "SELECT page_ptr_id FROM cms.home_homepage LIMIT 1"
+        )
+        if not homepage:
+            return {"scopes": [], "default_scope": "all"}
+
+        rows = await conn.fetch(
+            """
+            SELECT key, name, is_default, country_codes_iso2, country_codes_iso3,
+                   partner_keys, site_title, country_section_title, dashboard_title,
+                   show_basin_overlay
+            FROM cms.home_mapscope
+            WHERE page_id = $1 AND is_active = TRUE
+            ORDER BY sort_order
+            """,
+            homepage["page_ptr_id"],
+        )
+
+        scopes = []
+        default_scope = "all"
+
+        for row in rows:
+            iso2 = [c.strip().upper() for c in (row["country_codes_iso2"] or "").split(",") if c.strip()]
+            iso3 = [c.strip().upper() for c in (row["country_codes_iso3"] or "").split(",") if c.strip()]
+            partners = [
+                p.strip().lower().replace(" ", "")
+                for p in (row["partner_keys"] or "").split(",") if p.strip()
+            ]
+            countries = [_ISO2_TO_COUNTRY.get(c, c) for c in iso2]
+
+            scopes.append({
+                "key": row["key"],
+                "label": row["name"],
+                "countries": countries,
+                "country_codes_iso2": iso2,
+                "country_codes_iso3": iso3,
+                "partner_keys": partners,
+                "site_title": row["site_title"] or "",
+                "country_section_title": row["country_section_title"] or "",
+                "dashboard_title": row["dashboard_title"] or "",
+                "show_basin_overlay": row["show_basin_overlay"],
+            })
+
+            if row["is_default"]:
+                default_scope = row["key"]
+
+        return {"scopes": scopes, "default_scope": default_scope}
+
+
 @router.get("/categories")
 async def get_map_categories():
     """

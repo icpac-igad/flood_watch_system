@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="Multimodal WHCA points thumbnail">
+  <defs>
+    <linearGradient id="bg-whca" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#034930"/>
+      <stop offset="100%" stop-color="#116c43"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="180" rx="14" fill="url(#bg-whca)"/>
+  <rect x="30" y="30" width="260" height="118" rx="10" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.34)"/>
+  <g fill="#fbc02d">
+    <circle cx="78" cy="74" r="6"/>
+    <circle cx="116" cy="62" r="5"/>
+    <circle cx="152" cy="96" r="6"/>
+    <circle cx="188" cy="78" r="6"/>
+    <circle cx="226" cy="90" r="5"/>
+    <circle cx="252" cy="66" r="6"/>
+  </g>
+  <g stroke="#ffffff" stroke-width="2" opacity="0.72">
+    <line x1="78" y1="74" x2="116" y2="62"/>
+    <line x1="116" y1="62" x2="152" y2="96"/>
+    <line x1="152" y1="96" x2="188" y2="78"/>
+    <line x1="188" y1="78" x2="226" y2="90"/>
+    <line x1="226" y1="90" x2="252" y2="66"/>
+  </g>
+  <text x="18" y="34" fill="#ffffff" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Multimodal WHCA</text>
+  <text x="18" y="54" fill="#e0f6ea" font-size="11" font-family="Segoe UI, Arial, sans-serif">Nile Basin scope for WHCA project delivery</text>
+</svg>

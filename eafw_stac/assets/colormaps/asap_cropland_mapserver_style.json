@@ -1,0 +1,12 @@
+{
+  "name": "asap_cropland_mapserver_style",
+  "source": "data/mapfiles/classifications/asap-cropland.classes.map",
+  "classes": [
+    {"label": "0 to 20%", "min": 1, "max": 20, "rgba": [207, 198, 201, 255]},
+    {"label": "20 to 40%", "min": 21, "max": 40, "rgba": [255, 255, 203, 255]},
+    {"label": "40 to 60%", "min": 41, "max": 80, "rgba": [204, 225, 172, 255]},
+    {"label": "60 to 80%", "min": 81, "max": 120, "rgba": [152, 195, 141, 255]},
+    {"label": "80 to 100%", "min": 121, "max": 160, "rgba": [100, 164, 110, 255]},
+    {"label": ">160", "min": 161, "max": 255, "rgba": [48, 134, 80, 255]}
+  ]
+}

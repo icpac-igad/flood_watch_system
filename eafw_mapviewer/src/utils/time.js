@@ -28,7 +28,7 @@ export const getPreviousDate = (dates) => {
   const now = new Date();
 
   // Find the date that is one step behind the current date time, assuming the dates are ordered
-  const previousDate = dates.reverse().find((dateStr) => {
+  const previousDate = [...dates].reverse().find((dateStr) => {
     const date = new Date(dateStr);
     return date < now;
   });

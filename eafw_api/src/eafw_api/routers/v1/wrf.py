@@ -9,10 +9,20 @@ router = APIRouter()
 
 @router.get("/daily-rainfall/dates")
 async def daily_rainfall_dates():
-    """Return available dates for WRF daily rainfall."""
+    """Return available valid dates for the latest WRF forecast run only."""
     async with get_connection() as conn:
         rows = await conn.fetch(
-            "SELECT DISTINCT valid_date FROM wrf.daily_rainfall ORDER BY valid_date"
+            """
+            WITH latest_run AS (
+                SELECT MAX(forecast_date) AS forecast_date
+                FROM wrf.daily_rainfall
+            )
+            SELECT DISTINCT d.valid_date
+            FROM wrf.daily_rainfall d
+            JOIN latest_run lr
+              ON d.forecast_date = lr.forecast_date
+            ORDER BY d.valid_date DESC
+            """
         )
     return {"timestamps": [r["valid_date"].isoformat() for r in rows]}
 
@@ -22,6 +32,6 @@ async def extreme_rainfall_dates():
     """Return available dates for WRF extreme rainfall."""
     async with get_connection() as conn:
         rows = await conn.fetch(
-            "SELECT DISTINCT forecast_date FROM wrf.extreme_rainfall ORDER BY forecast_date"
+            "SELECT DISTINCT forecast_date FROM wrf.extreme_rainfall ORDER BY forecast_date DESC"
         )
     return {"timestamps": [r["forecast_date"].isoformat() for r in rows]}

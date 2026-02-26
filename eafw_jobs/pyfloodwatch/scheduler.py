@@ -54,15 +54,15 @@ def run_floodproofs_sync():
 
 
 def run_wrf_rainfall_sync():
-    """Run WRF Rainfall sync - weekly total and extreme rainfall"""
-    logger.info(f"[{datetime.now()}] Running WRF Rainfall sync")
+    """Run WRF Rainfall sync - weekly total and extreme rainfall + COG export"""
+    logger.info(f"[{datetime.now()}] Running WRF Rainfall sync (includes COG export)")
 
     try:
         from .wrf_rainfall_job import run_wrf_rainfall
         success = run_wrf_rainfall()
 
         if success:
-            logger.info("WRF Rainfall sync completed successfully")
+            logger.info("WRF Rainfall sync completed successfully (ingestion + COG export)")
         else:
             logger.error("WRF Rainfall sync failed")
 

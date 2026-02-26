@@ -28,3 +28,5 @@ export const setInitialBbox = createAction("setInitialBbox");
 
 export const setBoundaryData = createAction("setBoundaryData");
 export const clearBoundaryData = createAction("clearBoundaryData");
+
+export const setCmsScopes = createAction("setCmsScopes");

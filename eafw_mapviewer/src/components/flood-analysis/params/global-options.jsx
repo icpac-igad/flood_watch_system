@@ -5,10 +5,13 @@
  * Uses native HTML components for compatibility
  */
 import React, { useEffect, useMemo, useState } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import { isEmpty } from "lodash";
 
 import Button from "@/components/ui/button";
 import { CMS_API } from "@/utils/constants";
+import { setParamInteractions } from "@/components/map/actions";
+import { selectCmsScopes, selectDefaultScope } from "@/components/map/selectors";
 
 import "./global-options.scss";
 
@@ -23,8 +26,9 @@ const ALERT_LEVELS = [
 // Countries to exclude from dropdown (merge into parent country)
 const EXCLUDED_COUNTRIES = new Set(["zanzibar"]);
 
-// Available projects for the Projects reporting unit
-const PROJECTS = [
+// Projects are loaded from CMS via Redux (selectCmsScopes).
+// Fallback if CMS scopes haven't loaded yet.
+const FALLBACK_PROJECTS = [
   { code: "whca", name: "WHCA (Water at Heart of Climate Action)" },
 ];
 
@@ -110,6 +114,28 @@ const GlobalOptions = ({
   updateSettings,
   onGenerateAnalysis,
 }) => {
+  const dispatch = useDispatch();
+  const cmsScopes = useSelector(selectCmsScopes);
+  const defaultScope = useSelector(selectDefaultScope);
+
+  // Build project options from CMS scopes, falling back to hardcoded list
+  const projectOptions = useMemo(() => {
+    if (cmsScopes && cmsScopes.length > 0) {
+      return cmsScopes.map(s => ({ code: s.key, name: s.label }));
+    }
+    return FALLBACK_PROJECTS;
+  }, [cmsScopes]);
+
+  // Build dynamic country set for the active scope
+  const scopeCountrySet = useMemo(() => {
+    if (!cmsScopes || cmsScopes.length === 0) return WHCA_COUNTRY_SET;
+    const scope = cmsScopes.find(s => s.key === (params.unit_id || '').toLowerCase());
+    if (scope && scope.countries && scope.countries.length > 0) {
+      return new Set(scope.countries.map(c => c.toLowerCase()));
+    }
+    return null; // No filtering — show all countries
+  }, [cmsScopes, params.unit_id]);
+
   const [adminBoundaries, setAdminBoundaries] = useState({
     admin0: [],
     admin1: [],
@@ -118,6 +144,18 @@ const GlobalOptions = ({
   const [riverBasins, setRiverBasins] = useState([]);
   const [availableDates, setAvailableDates] = useState([]);
   const [datesLoading, setDatesLoading] = useState(true);
+
+  // On mount, sync with Redux default scope: auto-select Projects/WHCA if that's the default
+  useEffect(() => {
+    if (defaultScope && defaultScope !== 'all' && !params.reporting_unit) {
+      updateParams({
+        reporting_unit: 'Projects',
+        unit_id: defaultScope,
+        scope: defaultScope,
+        placename: projectOptions.find(p => p.code === defaultScope)?.name || defaultScope,
+      });
+    }
+  }, [defaultScope]);
 
   // Fetch available forecast dates from database
   useEffect(() => {
@@ -186,13 +224,13 @@ const GlobalOptions = ({
   }, []);
 
   const projectCountryOptions = useMemo(() => {
-    if ((params.unit_id || "").toLowerCase() !== "whca") {
+    if (!scopeCountrySet) {
       return adminBoundaries.admin0;
     }
     return (adminBoundaries.admin0 || []).filter((item) =>
-      WHCA_COUNTRY_SET.has((item.name || "").toLowerCase())
+      scopeCountrySet.has((item.name || "").toLowerCase())
     );
-  }, [adminBoundaries.admin0, params.unit_id]);
+  }, [adminBoundaries.admin0, scopeCountrySet]);
 
   useEffect(() => {
     if (params.reporting_unit !== "Projects") return;
@@ -313,17 +351,23 @@ const GlobalOptions = ({
     });
   };
 
-  // Handle project selection
+  // Handle project selection — also sync scope to Redux for mapviewer
   const handleProjectChange = (code) => {
-    const project = PROJECTS.find((p) => p.code === code);
+    const project = projectOptions.find((p) => p.code === code);
+    const scopeKey = code || 'all';
     updateParams({
       unit_id: code,
       admin_level: null,
       admin0_code: null,
       admin1_code: null,
       placename: project?.name || code,
-      scope: code === "whca" ? "whca" : "all",
+      scope: scopeKey,
     });
+    // Sync to Redux so mapviewer stays in sync
+    dispatch(setParamInteractions({
+      scope: scopeKey,
+      whca_filter: scopeKey === 'whca',
+    }));
   };
 
   const handleProjectCountryChange = (code) => {
@@ -456,19 +500,19 @@ const GlobalOptions = ({
                 <SelectInput
                   label="Project"
                   value={params.unit_id}
-                  options={PROJECTS}
+                  options={projectOptions}
                   onChange={handleProjectChange}
                   disabled={loading}
                   placeholder="Select project"
                 />
-                {(params.unit_id || "").toLowerCase() === "whca" && (
+                {params.unit_id && projectCountryOptions.length > 0 && (
                   <SelectInput
                     label="Country"
                     value={params.admin0_code}
                     options={projectCountryOptions}
                     onChange={handleProjectCountryChange}
                     disabled={loading}
-                    placeholder={isEmpty(projectCountryOptions) ? "No WHCA countries found" : "Select WHCA country"}
+                    placeholder={`Select ${params.unit_id.toUpperCase()} country`}
                   />
                 )}
               </div>

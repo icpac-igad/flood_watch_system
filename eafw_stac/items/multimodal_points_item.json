@@ -1,0 +1,59 @@
+{
+  "type": "Feature",
+  "stac_version": "1.0.0",
+  "id": "multimodal-points-gha-2026-02-16",
+  "collection": "multimodal-points-gha",
+  "bbox": [
+    24.055,
+    -12.780902,
+    50.819288,
+    23.339656
+  ],
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          24.055,
+          -12.780902
+        ],
+        [
+          50.819288,
+          -12.780902
+        ],
+        [
+          50.819288,
+          23.339656
+        ],
+        [
+          24.055,
+          23.339656
+        ],
+        [
+          24.055,
+          -12.780902
+        ]
+      ]
+    ]
+  },
+  "properties": {
+    "datetime": "2026-02-16T00:00:00Z",
+    "start_datetime": "2026-02-16T00:00:00Z",
+    "end_datetime": "2026-02-16T00:00:00Z",
+    "proj:epsg": 4326,
+    "eafw:feature_count": 3151,
+    "eafw:geometry_type": "Point",
+    "description": "Regional multimodal forecast points across the full GHA domain."
+  },
+  "links": [],
+  "assets": {
+    "data": {
+      "href": "/api/v1/multimodal/geojson?scope=all",
+      "title": "Flood API Multimodal GeoJSON (GHA)",
+      "type": "application/geo+json",
+      "roles": [
+        "data"
+      ]
+    }
+  }
+}

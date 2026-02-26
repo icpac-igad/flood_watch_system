@@ -1,4 +1,6 @@
 import { ALERT_COLORS, DEFAULT_THRESHOLDS } from './multimodal-config';
+import { isTitilerTileUrl } from './stac-tiles';
+import { applyTitilerStyleDefaults } from './titiler-style-presets';
 
 // FloodWatch Custom: Params that should be passed to backend for filtering
 // These are the ONLY params we want to add to pg_tileserv URLs
@@ -135,13 +137,13 @@ const sanitizeTemplateParams = (url) => {
       const decodedValue = decodeUrlComponentSafe(rawValue).trim();
       const normalizedValue = decodedValue.toLowerCase();
 
-      // Empty time params (time=) trigger 400s from mapcache for time-dimension layers.
+      // Empty time params (time=) trigger 400s from mapcache/WMS for time-dimension layers.
       if ((decodedKey === 'time' || decodedKey === 'dim_time') && decodedValue === '') {
         return false;
       }
 
       // Remove unresolved placeholders like date={{time}} that can break SQL casts,
-      // but preserve map tile placeholders needed by maplibre/mapcache.
+      // but preserve map tile placeholders needed by maplibre/mapcache/titiler.
       if (isTemplateToken(normalizedValue) && !SAFE_TILE_TEMPLATE_VALUES.has(normalizedValue)) {
         return false;
       }
@@ -263,6 +265,9 @@ const appendGeojsonParamsToUrl = (url, params = {}) => {
 };
 
 const isWmsTileUrl = (url = '') => /SERVICE=WMS/i.test(url) || url.includes('/mapserver/') || url.includes('/mapcache/');
+
+// Detect any raster tile URL that needs clipping scope params (WMS or TiTiler).
+const isRasterTileUrl = (url = '') => isWmsTileUrl(url) || isTitilerTileUrl(url);
 
 // =============================================================================
 // FloodWatch Custom: WHCA Countries Filter - Tile source swapping
@@ -532,6 +537,23 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
     const newLayer = { ...layer };
 
     if (tiles) {
+      // Resolve URL templates for raster tile sources too (e.g. {time} in TiTiler item ids).
+      const templateParams = {
+        ...(newLayer.params || {}),
+        ...(paramInteractions || {}),
+      };
+      const resolvedTiles = resolveTemplateUrlParams(tiles, templateParams);
+      if (resolvedTiles !== tiles && newLayer.layerConfig?.source) {
+        tiles = resolvedTiles;
+        newLayer.layerConfig = {
+          ...newLayer.layerConfig,
+          source: {
+            ...newLayer.layerConfig.source,
+            tiles: [resolvedTiles],
+          },
+        };
+      }
+
       const sanitizedTiles = sanitizeTemplateParams(tiles);
       if (sanitizedTiles !== tiles) {
         tiles = sanitizedTiles;
@@ -544,6 +566,18 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
             },
           };
         }
+      }
+
+      const styledTiles = applyTitilerStyleDefaults(tiles);
+      if (styledTiles !== tiles && newLayer.layerConfig?.source) {
+        tiles = styledTiles;
+        newLayer.layerConfig = {
+          ...newLayer.layerConfig,
+          source: {
+            ...newLayer.layerConfig.source,
+            tiles: [styledTiles],
+          },
+        };
       }
     }
 
@@ -631,7 +665,9 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
 
     // Add filter params when swapped OR when already on a filtered function source.
     if ((tileSourceSwapped || isAlreadyFilteredLayer) && isFilteringActive) {
-      const updatedTiles = appendParamsToUrl(tiles, backendFilterParams, true);
+      const updatedTiles = applyTitilerStyleDefaults(
+        appendParamsToUrl(tiles, backendFilterParams, true)
+      );
 
       // Update the layer config with new tiles URL
       newLayer.layerConfig = {
@@ -658,10 +694,10 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
       }
     }
 
-    // Ensure MapServer WMS raster requests receive clipping scope params as well.
+    // Ensure raster tile requests (WMS or TiTiler) receive clipping scope params.
     const resolvedTiles = newLayer.layerConfig?.source?.tiles?.[0] || tiles || originalTiles;
-    if (isWmsTileUrl(resolvedTiles) && isFilteringActive) {
-      const wmsParams = {
+    if (isRasterTileUrl(resolvedTiles) && isFilteringActive) {
+      const rasterParams = {
         country_name: paramInteractions?.country_name || '',
         region_name: paramInteractions?.region_name || '',
         district_name: paramInteractions?.district_name || '',
@@ -669,11 +705,15 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
         scope: resolvedScope,
       };
 
+      const updatedRasterTiles = applyTitilerStyleDefaults(
+        appendParamsToUrl(resolvedTiles, rasterParams, true)
+      );
+
       newLayer.layerConfig = {
         ...newLayer.layerConfig,
         source: {
           ...newLayer.layerConfig.source,
-          tiles: [appendParamsToUrl(resolvedTiles, wmsParams, true)],
+          tiles: [updatedRasterTiles],
         },
       };
     }

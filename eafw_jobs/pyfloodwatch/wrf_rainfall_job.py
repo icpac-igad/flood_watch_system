@@ -1,4 +1,5 @@
 """Job: Download WRF rainfall forecasts from FTP and ingest directly to database"""
+import os
 import subprocess
 from io import BytesIO
 from datetime import datetime, timedelta
@@ -12,6 +13,10 @@ import pandas as pd
 from .settings import WRF_CONFIG, DATA_DIR
 from .database import get_db_connection
 from .logger_config import setup_logger
+
+# COG export configuration
+COG_OUTPUT_DIR = os.getenv('COG_OUTPUT_DIR', '/data/cogs')
+STAC_API_URL = os.getenv('STAC_API_URL', 'http://eafw_stac:8080')
 
 logger = setup_logger(__name__, 'wrf_rainfall.log')
 
@@ -460,8 +465,36 @@ quit
             except:
                 pass
 
+        # Export COGs from the freshly ingested data
+        self._export_cogs(folder)
+
         logger.info("WRF Rainfall Job Completed")
         return True
+
+    def _export_cogs(self, folder_date):
+        """Export Cloud Optimised GeoTIFFs after WRF data ingestion.
+
+        This step is non-blocking: failures are logged but do not prevent
+        the main ingestion job from reporting success.
+        """
+        try:
+            from pyfloodwatch.wrf_cog_export import export_all_for_forecast
+
+            # Convert folder date (YYYYMMDD) to ISO format (YYYY-MM-DD)
+            forecast_date = datetime.strptime(folder_date, '%Y%m%d').strftime('%Y-%m-%d')
+
+            logger.info(f"Starting COG export for forecast_date={forecast_date}")
+            cogs = export_all_for_forecast(
+                db_url=None,  # use env vars
+                forecast_date=forecast_date,
+                output_dir=COG_OUTPUT_DIR,
+                stac_api_url=STAC_API_URL,
+            )
+            logger.info(f"COG export completed for {forecast_date}: {len(cogs)} files written")
+        except Exception as e:
+            logger.error(f"COG export failed for {folder_date}: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 def run_wrf_rainfall(folder_date=None):

@@ -1,0 +1,125 @@
+{
+  "type": "Feature",
+  "stac_version": "1.0.0",
+  "id": "cmorph-virtualizarr-catalog-1998-2024",
+  "collection": "cmorph-30min-virtualizarr-parquet",
+  "bbox": [
+    -180,
+    -60,
+    180,
+    60
+  ],
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          -180,
+          -60
+        ],
+        [
+          180,
+          -60
+        ],
+        [
+          180,
+          60
+        ],
+        [
+          -180,
+          60
+        ],
+        [
+          -180,
+          -60
+        ]
+      ]
+    ]
+  },
+  "properties": {
+    "datetime": null,
+    "start_datetime": "1998-01-17T00:00:00Z",
+    "end_datetime": "2024-10-14T11:30:00Z",
+    "cmorph:resolution": "8km",
+    "cmorph:temporal_resolution": "30min",
+    "cmorph:variable": "precipitation_rate",
+    "cmorph:unit": "mm/hr",
+    "cmorph:catalog_rows": 236688,
+    "description": "Reference item for CMORPH VirtualiZarr parquet catalog and Kerchunk-backed dataset access metadata."
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "./cmorph_30min_virtualizarr_catalog_item.json",
+      "type": "application/geo+json"
+    },
+    {
+      "rel": "preview",
+      "href": "/stac-assets/thumbnails/cmorph_virtualizarr_thumb.svg",
+      "type": "image/png",
+      "title": "CMORPH VirtualiZarr preview"
+    },
+    {
+      "rel": "via",
+      "href": "https://huggingface.co/datasets/E4DRR/virtualizarr-stores",
+      "type": "text/html",
+      "title": "HuggingFace Dataset Page"
+    }
+  ],
+  "assets": {
+    "data": {
+      "href": "https://huggingface.co/datasets/E4DRR/virtualizarr-stores/resolve/main/cmorph-aws-s3-1998-2024.parquet",
+      "title": "CMORPH VirtualiZarr Parquet Catalog (223 MB)",
+      "type": "application/vnd.apache.parquet",
+      "roles": [
+        "data",
+        "index",
+        "metadata"
+      ]
+    },
+    "parquet_catalog": {
+      "href": "https://huggingface.co/datasets/E4DRR/virtualizarr-stores/resolve/main/cmorph-aws-s3-1998-2024.parquet",
+      "title": "CMORPH VirtualiZarr Parquet Catalog (223 MB)",
+      "type": "application/vnd.apache.parquet",
+      "roles": [
+        "data",
+        "index",
+        "metadata"
+      ]
+    },
+    "sample_netcdf": {
+      "href": "s3://noaa-cdr-precip-cmorph-pds/data/30min/8km/2020/01/01/CMORPH_V1.0_ADJ_8km-30min_2020010100.nc",
+      "title": "Sample NOAA CMORPH NetCDF",
+      "type": "application/x-netcdf",
+      "roles": [
+        "data"
+      ]
+    },
+    "catalog_page": {
+      "href": "https://huggingface.co/datasets/E4DRR/virtualizarr-stores",
+      "title": "VirtualiZarr Stores Catalog",
+      "type": "text/html",
+      "roles": [
+        "metadata",
+        "catalog"
+      ]
+    },
+    "dataset_api": {
+      "href": "https://huggingface.co/api/datasets/E4DRR/virtualizarr-stores",
+      "title": "Dataset API Metadata",
+      "type": "application/json",
+      "roles": [
+        "metadata"
+      ]
+    },
+    "thumbnail": {
+      "href": "/stac-assets/thumbnails/cmorph_virtualizarr_thumb.svg",
+      "title": "CMORPH VirtualiZarr preview",
+      "type": "image/png",
+      "roles": [
+        "thumbnail",
+        "overview"
+      ]
+    }
+  }
+}

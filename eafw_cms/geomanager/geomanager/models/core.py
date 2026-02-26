@@ -144,7 +144,7 @@ class Dataset(TimeStampedModel, AdminSortable):
         verbose_name=_("human-readable dataset unique identifier text"),
         help_text=_(
             "A human-readable hypen separated text to uniquely identify the dataset "
-            "for the purpose of updating from data ingestion jobs and visualization using mapserver/mapcache"
+            "for the purpose of updating from data ingestion jobs and visualization using TiTiler/STAC"
         ),
     )
     time_parameter = models.CharField(

@@ -881,6 +881,9 @@ export const selectHasParamInteraction = createSelector(
 
 export const selectBoundaryData = (state) => state.map?.data?.boundaryData || {};
 
+export const selectCmsScopes = (state) => state.map?.data?.cmsScopes || [];
+export const selectDefaultScope = (state) => state.map?.data?.defaultScope || 'all';
+
 export const getMapProps = createStructuredSelector({
   viewport: getMapViewport,
   loading: getMapLoading,

@@ -1,0 +1,46 @@
+{
+  "type": "Collection",
+  "id": "landscan-population",
+  "stac_version": "1.0.0",
+  "title": "LandScan Population Distribution",
+  "description": "ORNL LandScan 2024 ambient population density at ~1km resolution for the Greater Horn of Africa. Used for flood exposure and impact assessment.",
+  "license": "proprietary",
+  "keywords": ["population", "LandScan", "ORNL", "exposure", "demographics"],
+  "providers": [
+    {
+      "name": "ORNL",
+      "description": "Oak Ridge National Laboratory",
+      "roles": ["producer"],
+      "url": "https://landscan.ornl.gov"
+    },
+    {
+      "name": "ICPAC",
+      "roles": ["host"],
+      "url": "https://www.icpac.net"
+    }
+  ],
+  "extent": {
+    "spatial": {
+      "bbox": [[21, -12, 52, 23]]
+    },
+    "temporal": {
+      "interval": [["2024-01-01T00:00:00Z", "2024-12-31T23:59:59Z"]]
+    }
+  },
+  "summaries": {
+    "gsd": [1000],
+    "proj:epsg": [4326]
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "./landscan_population.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "preview",
+      "href": "/cog-tiles/collections/landscan-population/tiles/WebMercatorQuad/1/1/1.png?assets=data&colormap=%7B%220%22%3A%5B0%2C0%2C0%2C0%5D%2C%221%22%3A%5B255%2C255%2C190%2C255%5D%2C%225%22%3A%5B255%2C255%2C190%2C255%5D%2C%226%22%3A%5B255%2C255%2C115%2C255%5D%2C%2225%22%3A%5B255%2C255%2C115%2C255%5D%2C%2226%22%3A%5B255%2C255%2C0%2C255%5D%2C%2250%22%3A%5B255%2C255%2C0%2C255%5D%2C%2251%22%3A%5B255%2C170%2C0%2C255%5D%2C%22100%22%3A%5B255%2C170%2C0%2C255%5D%2C%22101%22%3A%5B255%2C102%2C0%2C255%5D%2C%22500%22%3A%5B255%2C102%2C0%2C255%5D%2C%22501%22%3A%5B255%2C0%2C0%2C255%5D%2C%222500%22%3A%5B255%2C0%2C0%2C255%5D%2C%222501%22%3A%5B204%2C0%2C0%2C255%5D%2C%225000%22%3A%5B204%2C0%2C0%2C255%5D%2C%225001%22%3A%5B115%2C0%2C0%2C255%5D%2C%2265535%22%3A%5B115%2C0%2C0%2C255%5D%7D&resampling=bilinear",
+      "title": "LandScan Population Preview"
+    }
+  ]
+}

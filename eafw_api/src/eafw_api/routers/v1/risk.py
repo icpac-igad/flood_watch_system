@@ -12,6 +12,7 @@ from eafw_api.db import get_connection
 from ._helpers import (
     DEFAULT_WARNING_THRESHOLD, DEFAULT_ALARM_THRESHOLD, DEFAULT_EMERGENCY_THRESHOLD,
     normalize_country_code, ISO2_TO_COUNTRY_NAME,
+    WHCA_SCOPE_SQL_CONDITION,
 )
 
 router = APIRouter()
@@ -22,6 +23,7 @@ async def get_forecast_majority_risk(
     date: Optional[str] = Query(None, description="Date YYYY-MM-DD"),
     country: str = Query("", description="Country name or ISO2 code"),
     admin_level: str = Query("2", description="Admin level: 1 or 2"),
+    scope: str = Query("all", description="Scope filter: all, whca"),
 ):
     """Majority flood risk by admin unit from forecast points."""
     if admin_level not in ("1", "2"):
@@ -78,6 +80,7 @@ async def get_forecast_majority_risk(
                 CROSS JOIN first_forecast ff
                 LEFT JOIN gha.multimodal_forecasts f
                     ON f.point_id = cp.point_id AND f.data_date = qp.query_date AND f.forecast_date = ff.forecast_date
+                {"WHERE " + WHCA_SCOPE_SQL_CONDITION if scope == "whca" else ""}
             ),
             risk_points AS (
                 SELECT p.point_id, p.geom,
@@ -240,6 +243,7 @@ async def generate_regional_summary(request: Request):
 @router.get("/hotspots")
 async def get_hotspots(
     limit: int = Query(10, ge=1, le=100, description="Max hotspots to return"),
+    scope: str = Query("all", description="Scope filter: all, whca"),
 ):
     """Ranked hotspots with highest flood risk for homepage table."""
     warning_threshold = 500
@@ -267,6 +271,7 @@ async def get_hotspots(
                     (feature->'geometry'->'coordinates'->1)::float as lat
                 FROM latest_forecasts
                 WHERE feature->'properties'->'forecasts' IS NOT NULL
+                {f"AND (feature->'properties'->>'point_id')::int IN (SELECT cp.point_id FROM gha.multimodal_control_points cp WHERE {WHCA_SCOPE_SQL_CONDITION})" if scope == "whca" else ""}
             ),
             point_stats AS (
                 SELECT point_id, admin_name, lon, lat,

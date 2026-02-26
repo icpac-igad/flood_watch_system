@@ -1,0 +1,209 @@
+name: PR CI Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - eafw
+
+concurrency:
+  group: pr-ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  api-ci:
+    name: API Lint and Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect API changes
+        id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+            eafw_api/**/*.py
+
+      - name: Set up Python
+        if: steps.changed.outputs.any_changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint/test tools
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff pytest
+
+      - name: Lint changed API Python files
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          python -m ruff check --select E9,F63,F7,F82 ${{ steps.changed.outputs.all_changed_files }}
+
+      - name: Run API tests (if present)
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          if [ -d eafw_api/tests ] && find eafw_api/tests -type f -name "test_*.py" | grep -q .; then
+            python -m pip install -e "./eafw_api[dev]"
+            python -m pytest -q eafw_api/tests
+          else
+            echo "No API tests found under eafw_api/tests. Skipping."
+          fi
+
+      - name: Skip summary
+        if: steps.changed.outputs.any_changed != 'true'
+        run: echo "No API Python changes detected."
+
+  cms-ci:
+    name: CMS Lint and Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect CMS changes
+        id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+            eafw_cms/**/*.py
+
+      - name: Set up Python
+        if: steps.changed.outputs.any_changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint/test tools
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff pytest
+
+      - name: Lint changed CMS Python files
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          python -m ruff check --select E9,F63,F7,F82 ${{ steps.changed.outputs.all_changed_files }}
+
+      - name: Run CMS tests (if present)
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          if find eafw_cms -path "eafw_cms/.venv" -prune -o -type f -name "test_*.py" -print -quit | grep -q .; then
+            CMS_TEST_FILES=$(find eafw_cms -path "eafw_cms/.venv" -prune -o -type f -name "test_*.py" -print)
+            python -m pytest -q $CMS_TEST_FILES
+          else
+            echo "No CMS tests found. Skipping."
+          fi
+
+      - name: Skip summary
+        if: steps.changed.outputs.any_changed != 'true'
+        run: echo "No CMS Python changes detected."
+
+  mapviewer-ci:
+    name: Mapviewer Lint and Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect mapviewer changes
+        id: changed_any
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+            eafw_mapviewer/**/*.{js,jsx,ts,tsx}
+            eafw_mapviewer/package.json
+            eafw_mapviewer/yarn.lock
+            eafw_mapviewer/.eslintrc.json
+            eafw_mapviewer/next.config.js
+
+      - name: Detect mapviewer lintable files
+        id: changed_lint
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+            eafw_mapviewer/**/*.{js,jsx,ts,tsx}
+
+      - name: Set up Node.js
+        if: steps.changed_any.outputs.any_changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: eafw_mapviewer/yarn.lock
+
+      - name: Install mapviewer dependencies
+        if: steps.changed_any.outputs.any_changed == 'true'
+        working-directory: eafw_mapviewer
+        run: yarn install --frozen-lockfile
+
+      - name: Lint changed mapviewer files
+        if: steps.changed_lint.outputs.any_changed == 'true'
+        run: |
+          FILES="${{ steps.changed_lint.outputs.all_changed_files }}"
+          REL_FILES=$(echo "$FILES" | sed 's#eafw_mapviewer/##g')
+          cd eafw_mapviewer
+          yarn eslint --max-warnings=0 $REL_FILES
+
+      - name: Run mapviewer tests (if script exists)
+        if: steps.changed_any.outputs.any_changed == 'true'
+        run: |
+          if node -e "const s=require('./eafw_mapviewer/package.json').scripts||{}; process.exit(s.test ? 0 : 1)"; then
+            cd eafw_mapviewer
+            yarn test --watch=false
+          else
+            echo "No mapviewer test script found. Skipping."
+          fi
+
+      - name: Skip summary
+        if: steps.changed_any.outputs.any_changed != 'true'
+        run: echo "No mapviewer changes detected."
+
+  stac-ci:
+    name: STAC Unit Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect STAC changes
+        id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+            eafw_stac/**/*.py
+
+      - name: Set up Python
+        if: steps.changed.outputs.any_changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install STAC test dependencies
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest httpx
+
+      - name: Run STAC unit tests (non-integration)
+        if: steps.changed.outputs.any_changed == 'true'
+        run: |
+          python -m pytest -q eafw_stac/tests -m "not integration" -o "markers=integration: integration tests requiring running STAC services"
+
+      - name: Skip summary
+        if: steps.changed.outputs.any_changed != 'true'
+        run: echo "No STAC Python changes detected."

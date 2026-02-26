@@ -304,14 +304,42 @@
     const IMPACT_ADMIN1_LAYER_ID = 'impact-admin1-fill-layer';
     const EXTREME_RAINFALL_SOURCE_ID = 'extreme-rainfall-raster-source';
     const EXTREME_RAINFALL_LAYER_ID = 'extreme-rainfall-raster-layer';
+    // Per-percentile source/layer IDs for the three extreme rainfall sub-layers
+    const EXTREME_RAINFALL_PERCENTILES = ['f90', 'f95', 'f99'];
+    const extremeRainfallSourceId = (pct) => `extreme-rainfall-${pct}-source`;
+    const extremeRainfallLayerId = (pct) => `extreme-rainfall-${pct}-layer`;
     const FOCUS_MASK_SOURCE_ID = 'focus-mask-source';
     const FOCUS_MASK_LAYER_ID = 'focus-mask-layer';
     const DEFAULT_EXTREME_RAINFALL_PERCENTILE = 'f95';
-    const EXTREME_RAINFALL_WMS_LAYER_BY_PERCENTILE = Object.freeze({
-        f90: 'wrf_extreme_heavy',
-        f95: 'wrf_extreme_very_heavy',
-        f99: 'wrf_extreme_extremely_heavy'
+    const EXTREME_RAINFALL_TILE_COLORS = Object.freeze({
+        f90: [[0.001, 10000], [175, 238, 238, 220]],
+        f95: [[0.001, 10000], [23, 116, 205, 220]],
+        f99: [[0.001, 10000], [6, 0, 139, 220]]
     });
+
+    const _stacSearchCache = {};
+    async function registerStacTileSearch(collection, filters) {
+        const cacheKey = JSON.stringify({ collection, filters });
+        if (_stacSearchCache[cacheKey]) return _stacSearchCache[cacheKey];
+
+        const body = { collections: [collection] };
+        if (filters && filters.length > 0) {
+            body['filter-lang'] = 'cql2-json';
+            body.filter = filters.length === 1
+                ? filters[0]
+                : { op: 'and', args: filters };
+        }
+
+        const resp = await fetch('/cog-tiles/searches/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (!resp.ok) throw new Error('STAC search registration failed: ' + resp.status);
+        const data = await resp.json();
+        _stacSearchCache[cacheKey] = data.id;
+        return data.id;
+    }
     // CMS-driven scope configuration
     const _cmsScopeConfigs = {{ map_scopes_json|safe }};
     const MAP_SCOPE_CONFIG = (function() {
@@ -332,6 +360,10 @@
     const ISO3_TO_ISO2 = Object.freeze({
         BDI: 'BI', DJI: 'DJ', ETH: 'ET', KEN: 'KE',
         RWA: 'RW', SDN: 'SD', SOM: 'SO', SSD: 'SS', TZA: 'TZ', UGA: 'UG'
+    });
+    const ISO3_TO_COUNTRY_NAME = Object.freeze({
+        BDI: 'Burundi', DJI: 'Djibouti', ETH: 'Ethiopia', KEN: 'Kenya',
+        RWA: 'Rwanda', SDN: 'Sudan', SOM: 'Somalia', SSD: 'South Sudan', TZA: 'Tanzania', UGA: 'Uganda'
     });
     const BASE_SITE_TITLE = '{{ page.banner_title|default:"East Africa Flood Watch"|escapejs }}';
     const BASE_COUNTRY_SECTION_TITLE = '{{ page.country_cards_title|default:"Regional Flood Situation"|escapejs }}';
@@ -385,13 +417,9 @@
         multimodalGeojson: [
             '/api/v1/multimodal/geojson'
         ],
-        // Match mapserver layer names used by mapviewer for Extreme Rainfall.
-        extremeRainfallWmsBaseUrl: (
-            '/mapserver/?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap'
-            + '&FORMAT=image/png&TRANSPARENT=true'
-            + '&LAYERS={layer}&STYLES='
-            + '&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}'
-        ),
+        // TiTiler tile endpoint (search-based mosaic from pgSTAC)
+        titilerSearchUrl: '/cog-tiles/searches/register',
+        titilerTileBaseUrl: '/cog-tiles/searches',
         wrfExtremeRainfallDates: [
             '/api/v1/wrf/extreme-rainfall/dates'
         ],
@@ -430,13 +458,17 @@
             key: 'extreme-rainfall',
             label: 'Extreme Rainfall',
             renderMode: 'wms-raster',
-            wmsBaseUrl: apiEndpoints.extremeRainfallWmsBaseUrl,
             wmsPercentile: DEFAULT_EXTREME_RAINFALL_PERCENTILE,
             available: true,
             validationMessage: EXTREME_WRF_VALIDATION_MESSAGE,
             valueLabel: 'Rainfall Risk',
             valueField: 'geosfm',
-            valueUnit: ''
+            valueUnit: '',
+            legendItems: [
+                { label: 'Heavy (>90th pctl)', color: 'rgb(175, 238, 238)' },
+                { label: 'Very Heavy (>95th pctl)', color: 'rgb(23, 116, 205)' },
+                { label: 'Extremely Heavy (>99th pctl)', color: 'rgb(6, 0, 139)' }
+            ]
         },
         impact: {
             key: 'impact',
@@ -479,9 +511,7 @@
             }
             // WMS mode: resolve base URL and layer name
             if (merged[key].renderMode === 'wms-raster') {
-                merged[key].wmsBaseUrl = cms.wmsBaseUrl || fallback.wmsBaseUrl || apiEndpoints.extremeRainfallWmsBaseUrl;
-                merged[key].wmsLayerName = cms.wmsLayerName || '';
-                merged[key].wmsPercentile = fallback.wmsPercentile || DEFAULT_EXTREME_RAINFALL_PERCENTILE;
+                merged[key].wmsPercentile = cms.wmsPercentile || fallback.wmsPercentile || DEFAULT_EXTREME_RAINFALL_PERCENTILE;
             }
         });
         return Object.freeze(merged);
@@ -494,6 +524,7 @@
         initMapScopeControl();
         initCategoryMenuControl();
         updateScopeHeadings();
+        updateMapviewerLinks();
         initRiskTickerLoop();
         updateMemberCountriesByScope();
         updatePartnersByScope();
@@ -1015,8 +1046,16 @@
 
     function clearExtremeRainfallLayer() {
         if (!miniMap || !miniMap.isStyleLoaded()) return;
+        // Remove legacy single layer/source
         if (miniMap.getLayer(EXTREME_RAINFALL_LAYER_ID)) miniMap.removeLayer(EXTREME_RAINFALL_LAYER_ID);
         if (miniMap.getSource(EXTREME_RAINFALL_SOURCE_ID)) miniMap.removeSource(EXTREME_RAINFALL_SOURCE_ID);
+        // Remove per-percentile sub-layers
+        for (const pct of EXTREME_RAINFALL_PERCENTILES) {
+            const lid = extremeRainfallLayerId(pct);
+            const sid = extremeRainfallSourceId(pct);
+            if (miniMap.getLayer(lid)) miniMap.removeLayer(lid);
+            if (miniMap.getSource(sid)) miniMap.removeSource(sid);
+        }
     }
 
     function clearImpactAdmin1Layer() {
@@ -1324,6 +1363,7 @@
         updateMemberCountriesByScope();
         updatePartnersByScope();
         updateScopeHeadings();
+        updateMapviewerLinks();
 
         if (miniMap && miniMap.isStyleLoaded()) {
             const scopeBounds = await loadAdmin0Boundaries();
@@ -1497,6 +1537,14 @@
             const original = heroSubEl.getAttribute('data-original') || heroSubEl.textContent;
             heroSubEl.textContent = original.replace(BASE_SITE_TITLE, siteTitle);
         }
+    }
+
+    function updateMapviewerLinks() {
+        const param = selectedMapScope && selectedMapScope !== 'all' ? `?scope=${selectedMapScope}` : '';
+        document.querySelectorAll('a[href*="/mapviewer"]').forEach(a => {
+            const base = a.getAttribute('href').split('?')[0];
+            a.setAttribute('href', base + param);
+        });
     }
 
     function toBoundsPair(bounds) {
@@ -2105,9 +2153,16 @@
             return null;
         }
 
-        wrfExtremeRainfallDateCache = normalizeLayerDateValue(timestamps[timestamps.length - 1]);
+        wrfExtremeRainfallDateCache = normalizeLayerDateValue(timestamps[0]);
         return wrfExtremeRainfallDateCache;
     }
+
+    // MapServer WMS layer names for each extreme rainfall percentile
+    const EXTREME_RAINFALL_WMS_LAYERS = Object.freeze({
+        f90: 'wrf_extreme_heavy',
+        f95: 'wrf_extreme_very_heavy',
+        f99: 'wrf_extreme_extremely_heavy',
+    });
 
     async function loadExtremeRainfallRasterLayer(layerConfig, options = {}) {
         const { silent = false } = options || {};
@@ -2128,37 +2183,44 @@
                 return { ok: false, reason: 'no_data', message: noDataMessage };
             }
 
-            const baseUrl = layerConfig.wmsBaseUrl || apiEndpoints.extremeRainfallWmsBaseUrl;
-            const percentile = String(layerConfig.wmsPercentile || DEFAULT_EXTREME_RAINFALL_PERCENTILE).toLowerCase();
-            // CMS wmsLayerName takes priority, then percentile lookup, then default
-            const wmsLayerName = layerConfig.wmsLayerName
-                || EXTREME_RAINFALL_WMS_LAYER_BY_PERCENTILE[percentile]
-                || EXTREME_RAINFALL_WMS_LAYER_BY_PERCENTILE[DEFAULT_EXTREME_RAINFALL_PERCENTILE];
-            const resolvedBaseUrl = (baseUrl || '')
-                .replace('{layer}', encodeURIComponent(wmsLayerName))
-                .replace('wrf_extreme_rainfall', encodeURIComponent(wmsLayerName));
-            const wmsTileUrl = `${resolvedBaseUrl}&time=${encodeURIComponent(latestDate)}`;
-
             clearExtremeRainfallLayer();
-            miniMap.addSource(EXTREME_RAINFALL_SOURCE_ID, {
-                type: 'raster',
-                tiles: [wmsTileUrl],
-                tileSize: 256
-            });
 
-            const layerDefinition = {
-                id: EXTREME_RAINFALL_LAYER_ID,
-                type: 'raster',
-                source: EXTREME_RAINFALL_SOURCE_ID,
-                paint: {
-                    'raster-opacity': 0.86
+            // Add all three percentile layers (f90 Heavy, f95 Very Heavy, f99 Extremely Heavy)
+            // Order: f90 first (bottom), f95 middle, f99 on top — matching mapviewer
+            const beforeLayer = miniMap.getLayer(ADMIN0_FILL_LAYER_ID) ? ADMIN0_FILL_LAYER_ID : undefined;
+
+            for (const pct of EXTREME_RAINFALL_PERCENTILES) {
+                const wmsLayerName = EXTREME_RAINFALL_WMS_LAYERS[pct];
+                if (!wmsLayerName) continue;
+
+                const tileUrl = '/mapserver/?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap'
+                    + `&LAYERS=${wmsLayerName}`
+                    + '&SRS=EPSG:3857&FORMAT=image/png&TRANSPARENT=true'
+                    + '&WIDTH=256&HEIGHT=256'
+                    + `&time=${latestDate}`
+                    + '&BBOX={bbox-epsg-3857}';
+
+                const sid = extremeRainfallSourceId(pct);
+                const lid = extremeRainfallLayerId(pct);
+
+                miniMap.addSource(sid, {
+                    type: 'raster',
+                    tiles: [tileUrl],
+                    tileSize: 256
+                });
+
+                const layerDef = {
+                    id: lid,
+                    type: 'raster',
+                    source: sid,
+                    paint: { 'raster-opacity': 0.86 }
+                };
+
+                if (beforeLayer) {
+                    miniMap.addLayer(layerDef, beforeLayer);
+                } else {
+                    miniMap.addLayer(layerDef);
                 }
-            };
-
-            if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) {
-                miniMap.addLayer(layerDefinition, ADMIN0_FILL_LAYER_ID);
-            } else {
-                miniMap.addLayer(layerDefinition);
             }
 
             applyCountryFiltersToMapLayers();
@@ -2166,7 +2228,7 @@
 
             return { ok: true, reason: 'loaded', dataDate: latestDate, mode: 'wms-raster' };
         } catch (error) {
-            console.error('Error loading extreme rainfall WMS layer:', error);
+            console.error('Error loading extreme rainfall WMS layers:', error);
             if (!silent) {
                 showMapStatusToast(LAYER_VALIDATION_MESSAGE);
             }

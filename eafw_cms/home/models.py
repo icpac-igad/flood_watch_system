@@ -478,16 +478,15 @@ class MapCategory(Orderable):
         blank=True,
         verbose_name=_("WMS Base URL"),
         help_text=_(
-            "WMS tile URL template (for wms-raster mode). Use {layer} and {bbox-epsg-3857} as placeholders. "
-            "Example: /mapserver/?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png"
-            "&TRANSPARENT=true&LAYERS={layer}&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}"
+            "Tile URL template (for wms-raster mode). "
+            "Example: /cog-tiles/collections/{collection}/tiles/WebMercatorQuad/{z}/{x}/{y}.png?assets=data"
         ),
     )
     wms_layer_name = models.CharField(
         max_length=100,
         blank=True,
         verbose_name=_("WMS Layer Name"),
-        help_text=_("MapServer layer name for WMS requests, e.g. wrf_extreme_very_heavy"),
+        help_text=_("STAC collection ID or layer identifier, e.g. wrf_extreme_very_heavy"),
     )
     value_field = models.CharField(
         max_length=50,

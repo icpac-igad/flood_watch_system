@@ -25,6 +25,8 @@ export const initialState = {
     initialParamInteractions: null, // Store CMS predefined params
     initialBbox: null, // Store initial CMS boundary bbox
     boundaryData: {},
+    cmsScopes: [], // CMS-defined project scopes (fetched from /api/v1/cms/scopes)
+    defaultScope: 'all', // CMS default scope key
   },
   settings: {
     center: {
@@ -256,6 +258,15 @@ const clearBoundaryData = (state) => ({
   },
 });
 
+const setCmsScopes = (state, { payload }) => ({
+  ...state,
+  data: {
+    ...state.data,
+    cmsScopes: payload.scopes || [],
+    defaultScope: payload.default_scope || 'all',
+  },
+});
+
 export default {
   [actions.setMapBasemap]: setMapBasemap,
   [actions.setMapLoading]: setMapLoading,
@@ -273,4 +284,5 @@ export default {
   [actions.setInitialBbox]: setInitialBbox,
   [actions.setBoundaryData]: setBoundaryData,
   [actions.clearBoundaryData]: clearBoundaryData,
+  [actions.setCmsScopes]: setCmsScopes,
 };

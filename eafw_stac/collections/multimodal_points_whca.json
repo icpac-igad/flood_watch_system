@@ -1,0 +1,69 @@
+{
+  "type": "Collection",
+  "id": "multimodal-points-whca",
+  "stac_version": "1.0.0",
+  "title": "Multimodal Points (WHCA / Nile Basin)",
+  "description": "Operational multimodal forecast points for WHCA project implementation in the Nile Basin region.",
+  "license": "CC-BY-4.0",
+  "keywords": [
+    "multimodal",
+    "points",
+    "whca",
+    "nile-basin",
+    "floodwatch"
+  ],
+  "providers": [
+    {
+      "name": "ICPAC",
+      "description": "IGAD Climate Prediction and Applications Centre",
+      "roles": [
+        "producer",
+        "host"
+      ],
+      "url": "https://www.icpac.net"
+    }
+  ],
+  "extent": {
+    "spatial": {
+      "bbox": [
+        [
+          25.5408,
+          -2.07483,
+          39.0224,
+          19.5252
+        ]
+      ]
+    },
+    "temporal": {
+      "interval": [
+        [
+          "2026-02-16T00:00:00Z",
+          null
+        ]
+      ]
+    }
+  },
+  "summaries": {
+    "proj:epsg": [
+      4326
+    ],
+    "geometry_type": [
+      "Point"
+    ],
+    "feature_count": [
+      514
+    ]
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "./multimodal_points_whca.json",
+      "type": "application/json"
+    },
+    {
+      "rel": "preview",
+      "href": "/stac-assets/thumbnails/multimodal_points_whca_thumb.svg",
+      "title": "Multimodal WHCA Preview"
+    }
+  ]
+}
