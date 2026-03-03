@@ -77,7 +77,7 @@ services:
       - AUTH_DBNAME=${CMS_DB_NAME}
       - ADMIN_USERS=${CMS_DB_USER}
       - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-1024}
-      - POOL_MODE=${PGB_POOL_MODE:-session}
+      - POOL_MODE=${PGB_POOL_MODE:-transaction}
       - DEFAULT_POOL_SIZE=${PGB_DEFAULT_POOL_SIZE:-120}
       - SERVER_IDLE_TIMEOUT=${PGB_SERVER_IDLE_TIMEOUT:-600}
       - CLIENT_IDLE_TIMEOUT=${PGB_CLIENT_IDLE_TIMEOUT:-1500}
@@ -141,6 +141,7 @@ services:
       - ENSEMBLE_FTP_USER=${ENSEMBLE_FTP_USER}
       - ENSEMBLE_FTP_PASSWORD=${ENSEMBLE_FTP_PASSWORD}
       - ENSEMBLE_FTP_DIR=${ENSEMBLE_FTP_DIR}
+      - ANALYTICS_PROPERTY_ID=${ANALYTICS_PROPERTY_ID}
     depends_on:
       eafw_pgdb:
         condition: service_healthy
@@ -150,6 +151,9 @@ services:
       - eafw_geomanager_data:/geomanager/data
       - ./eafw_docker/volumes/cms/.cache:/root/.cache:z
       - ./eafw_cms/home/templates:/opt/eafw_cms/home/templates:z
+      - ./eafw_cms/home/context_processors.py:/opt/eafw_cms/home/context_processors.py:z
+      - ./eafw_cms/geomanagerweb/settings/base.py:/opt/eafw_cms/geomanagerweb/settings/base.py:z
+      - ./eafw_cms/geomanagerweb/templates/base.html:/opt/eafw_cms/geomanagerweb/templates/base.html:z
       - ./eafw_docker/cms/seed:/opt/eafw_cms/seed:z
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
@@ -321,6 +325,13 @@ services:
       - GOOGLE_FLOOD_MODEL_CHUNK_SIZE=${GOOGLE_FLOOD_MODEL_CHUNK_SIZE:-200}
       - GOOGLE_FLOOD_FORECAST_CHUNK_SIZE=${GOOGLE_FLOOD_FORECAST_CHUNK_SIZE:-200}
       - GOOGLE_FLOOD_ISSUED_LOOKBACK_DAYS=${GOOGLE_FLOOD_ISSUED_LOOKBACK_DAYS:-7}
+      - EMAIL_NOTIFICATIONS_ENABLED=${EMAIL_NOTIFICATIONS_ENABLED:-true}
+      - SMTP_HOST=${SMTP_HOST:-${SMTP_EMAIL_HOST:-smtp.gmail.com}}
+      - SMTP_PORT=${SMTP_PORT:-${SMTP_EMAIL_PORT:-587}}
+      - SMTP_USER=${SMTP_USER:-${SMTP_EMAIL_HOST_USER}}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-${SMTP_EMAIL_HOST_PASSWORD}}
+      - EMAIL_FROM=${EMAIL_FROM:-${SMTP_USER:-${SMTP_EMAIL_HOST_USER}}}
+      - EMAIL_TO=${EMAIL_TO:-hkoros@icpac.net}
       - TZ=${TIME_ZONE:-Africa/Nairobi}
     volumes:
       - eafw_jobs_data:/opt/data
