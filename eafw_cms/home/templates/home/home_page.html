@@ -27,7 +27,7 @@
 /* Dashboard grid: map + country panel side by side */
 .dashboard-container { max-width: 1320px; padding: 1rem; margin: 0 auto; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: clamp(12px, 1.8vw, 20px); width: 100%; align-items: stretch; }
-.map-section, .country-section { min-width: 0; overflow: hidden; --home-map-min-height: clamp(390px, 53vh, 600px); --home-panel-offset-height: 44px; --home-panel-height: calc(max(var(--map-height, 0px), var(--home-map-min-height)) + var(--home-panel-offset-height)); }
+.map-section, .country-section { min-width: 0; overflow: hidden; --home-map-min-height: clamp(430px, 58vh, 660px); --home-panel-offset-height: 44px; --home-panel-height: calc(max(var(--map-height, 0px), var(--home-map-min-height)) + var(--home-panel-offset-height)); }
 .map-section { display: flex; flex-direction: column; height: var(--home-panel-height); min-height: var(--home-panel-height); position: relative; z-index: 1; }
 .map-wrapper { position: relative; min-height: 0; height: auto; flex: 1 1 auto; --map-cta-bottom: 14px; --map-cta-right: 14px; }
 #mini-map { width: 100%; height: 100%; min-height: 0; }
@@ -47,11 +47,13 @@
 .c-menu-control .c-map-menu .menu-category .category-icon { height: 34px; width: 34px; display: flex; align-items: center; justify-content: center; border-radius: 50%; overflow: hidden; transition: background-color 0.2s, box-shadow 0.2s; }
 .c-menu-control .c-map-menu .menu-category .category-icon img { padding: 3px; width: 26px; height: 26px; object-fit: contain; filter: brightness(0) invert(1); }
 .c-menu-control .c-map-menu .menu-category .category-icon .category-svg-icon { width: 22px; height: 22px; fill: #fff; }
+.c-menu-control .c-map-menu .menu-category .category-icon .category-fa-icon { font-size: 18px; line-height: 1; color: #fff; }
 .c-menu-control .c-map-menu .menu-category .category-icon .category-initial { color: #fff; font-size: 14px; font-weight: 700; text-transform: uppercase; }
 .c-menu-control .c-map-menu .menu-category .layer-title { position: absolute; left: 42px; cursor: pointer; width: max-content; padding: 2px 12px 3px; font-size: 13px; text-shadow: none; border-radius: 18px; background-color: rgba(106, 110, 116, 0.92); box-shadow: 0 2px 8px rgba(8, 30, 52, 0.18); color: #fff; font-weight: 500; opacity: 0; transition: opacity 0.2s, background-color 0.2s, transform 0.2s; transform: translateX(-4px); pointer-events: none; }
 .c-menu-control .c-map-menu .menu-category.active .category-icon { background-color: var(--menu-active, #f7a600); box-shadow: 0 0 4px 0 black; }
 .c-menu-control .c-map-menu .menu-category.active .category-icon img { filter: none; }
 .c-menu-control .c-map-menu .menu-category.active .category-icon .category-svg-icon { fill: #fff; }
+.c-menu-control .c-map-menu .menu-category.active .category-icon .category-fa-icon { color: #fff; }
 .c-menu-control .c-map-menu .menu-category.active .layer-title, .c-menu-control .c-map-menu .menu-category:hover .layer-title { opacity: 1; transform: translateX(0); }
 .c-menu-control.card-style { left: 15px; top: 15px; }
 .c-menu-control.card-style .c-map-menu { background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15); overflow: hidden; min-width: 180px; }
@@ -63,6 +65,7 @@
 .c-menu-control.card-style .menu-category .category-icon { width: 32px; height: 32px; }
 .c-menu-control.card-style .menu-category .category-icon img { filter: none; width: 100%; height: 100%; }
 .c-menu-control.card-style .menu-category .category-icon .category-svg-icon { width: 18px; height: 18px; fill: #4b5b6a; }
+.c-menu-control.card-style .menu-category .category-icon .category-fa-icon { font-size: 17px; color: #4b5b6a; }
 .c-menu-control.card-style .menu-category .layer-title { position: static; opacity: 1; padding: 0; text-shadow: none; font-size: 0.9rem; }
 .c-menu-control.card-style .menu-category.active .layer-title { background: none; color: #e65100; font-weight: 600; }
 .c-menu-control .c-map-menu .menu-category.loading .category-icon { opacity: 0.6; }
@@ -83,9 +86,9 @@
 .map-scope-btn.active { background: #1976d2; color: #fff; border-color: #1565c0; }
 
 /* Legend */
-.c-legend { position: absolute; z-index: 100; max-width: 220px; min-width: 160px; width: fit-content; background-color: #fff; padding: 10px 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); border-radius: 8px; bottom: calc(var(--map-cta-bottom) + 42px); right: 15px; }
-.c-legend.legend-bottom-left { bottom: calc(var(--map-cta-bottom) + 42px); left: 15px; right: auto; }
-.c-legend.legend-bottom-right { bottom: calc(var(--map-cta-bottom) + 42px); right: var(--map-cta-right); left: auto; }
+.c-legend { position: absolute; z-index: 100; max-width: 220px; min-width: 160px; width: fit-content; background-color: #fff; padding: 10px 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); border-radius: 8px; bottom: 8px; right: 15px; }
+.c-legend.legend-bottom-left { bottom: 8px; left: 15px; right: auto; }
+.c-legend.legend-bottom-right { bottom: 8px; right: 15px; left: auto; }
 .c-legend.legend-top-left { top: 15px; left: 15px; bottom: auto; right: auto; }
 .c-legend.legend-top-right { top: 15px; right: 15px; bottom: auto; left: auto; }
 .c-legend .c-legend-title { font-size: 0.75rem; font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid #eee; margin-bottom: 6px; color: #333; }
@@ -135,11 +138,11 @@
 .country-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px 15px; color: #5b6b7c; }
 
 /* Country summary table */
-.country-summary-table { padding: 0 10px 6px; flex: 0 0 auto; border-top: 1px solid #e5ebf2; margin-top: 0; }
-.summary-table-title { font-size: 0.78rem; font-weight: 600; color: #213244; padding: 6px 0 2px; }
-.summary-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; margin-top: 4px; }
-.summary-table th, .summary-table td { padding: 3px 6px; text-align: center; }
-.summary-table th { font-weight: 600; color: #5b6b7c; border-bottom: 1px solid #e5ebf2; font-size: 0.68rem; text-transform: uppercase; }
+.country-summary-table { padding: 6px 10px 12px; flex: 0 0 auto; border-top: 1px solid #e5ebf2; margin-top: 34px; }
+.summary-table-title { font-size: 0.98rem; font-weight: 600; color: #213244; line-height: 1.35; padding: 14px 0 7px; }
+.summary-table { width: 100%; border-collapse: collapse; font-size: 0.79rem; margin-top: 6px; }
+.summary-table th, .summary-table td { padding: 4px 6px; text-align: center; }
+.summary-table th { font-weight: 600; color: #5b6b7c; border-bottom: 1px solid #e5ebf2; font-size: 0.74rem; text-transform: uppercase; }
 .summary-table th:first-child, .summary-table td:first-child { text-align: left; }
 .summary-table td.emergency { color: #d32f2f; }
 .summary-table td.alarm { color: #ff9800; }
@@ -147,14 +150,13 @@
 .summary-table th.emergency { color: #d32f2f; }
 .summary-table th.alarm { color: #ff9800; }
 .summary-table th.warning { color: #c79100; }
-.summary-totals { border-top: 1px solid #e5ebf2; }
 
 /* Risk ticker */
 .risk-ticker-container { min-height: 44px; display: flex; align-items: center; overflow: hidden; background: linear-gradient(90deg, #0c1f3e 0%, #17315f 100%); }
 .risk-ticker { width: max-content; display: flex; align-items: center; will-change: transform; --ticker-duration: 26s; --ticker-shift: 700px; animation: ticker-scroll var(--ticker-duration) linear infinite; }
 .ticker-content { width: max-content; display: flex; align-items: center; gap: 18px; white-space: nowrap; padding: 0 18px; flex-shrink: 0; }
 .ticker-content.is-clone { pointer-events: none; }
-.ticker-title { color: #fff; font-size: 0.84rem; font-weight: 600; }
+.ticker-title { color: #fff; font-size: 0.84rem; font-weight: 400; }
 .ticker-separator { color: rgba(255, 255, 255, 0.45); font-size: 1.15rem; }
 .ticker-item { display: inline-flex; align-items: center; gap: 5px; color: #fff; font-size: 0.8rem; font-weight: 500; }
 .ticker-dot { width: 9px; height: 9px; border-radius: 999px; animation: pulse 1.5s ease-in-out infinite; }
@@ -184,25 +186,32 @@
 .popup-value span.warning { color: #c79100; }
 
 /* Partners / Members section */
-.home-module--partners { padding: 0; }
+.home-module--partners { padding: 0; margin-top: clamp(36px, 5vw, 72px); }
 .partners-section { padding: 0; }
 .partners-container { max-width: 1320px; margin: 0 auto; padding: 0 1rem; }
 .partners-label { font-size: 20px; font-weight: 600; color: var(--secondary-text-color, #333); text-transform: none; letter-spacing: normal; padding: 0; border-left: none; background: none; border-radius: 0; min-width: auto; text-align: center; }
 .members-group, .partners-group { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 1.25rem 0; background-color: color-mix(in srgb, var(--background-color, #fff) 98%, black); }
-.member-flags { display: flex; justify-content: center; align-items: stretch; gap: 1.25rem; flex-wrap: wrap; overflow: visible; margin-top: 0.75rem; }
-.member-flag { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: inherit; padding: 0.6rem; background-color: var(--background-color, #fff); border-radius: 8px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08); transition: transform 0.2s ease, box-shadow 0.2s ease; width: 130px; height: 90px; }
+.member-flags-shell, .partners-logos-shell { overflow: hidden; width: 100%; margin: 0.5rem 0; position: relative; }
+.member-flags, .partners-logos { display: flex; align-items: stretch; gap: 1.1rem; flex-wrap: nowrap; justify-content: flex-start; width: max-content; min-width: max-content; will-change: transform; }
+.member-flags { margin-top: 0.25rem; }
+.member-flags.is-static, .partners-logos.is-static { width: 100%; min-width: 100%; justify-content: center; transform: translateX(0); animation: none; }
+.member-flags.is-animated, .partners-logos.is-animated { width: max-content; min-width: max-content; justify-content: flex-start; animation: horizontal-strip-pan var(--marquee-duration, 24s) linear infinite alternate; }
+.member-flag { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: inherit; padding: 0.35rem; background-color: var(--background-color, #fff); border-radius: 8px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08); transition: transform 0.2s ease, box-shadow 0.2s ease; width: 96px; height: 64px; }
 .member-flag:hover { transform: translateY(-2px); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12); }
-.member-flag img { width: 80px; height: 52px; object-fit: cover; border-radius: 3px; box-shadow: none; border: 1px solid rgba(51, 51, 51, 0.12); }
-.member-flag-name { display: block; font-size: 13px; font-weight: 500; color: var(--secondary-text-color, #333); text-align: center; margin-top: 0.35rem; }
+.member-flag img { width: 58px; height: 36px; object-fit: cover; border-radius: 3px; box-shadow: none; border: 1px solid rgba(51, 51, 51, 0.12); }
+.member-flag-name { display: none; }
 .partners-group-header { margin-bottom: 0.25rem; }
-.partners-logos-shell { overflow: hidden; width: 100%; margin: 0.5rem 0; position: relative; }
-.partners-logos { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; width: 100%; }
-.partners-logos a, .partner-item { flex-shrink: 0; display: flex; align-items: center; justify-content: center; text-decoration: none; padding: 0.5rem; background-color: var(--background-color, #fff); border-radius: 8px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08); transition: transform 0.2s ease, box-shadow 0.2s ease; height: 90px; width: 130px; }
+.partners-logos { gap: 1.5rem; }
+.partners-logos a, .partner-item { flex-shrink: 0; display: flex; align-items: center; justify-content: center; text-decoration: none; padding: 0.65rem; background-color: var(--background-color, #fff); border-radius: 8px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.08); transition: transform 0.2s ease, box-shadow 0.2s ease; height: 110px; width: 180px; }
 .partner-item:hover { transform: translateY(-2px); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12); }
-.partner-logo { max-width: 120px; max-height: 80px; width: auto; height: auto; object-fit: contain; display: block; }
+.partner-logo { max-width: 158px; max-height: 92px; width: auto; height: auto; object-fit: contain; display: block; }
 .partners-more-wrap { margin-top: 0.5rem; text-align: center; }
 .partners-more-link { display: inline-block; background-color: var(--primary-color, #034930); color: var(--primary-text-color, #fff); border-radius: 9999px; padding: 0.35rem 1.2rem; font-size: 0.75rem; font-weight: 600; text-decoration: none; transition: background-color 0.3s ease; }
 .partners-more-link:hover { background-color: var(--accent-color, #fbc02d); color: var(--secondary-text-color, #333); text-decoration: none; }
+@keyframes horizontal-strip-pan {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--marquee-travel, 0px)); }
+}
 
 /* Responsive */
 @media screen and (max-width: 1200px) {
@@ -223,9 +232,10 @@
   .c-menu-control .c-map-menu .menu-category { padding: 9px 0; }
   .c-menu-control .c-map-menu .menu-category .category-icon { width: 30px; height: 30px; }
   .c-menu-control .c-map-menu .menu-category .category-icon .category-svg-icon { width: 18px; height: 18px; }
+  .c-menu-control .c-map-menu .menu-category .category-icon .category-fa-icon { font-size: 16px; }
   .c-menu-control .c-map-menu .menu-category .layer-title { left: 36px; font-size: 0.68rem; }
-  .c-legend { max-width: none; min-width: 0; width: auto; padding: 5px 8px; right: var(--map-cta-right); left: auto; bottom: calc(var(--map-cta-bottom) + 34px); border-radius: 6px; }
-  .c-legend.legend-bottom-left, .c-legend.legend-bottom-right { right: var(--map-cta-right); left: auto; bottom: calc(var(--map-cta-bottom) + 34px); }
+  .c-legend { max-width: none; min-width: 0; width: auto; padding: 5px 8px; right: 10px; left: auto; bottom: 8px; border-radius: 6px; }
+  .c-legend.legend-bottom-left, .c-legend.legend-bottom-right { right: 10px; left: auto; bottom: 8px; }
   .c-legend .c-legend-title { font-size: 0.66rem; }
   .c-legend-basic .c-legend-item .c-legend-item-icon { width: 10px; height: 8px; margin-right: 5px; }
   .c-legend-basic .c-legend-item .c-legend-item-label { font-size: 0.62rem; }
@@ -234,13 +244,12 @@
   .risk-ticker-container { min-height: 38px; }
   .ticker-title { font-size: 0.74rem; }
   .ticker-item { font-size: 0.72rem; }
-  .member-flags { flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
-  .member-flag { width: 100px; height: 72px; }
-  .member-flag img { width: 64px; height: 42px; }
-  .member-flag-name { font-size: 11px; }
-  .partners-logos { gap: 0.75rem; }
-  .partner-item, .partners-logos a { height: 72px; width: 100px; padding: 0.4rem; }
-  .partner-logo { max-width: 80px; max-height: 52px; }
+  .member-flags, .partners-logos { gap: 0.75rem; }
+  .member-flag { width: 80px; height: 56px; }
+  .member-flag img { width: 46px; height: 28px; }
+  .member-flag-name { font-size: 10px; }
+  .partner-item, .partners-logos a { height: 88px; width: 132px; padding: 0.45rem; }
+  .partner-logo { max-width: 116px; max-height: 66px; }
   .partners-label { font-size: 16px; }
 }
 </style>
@@ -353,6 +362,22 @@
     })();
     const DEFAULT_SCOPE_KEY = '{{ default_scope_key|default:"all" }}';
 
+    /** Append scope + project_countries params when a non-"all" scope is active. */
+    function applyScopeParams(params) {
+        if (selectedMapScope && selectedMapScope !== 'all') {
+            const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+            const admin0Codes = scopeConfig?.admin0Codes || [];
+            if (selectedMapScope === 'whca') {
+                params.scope = 'whca';
+            } else if (admin0Codes.length > 0) {
+                params.scope = 'project';
+                params.project_countries = admin0Codes.join(',');
+            } else {
+                params.scope = selectedMapScope;
+            }
+        }
+    }
+
     const ISO2_TO_ISO3 = Object.freeze({
         BI: 'BDI', DJ: 'DJI', ET: 'ETH', KE: 'KEN',
         RW: 'RWA', SD: 'SDN', SO: 'SOM', SS: 'SSD', TZ: 'TZA', UG: 'UGA'
@@ -390,6 +415,10 @@
         scopeFitDurationMs: 700
     });
 
+    // CAP severity display labels (internal key → user-facing name)
+    const CAP_LABELS = { emergency: 'Extreme', alarm: 'Severe', warning: 'Moderate', normal: 'Normal' };
+    function capLabel(level) { return CAP_LABELS[String(level || 'normal').toLowerCase()] || String(level).toUpperCase(); }
+
     // Alert colors
     const alertColors = {
         emergency: '{{ multimodal_settings.emergency_color|default:"#d32f2f" }}',
@@ -397,6 +426,87 @@
         warning: '{{ multimodal_settings.warning_color|default:"#ffc107" }}',
         normal: '{{ multimodal_settings.normal_color|default:"#b0b0b0" }}'
     };
+    const FORECAST_GAUGE_ICON_IDS = Object.freeze({
+        emergency: 'forecast-gauge-icon-emergency',
+        alarm: 'forecast-gauge-icon-alarm',
+        warning: 'forecast-gauge-icon-warning',
+        normal: 'forecast-gauge-icon-normal'
+    });
+
+    function createForecastGaugeIcon(color) {
+        const canvas = document.createElement('canvas');
+        const size = 48;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) };
+        }
+
+        const centerX = 24;
+        const centerY = 29;
+        const radius = 12;
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // White halo for visibility on any basemap.
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(centerX + 8, centerY - 8);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // CAP-colored gauge icon.
+        ctx.strokeStyle = color || alertColors.normal;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(centerX + 8, centerY - 8);
+        ctx.stroke();
+        ctx.fillStyle = color || alertColors.normal;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        const imageData = ctx.getImageData(0, 0, size, size);
+        return { width: size, height: size, data: imageData.data };
+    }
+
+    function ensureForecastGaugeIcons(map) {
+        if (!map) return;
+        Object.entries(FORECAST_GAUGE_ICON_IDS).forEach(([level, iconId]) => {
+            if (map.hasImage(iconId)) {
+                try {
+                    map.removeImage(iconId);
+                } catch (error) {
+                    // Ignore remove race and continue with fresh add.
+                }
+            }
+            map.addImage(iconId, createForecastGaugeIcon(alertColors[level] || alertColors.normal), { pixelRatio: 2 });
+        });
+    }
+
+    function buildForecastGaugeIconExpression() {
+        return [
+            'match', ['get', 'alert_level'],
+            'emergency', FORECAST_GAUGE_ICON_IDS.emergency,
+            'alarm', FORECAST_GAUGE_ICON_IDS.alarm,
+            'warning', FORECAST_GAUGE_ICON_IDS.warning,
+            FORECAST_GAUGE_ICON_IDS.normal
+        ];
+    }
 
     // Country flag URLs (using flagcdn.com)
     const flagUrls = {
@@ -623,57 +733,63 @@
 
     function initPartnersAutoScroll() {
         const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const setTrackStatic = (track, shell) => {
+            track.classList.add('is-static');
+            if (shell) shell.classList.add('is-static');
+        };
 
-        document.querySelectorAll('.partners-logos').forEach((track) => {
+        const configureTrack = (track, itemSelector) => {
+            if (!track) return;
+
             track.classList.remove('is-animated', 'is-static');
             track.style.removeProperty('--marquee-distance');
+            track.style.removeProperty('--marquee-travel');
             track.style.removeProperty('--marquee-duration');
             track.style.removeProperty('transform');
-            const shell = track.closest('.partners-logos-shell') || track.parentElement;
-            const container = shell || track.closest('.partners-group') || track.parentElement;
+
+            const shell = track.closest('.partners-logos-shell, .member-flags-shell') || track.parentElement;
+            const container = shell || track.closest('.partners-group, .members-group') || track.parentElement;
 
             if (shell) {
                 shell.classList.remove('is-animated', 'is-static');
             }
 
             if (reduceMotion || !container) {
-                track.classList.add('is-static');
-                if (shell) shell.classList.add('is-static');
+                setTrackStatic(track, shell);
                 return;
             }
 
-            const minItems = Number.parseInt(track.getAttribute('data-slider-threshold') || '5', 10);
-            const threshold = Number.isFinite(minItems) && minItems > 1 ? minItems : 5;
-            const visibleItems = Array.from(track.querySelectorAll('.partner-item')).filter((item) => (
+            const visibleItems = Array.from(track.querySelectorAll(itemSelector)).filter((item) => (
                 item.style.display !== 'none'
             ));
 
-            if (visibleItems.length < threshold) {
-                track.classList.add('is-static');
-                if (shell) shell.classList.add('is-static');
+            if (visibleItems.length < 1) {
+                setTrackStatic(track, shell);
                 return;
             }
 
-            const marqueeDistance = Math.round(track.scrollWidth - container.clientWidth);
-            if (!Number.isFinite(marqueeDistance) || marqueeDistance < 48) {
-                track.classList.add('is-static');
-                if (shell) shell.classList.add('is-static');
+            const containerWidth = Math.round(container.clientWidth);
+            const trackWidth = Math.round(track.scrollWidth);
+            const travelPx = containerWidth - trackWidth;
+            if (!Number.isFinite(travelPx)) {
+                setTrackStatic(track, shell);
                 return;
             }
 
-            const durationSeconds = Math.max(18, Math.min(52, marqueeDistance / 68));
-            track.style.setProperty('--marquee-distance', `${marqueeDistance}px`);
+            const effectiveTravelPx = travelPx;
+            const durationSeconds = Math.max(18, Math.min(42, (Math.abs(effectiveTravelPx) + 280) / 22));
+            track.style.setProperty('--marquee-travel', `${effectiveTravelPx}px`);
             track.style.setProperty('--marquee-duration', `${durationSeconds}s`);
             track.classList.add('is-animated');
             if (shell) shell.classList.add('is-animated');
-        });
+        };
 
         document.querySelectorAll('.member-flags').forEach((track) => {
-            track.classList.remove('is-animated', 'is-static');
-            track.style.removeProperty('--marquee-distance');
-            track.style.removeProperty('--marquee-duration');
-            track.style.removeProperty('transform');
-            track.classList.add('is-static');
+            configureTrack(track, '.member-flag');
+        });
+
+        document.querySelectorAll('.partners-logos').forEach((track) => {
+            configureTrack(track, '.partner-item');
         });
     }
 
@@ -1163,7 +1279,7 @@
             const rounded = Math.round(rawValue);
             return layerConfig.valueUnit ? `${rounded} ${layerConfig.valueUnit}` : `${rounded}`;
         }
-        return properties?.alert_level ? String(properties.alert_level).toUpperCase() : 'N/A';
+        return properties?.alert_level ? capLabel(properties.alert_level) : 'N/A';
     }
 
     function applyPreferredCategoryOrder() {
@@ -1406,11 +1522,29 @@
 
         const label = membersGroup.querySelector('.partners-label');
         if (label) {
-            label.textContent = label.getAttribute('data-default-label') || 'Partner Countries';
+            const configuredLabel = label.getAttribute('data-default-label') || label.textContent || '';
+            const resolvedLabel = normalizeMemberCountriesLabel(configuredLabel);
+            label.setAttribute('data-default-label', resolvedLabel);
+            label.textContent = resolvedLabel || 'Member Countries';
         }
 
         membersGroup.style.display = visibleCount > 0 ? '' : 'none';
         dedupePartnersAndMembers();
+        initPartnersAutoScroll();
+    }
+
+    function normalizeMemberCountriesLabel(value) {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (!normalized) return 'Member Countries';
+        if (
+            normalized === 'partner countries'
+            || normalized === 'icpac partner countries'
+            || normalized === 'icpac member countries'
+            || normalized === 'member states'
+        ) {
+            return 'Member Countries';
+        }
+        return String(value).trim();
     }
 
     function normalizePartnerName(value) {
@@ -1486,7 +1620,9 @@
 
     function getScopePanelTitle() {
         const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
-        return (scopeConfig?.countrySectionTitle) || BASE_COUNTRY_SECTION_TITLE || 'Regional Flood Situation';
+        if (scopeConfig?.countrySectionTitle) return scopeConfig.countrySectionTitle;
+        if ((selectedMapScope || '').toLowerCase() === 'whca') return 'Nile Basin Flood Situation';
+        return BASE_COUNTRY_SECTION_TITLE || 'Regional Flood Situation';
     }
 
     function getScopeTickerTitle() {
@@ -1497,6 +1633,12 @@
     function getScopeSiteTitle() {
         const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
         return (scopeConfig?.siteTitle) || BASE_SITE_TITLE || 'East Africa Flood Watch';
+    }
+
+    function getScopeSummaryTableTitle() {
+        const scopeKey = (selectedMapScope || 'all').toLowerCase();
+        if (scopeKey === 'whca') return 'Summary of Nile Basin Flood Situation';
+        return 'Summary of Regional Flood Situation';
     }
 
     function updateScopeHeadings() {
@@ -2354,7 +2496,7 @@
         try {
             const params = {};
             if (mapConfig.pointFilter !== 'all') params.filter = mapConfig.pointFilter;
-            if (selectedMapScope !== 'all') params.scope = selectedMapScope;
+            applyScopeParams(params);
             const urls = config.geojsonUrls.map(u => {
                 const q = new URLSearchParams(params).toString();
                 return q ? `${u}?${q}` : u;
@@ -2390,21 +2532,17 @@
             if (miniMap.getLayer('forecast-points-layer')) miniMap.removeLayer('forecast-points-layer');
             if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
 
+            ensureForecastGaugeIcons(miniMap);
             miniMap.addSource('forecast-points', { type: 'geojson', data: geojson });
             miniMap.addLayer({
                 id: 'forecast-points-layer',
-                type: 'circle',
+                type: 'symbol',
                 source: 'forecast-points',
-                paint: {
-                    'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 4, 8, 7, 12, 10],
-                    'circle-color': ['match', ['get', 'alert_level'],
-                        'emergency', alertColors.emergency,
-                        'alarm', alertColors.alarm,
-                        'warning', alertColors.warning,
-                        alertColors.normal],
-                    'circle-stroke-width': 1.5,
-                    'circle-stroke-color': 'white',
-                    'circle-opacity': 0.9
+                layout: {
+                    'icon-image': buildForecastGaugeIconExpression(),
+                    'icon-size': ['interpolate', ['linear'], ['zoom'], 3, 0.52, 8, 0.72, 12, 0.92],
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true
                 }
             });
 
@@ -2451,7 +2589,7 @@
         try {
             const params = {};
             if (mapConfig.pointFilter !== 'all') params.filter = mapConfig.pointFilter;
-            if (selectedMapScope !== 'all') params.scope = selectedMapScope;
+            applyScopeParams(params);
 
             clearExtremeRainfallLayer();
             clearImpactAdmin1Layer();
@@ -2506,23 +2644,17 @@
             if (miniMap.getLayer('forecast-points-layer')) miniMap.removeLayer('forecast-points-layer');
             if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
 
-            const circleColor = ['match', ['get', 'alert_level'],
-                    'emergency', alertColors.emergency,
-                    'alarm', alertColors.alarm,
-                    'warning', alertColors.warning,
-                    alertColors.normal];
-
+            ensureForecastGaugeIcons(miniMap);
             miniMap.addSource('forecast-points', { type: 'geojson', data: geojson });
             miniMap.addLayer({
                 id: 'forecast-points-layer',
-                type: 'circle',
+                type: 'symbol',
                 source: 'forecast-points',
-                paint: {
-                    'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 4, 8, 7, 12, 10],
-                    'circle-color': circleColor,
-                    'circle-stroke-width': 1.5,
-                    'circle-stroke-color': 'white',
-                    'circle-opacity': 0.9
+                layout: {
+                    'icon-image': buildForecastGaugeIconExpression(),
+                    'icon-size': ['interpolate', ['linear'], ['zoom'], 3, 0.52, 8, 0.72, 12, 0.92],
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true
                 }
             });
 
@@ -2548,7 +2680,7 @@
                         .setLngLat(coords)
                         .setHTML(`
                             <div class="popup-title">${props.admin_name || 'Forecast Point'}</div>
-                            <div class="popup-value">Alert: <span class="${props.alert_level}">${String(props.alert_level || 'normal').toUpperCase()}</span></div>
+                            <div class="popup-value">Alert: <span class="${props.alert_level}">${capLabel(props.alert_level)}</span></div>
                             <div class="popup-value">${popupValueLabel}: <span>${popupValue}</span></div>
                         `)
                         .addTo(miniMap);
@@ -2578,7 +2710,7 @@
         try {
             const params = {};
             // WHCA (default) shows all data; other scopes filter per CMS config
-            if (selectedMapScope !== 'all') params.scope = selectedMapScope;
+            applyScopeParams(params);
             const urls = buildUrlsWithParams(apiEndpoints.countrySummary, params);
             const data = await fetchJsonWithFallback(urls);
             countriesData = data.countries || [];
@@ -2607,20 +2739,6 @@
         updateAll('ticker-emergency', riskCounts.emergency || 0);
         updateAll('ticker-alarm', riskCounts.alarm || 0);
         updateAll('ticker-warning', riskCounts.warning || 0);
-        updateAll('ticker-normal', riskCounts.normal || 0);
-    }
-
-    function updateSummaryTotalsRow() {
-        if (!situationRiskCounts) return;
-        const row = document.querySelector('.summary-totals');
-        if (!row) return;
-        const rc = situationRiskCounts;
-        const tEmg = rc.emergency || 0;
-        const tAlm = rc.alarm || 0;
-        const tWrn = rc.warning || 0;
-        const tNrm = rc.normal || 0;
-        const tTotal = rc.total || (tEmg + tAlm + tWrn + tNrm);
-        row.innerHTML = `<td><strong>Total</strong></td><td class="emergency"><strong>${tEmg}</strong></td><td class="alarm"><strong>${tAlm}</strong></td><td class="warning"><strong>${tWrn}</strong></td><td><strong>${tNrm}</strong></td><td><strong>${tTotal}</strong></td>`;
     }
 
     // ========================================
@@ -2695,26 +2813,11 @@
         const summaryTable = document.getElementById('country-summary-table');
         if (summaryTable) {
             const displayed = countries.slice(0, cardLimit);
-            let tableHtml = '<div class="summary-table-title">Summary</div><table class="summary-table"><thead><tr><th>Country</th><th class="emergency">Emg</th><th class="alarm">Alm</th><th class="warning">Wrn</th><th>Nrm</th><th>Total</th></tr></thead><tbody>';
-            let totals = { emergency: 0, alarm: 0, warning: 0, normal: 0 };
+            const summaryTitle = getScopeSummaryTableTitle();
+            let tableHtml = `<div class="summary-table-title">${summaryTitle}</div><table class="summary-table"><thead><tr><th>Country</th><th class="emergency">Extreme</th><th class="alarm">Severe</th><th class="warning">Moderate</th></tr></thead><tbody>`;
             displayed.forEach(c => {
-                const tp = c.total_points || 0;
-                const aboveThreshold = (c.emergency || 0) + (c.alarm || 0) + (c.warning || 0);
-                const normal = tp > 0 ? tp - aboveThreshold : 0;
-                totals.emergency += (c.emergency || 0);
-                totals.alarm += (c.alarm || 0);
-                totals.warning += (c.warning || 0);
-                totals.normal += normal;
-                tableHtml += `<tr><td>${c.name || c.code}</td><td class="emergency">${c.emergency || 0}</td><td class="alarm">${c.alarm || 0}</td><td class="warning">${c.warning || 0}</td><td>${normal}</td><td><strong>${tp || aboveThreshold}</strong></td></tr>`;
+                tableHtml += `<tr><td>${c.name || c.code}</td><td class="emergency">${c.emergency || 0}</td><td class="alarm">${c.alarm || 0}</td><td class="warning">${c.warning || 0}</td></tr>`;
             });
-            // Use situation-summary risk_counts for totals row (includes normal-only countries)
-            const rc = situationRiskCounts;
-            const tEmg = rc ? (rc.emergency || 0) : totals.emergency;
-            const tAlm = rc ? (rc.alarm || 0) : totals.alarm;
-            const tWrn = rc ? (rc.warning || 0) : totals.warning;
-            const tNrm = rc ? (rc.normal || 0) : totals.normal;
-            const tTotal = rc ? (rc.total || (tEmg + tAlm + tWrn + tNrm)) : (totals.emergency + totals.alarm + totals.warning + totals.normal);
-            tableHtml += `<tr class="summary-totals"><td><strong>Total</strong></td><td class="emergency"><strong>${tEmg}</strong></td><td class="alarm"><strong>${tAlm}</strong></td><td class="warning"><strong>${tWrn}</strong></td><td><strong>${tNrm}</strong></td><td><strong>${tTotal}</strong></td></tr>`;
             tableHtml += '</tbody></table>';
             summaryTable.innerHTML = tableHtml;
         }
@@ -2781,7 +2884,7 @@
         try {
             const params = {};
             // WHCA (default) shows all data; other scopes filter per CMS config
-            if (selectedMapScope !== 'all') params.scope = selectedMapScope;
+            applyScopeParams(params);
             const urls = buildUrlsWithParams(apiEndpoints.situationSummary, params);
             const data = await fetchJsonWithFallback(urls);
 
@@ -2807,7 +2910,6 @@
             if (data.risk_counts) {
                 situationRiskCounts = data.risk_counts;
                 updateRiskTicker(data.risk_counts);
-                updateSummaryTotalsRow();
             }
 
         } catch (error) {

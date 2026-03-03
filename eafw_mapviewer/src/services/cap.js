@@ -94,6 +94,18 @@ const getFeatureCollection = (alert) => {
   return featureColl;
 };
 
+// FloodWatch CAP Composer integration
+export const getActiveAlerts = (params = {}) =>
+  request.get("/api/v1/cap/alerts", { params }).then((res) => res.data);
+
+export const createCapDraft = (assessmentId, options = {}) =>
+  request
+    .post("/api/v1/cap/draft", {
+      assessment_id: assessmentId,
+      expires_hours: options.expiresHours || 48,
+    })
+    .then((res) => res.data);
+
 export const getCapAlertsGeojson = (capBaseUrlGeojson) => {
   return request
     .get(capBaseUrlGeojson)

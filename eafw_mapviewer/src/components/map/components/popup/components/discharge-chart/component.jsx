@@ -198,7 +198,7 @@ const DischargeChart = ({
               stroke="#FFA726"
               strokeDasharray="5 5"
               label={{
-                value: "Warning",
+                value: "Moderate",
                 position: "right",
                 fill: "#FFA726",
                 fontSize: 10,
@@ -211,7 +211,7 @@ const DischargeChart = ({
               stroke="#FF5722"
               strokeDasharray="5 5"
               label={{
-                value: "Alarm",
+                value: "Severe",
                 position: "right",
                 fill: "#FF5722",
                 fontSize: 10,
@@ -224,7 +224,7 @@ const DischargeChart = ({
               stroke="#B71C1C"
               strokeDasharray="5 5"
               label={{
-                value: "Emergency",
+                value: "Extreme",
                 position: "right",
                 fill: "#B71C1C",
                 fontSize: 10,
@@ -319,11 +319,11 @@ const getCurrentStatus = (data, warning, alarm, emergency) => {
   const currentDischarge = Math.max(latestGfs, latestIcon);
 
   if (currentDischarge >= emergency && emergency > 0) {
-    return <span className="status-emergency">Emergency</span>;
+    return <span className="status-emergency">Extreme</span>;
   } else if (currentDischarge >= alarm && alarm > 0) {
-    return <span className="status-alarm">Alarm</span>;
+    return <span className="status-alarm">Severe</span>;
   } else if (currentDischarge >= warning && warning > 0) {
-    return <span className="status-warning">Warning</span>;
+    return <span className="status-warning">Moderate</span>;
   }
   return <span className="status-normal">Normal</span>;
 };

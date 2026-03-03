@@ -24,6 +24,88 @@ const SOURCE_ID = "multimodal-cluster-source";
 const CLUSTER_LAYER_ID = "multimodal-clusters";
 const CLUSTER_COUNT_LAYER_ID = "multimodal-cluster-count";
 const UNCLUSTERED_LAYER_ID = "multimodal-unclustered-point";
+const GAUGE_ICON_IDS = Object.freeze({
+  emergency: "multimodal-gauge-icon-emergency",
+  alarm: "multimodal-gauge-icon-alarm",
+  warning: "multimodal-gauge-icon-warning",
+  normal: "multimodal-gauge-icon-normal",
+});
+
+const createGaugeIconCanvas = (color = ALERT_COLORS.normal) => {
+  const canvas = document.createElement("canvas");
+  const size = 48;
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) };
+  }
+
+  const centerX = 24;
+  const centerY = 29;
+  const radius = 12;
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // White halo for contrast.
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(centerX, centerY);
+  ctx.lineTo(centerX + 8, centerY - 8);
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, 4.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // CAP color layer.
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(centerX, centerY);
+  ctx.lineTo(centerX + 8, centerY - 8);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, 3.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  const imageData = ctx.getImageData(0, 0, size, size);
+  return { width: size, height: size, data: imageData.data };
+};
+
+const ensureGaugeIcons = (map, colors = ALERT_COLORS) => {
+  Object.entries(GAUGE_ICON_IDS).forEach(([level, iconId]) => {
+    if (map.hasImage(iconId)) {
+      try {
+        map.removeImage(iconId);
+      } catch (error) {
+        // Ignore remove race and continue with fresh add.
+      }
+    }
+    map.addImage(iconId, createGaugeIconCanvas(colors[level] || colors.normal || ALERT_COLORS.normal), {
+      pixelRatio: 2,
+    });
+  });
+};
+
+const buildGaugeIconExpression = () => [
+  "match",
+  ["get", "alert_level"],
+  "emergency", GAUGE_ICON_IDS.emergency,
+  "alarm", GAUGE_ICON_IDS.alarm,
+  "warning", GAUGE_ICON_IDS.warning,
+  GAUGE_ICON_IDS.normal,
+];
 
 /**
  * Get selected date from multimodal layer params in active datasets
@@ -178,26 +260,28 @@ const MultimodalClusterLayer = ({
       cluster: false, // Disabled - focus on individual point coloring first
     });
 
-    // Add individual point layer - colors based on alert_level
+    ensureGaugeIcons(map, colors);
+
+    // Add individual point layer - same gauge icon, CAP color by alert level.
     map.addLayer({
       id: UNCLUSTERED_LAYER_ID,
-      type: "circle",
+      type: "symbol",
       source: SOURCE_ID,
-      paint: {
-        // Color based on alert level - uses colors from shared config
-        "circle-color": [
-          "match",
-          ["get", "alert_level"],
-          "emergency", colors.emergency,
-          "alarm", colors.alarm,
-          "warning", colors.warning,
-          "normal", colors.normal,
-          colors.normal, // default
+      layout: {
+        "icon-image": buildGaugeIconExpression(),
+        "icon-size": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          3, 0.52,
+          8, 0.72,
+          12, 0.92,
         ],
-        "circle-radius": 3,
-        "circle-stroke-width": 1,
-        "circle-stroke-color": "#fff",
-        "circle-opacity": 0.85,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: {
+        "icon-opacity": 0.9,
       },
     });
 

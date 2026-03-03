@@ -154,6 +154,18 @@ def run_db_backup():
         logger.exception(f"Database backup failed: {e}")
 
 
+def run_email_report():
+    """Send daily email report with job status summary"""
+    logger.info(f"[{datetime.now()}] Sending daily email report")
+
+    try:
+        from .email_report import send_daily_report
+        send_daily_report()
+        logger.info("Daily email report sent")
+    except Exception as e:
+        logger.exception(f"Error sending email report: {e}")
+
+
 def signal_handler(signum, frame):
     """Handle shutdown signals"""
     logger.info("Received shutdown signal, stopping scheduler...")
@@ -174,11 +186,11 @@ def start_scheduler():
 
     scheduler = BlockingScheduler()
 
-    # Schedule multimodal sync - daily at 5:20 PM (17:20) East Africa Time
-    # Data is available around 5:00 PM, run at 5:20 PM to allow for upload completion
+    # Schedule multimodal sync - daily at 5:30 PM (17:30) East Africa Time
+    # Data is available around 5:00 PM, run at 5:30 PM to allow for upload completion
     scheduler.add_job(
         run_multimodal_sync,
-        CronTrigger(hour=17, minute=20),
+        CronTrigger(hour=17, minute=30),
         id='multimodal_sync',
         name='Multimodal Ensemble Sync',
         replace_existing=True
@@ -223,13 +235,23 @@ def start_scheduler():
         replace_existing=True
     )
 
-    # Schedule DB backup - daily at 5:30 PM (17:30) EAT
+    # Schedule DB backup - daily at 6:00 PM (18:00) EAT
     # Runs after multimodal sync to capture fresh data
     scheduler.add_job(
         run_db_backup,
-        CronTrigger(hour=17, minute=30),
+        CronTrigger(hour=18, minute=0),
         id='db_backup',
         name='Database Backup',
+        replace_existing=True
+    )
+
+    # Schedule daily email report - at 6:30 PM (18:30) EAT
+    # Runs after backup to summarize the day's job results
+    scheduler.add_job(
+        run_email_report,
+        CronTrigger(hour=18, minute=30),
+        id='email_report',
+        name='Daily Email Report',
         replace_existing=True
     )
 
@@ -242,12 +264,13 @@ def start_scheduler():
     run_google_flood_sync_job()
 
     logger.info("Scheduler started. Jobs will run on schedule.")
-    logger.info("Multimodal sync: Daily at 17:20 (5:20 PM)")
-    logger.info("FloodProofs sync: 01:00, 07:00, 13:00, 19:00 UTC")
-    logger.info("GCS Inundation sync: Weekly on Sunday at 02:00 UTC")
-    logger.info("WRF Rainfall sync: Daily at 06:00 UTC")
-    logger.info("Google Flood sync: 00:20, 06:20, 12:20, 18:20 UTC")
-    logger.info("Database backup: Daily at 17:30 (5:30 PM), keep 7 days")
+    logger.info("Multimodal sync: Daily at 17:30 (5:30 PM) EAT")
+    logger.info("FloodProofs sync: 01:00, 07:00, 13:00, 19:00 EAT")
+    logger.info("GCS Inundation sync: Weekly on Sunday at 02:00 EAT")
+    logger.info("WRF Rainfall sync: Daily at 06:00 EAT")
+    logger.info("Google Flood sync: 00:20, 06:20, 12:20, 18:20 EAT")
+    logger.info("Database backup: Daily at 18:00 (6:00 PM) EAT, keep 7 days")
+    logger.info("Email report: Daily at 18:30 (6:30 PM) EAT")
 
     try:
         scheduler.start()

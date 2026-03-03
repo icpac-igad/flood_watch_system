@@ -18,7 +18,7 @@ router = APIRouter()
 async def get_google_flood_geojson(
     date: Optional[str] = Query(None, description="Date YYYY-MM-DD (defaults to latest)"),
     filter: str = Query("all", description="Filter: all, active, alarm, emergency"),
-    scope: str = Query("all", description="Scope: all, whca"),
+    scope: str = Query("all", description="Scope: all, whca, project"),
     confidence: str = Query("high", description="Confidence: all, high, low"),
     extended_coverage: str = Query("false", description="Include lower-confidence gauges"),
     country_name: str = Query(""),
@@ -34,8 +34,8 @@ async def get_google_flood_geojson(
     if extended_coverage.strip().lower() in ("1", "true", "yes", "on"):
         confidence_mode = "all"
 
-    if scope not in ("all", "whca"):
-        raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+    if scope not in ("all", "whca", "project"):
+        raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
     filter_sql = ""
     if filter == "active":

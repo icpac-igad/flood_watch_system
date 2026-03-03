@@ -1,8 +1,24 @@
 import json
 import math
+from urllib.parse import urljoin
 from uuid import UUID
 
+from django.conf import settings
 from django.utils.translation import gettext_lazy as _
+
+
+def get_full_url(request, path):
+    """Compat shim — wagtail.api.v2.utils.get_full_url removed in Wagtail 7."""
+    if not path:
+        path = ""
+    cms_base_url = getattr(settings, "CMS_BASE_URL", None)
+    if cms_base_url:
+        if path and not path.startswith("/"):
+            path = "/" + path
+        return urljoin(cms_base_url, path)
+    if request:
+        return request.build_absolute_uri(path)
+    return path
 
 
 class UUIDEncoder(json.JSONEncoder):

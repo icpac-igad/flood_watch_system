@@ -1,5 +1,6 @@
 from django.utils.translation import gettext_lazy as _
 from wagtail import blocks
+from wagtail.documents.blocks import DocumentChooserBlock
 from wagtail.images.blocks import ImageChooserBlock
 
 
@@ -43,10 +44,90 @@ class MediaBlock(blocks.StreamBlock):
         icon="media",
         label=_("Embed (iframe)"),
     )
+    external_video = blocks.StructBlock(
+        [
+            ("url", blocks.URLBlock(label=_("Video URL"))),
+            ("title", blocks.CharBlock(max_length=200, required=False, label=_("Title"))),
+            ("poster_url", blocks.URLBlock(required=False, label=_("Poster Image URL"))),
+            ("caption", blocks.CharBlock(max_length=500, required=False, label=_("Caption"))),
+            ("autoplay", blocks.BooleanBlock(required=False, default=False, label=_("Autoplay"))),
+            ("muted", blocks.BooleanBlock(required=False, default=True, label=_("Muted"))),
+            ("loop", blocks.BooleanBlock(required=False, default=False, label=_("Loop"))),
+        ],
+        icon="media",
+        label=_("External Video"),
+    )
+    uploaded_video = blocks.StructBlock(
+        [
+            ("file", DocumentChooserBlock(label=_("Video File"))),
+            ("title", blocks.CharBlock(max_length=200, required=False, label=_("Title"))),
+            ("poster_url", blocks.URLBlock(required=False, label=_("Poster Image URL"))),
+            ("caption", blocks.CharBlock(max_length=500, required=False, label=_("Caption"))),
+            ("autoplay", blocks.BooleanBlock(required=False, default=False, label=_("Autoplay"))),
+            ("muted", blocks.BooleanBlock(required=False, default=True, label=_("Muted"))),
+            ("loop", blocks.BooleanBlock(required=False, default=False, label=_("Loop"))),
+        ],
+        icon="media",
+        label=_("Uploaded Video"),
+    )
 
     class Meta:
         icon = "image"
         label = _("Media")
+
+
+class MapOverlayBlock(blocks.StructBlock):
+    """GeoJSON overlay styling for chapter map scenes."""
+
+    label = blocks.CharBlock(
+        max_length=120,
+        required=False,
+        label=_("Label"),
+        help_text=_("Optional short name shown in the chapter card"),
+    )
+    url = blocks.URLBlock(
+        label=_("GeoJSON URL"),
+        help_text=_("Public URL to a GeoJSON file for this chapter overlay"),
+    )
+    layer_type = blocks.ChoiceBlock(
+        choices=[
+            ("fill", _("Fill Polygon")),
+            ("line", _("Line")),
+            ("circle", _("Point Circles")),
+        ],
+        default="fill",
+        label=_("Layer Type"),
+    )
+    color = blocks.CharBlock(
+        max_length=32,
+        required=False,
+        default="#38bdf8",
+        label=_("Color"),
+        help_text=_("CSS color (for example #38bdf8 or rgba(56,189,248,1))"),
+    )
+    opacity = blocks.FloatBlock(
+        required=False,
+        default=0.45,
+        min_value=0,
+        max_value=1,
+        label=_("Opacity"),
+    )
+    line_width = blocks.FloatBlock(
+        required=False,
+        default=2,
+        min_value=0,
+        label=_("Line Width"),
+    )
+    point_radius = blocks.FloatBlock(
+        required=False,
+        default=5,
+        min_value=0,
+        label=_("Point Radius"),
+    )
+
+    class Meta:
+        icon = "site"
+        label = _("Map Overlay")
 
 
 class MapStateBlock(blocks.StructBlock):
@@ -99,6 +180,12 @@ class ChapterBlock(blocks.StructBlock):
         required=False,
         label=_("Map View"),
         help_text=_("Where the map should fly to for this chapter"),
+    )
+    map_overlays = blocks.ListBlock(
+        MapOverlayBlock(),
+        required=False,
+        label=_("Map Overlays"),
+        help_text=_("GeoJSON flood layers to render when this chapter is active"),
     )
     transition = blocks.ChoiceBlock(
         choices=[

@@ -165,19 +165,19 @@ const ForecastChartWidget = ({ params, chartData, models, loading }) => {
               y={THRESHOLDS.warning}
               stroke="#ffc107"
               strokeDasharray="5 5"
-              label={{ value: "Warning", fontSize: 10, fill: "#b8860b" }}
+              label={{ value: "Moderate", fontSize: 10, fill: "#b8860b" }}
             />
             <ReferenceLine
               y={THRESHOLDS.alarm}
               stroke="#ff9800"
               strokeDasharray="5 5"
-              label={{ value: "Alarm", fontSize: 10, fill: "#e65100" }}
+              label={{ value: "Severe", fontSize: 10, fill: "#e65100" }}
             />
             <ReferenceLine
               y={THRESHOLDS.emergency}
               stroke="#d32f2f"
               strokeDasharray="5 5"
-              label={{ value: "Emergency", fontSize: 10, fill: "#c62828" }}
+              label={{ value: "Extreme", fontSize: 10, fill: "#c62828" }}
             />
 
             {/* Model lines */}
@@ -202,7 +202,7 @@ const ForecastChartWidget = ({ params, chartData, models, loading }) => {
       {/* Legend note */}
       <div className="chart-note">
         <p>
-          Dashed lines indicate alert thresholds. Values above Emergency
+          Dashed lines indicate alert thresholds. Values above Extreme
           threshold indicate severe flood risk.
         </p>
       </div>

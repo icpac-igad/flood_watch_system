@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse
-from wagtail.api.v2.utils import get_full_url
+from geomanager.utils import get_full_url
 from wagtailcache.cache import cache_page
 
 from geomanager.errors import MissingTileError

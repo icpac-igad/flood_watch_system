@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     # Upstream CMS API base (used for compatibility proxy endpoints)
     # Can be either host root (http://eafw_cms:8000) or explicit API root
     # (http://eafw_cms:8000/api). It is normalized to include /api.
+    cms_base_url: str = "http://eafw_cms:8000"
     cms_api_base_url: str = "http://eafw_cms:8000/api"
     # Host header forwarded by the API compatibility proxy when requesting CMS.
     # Needed in local docker where CMS ALLOWED_HOSTS may not include service DNS.

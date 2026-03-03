@@ -22,6 +22,13 @@ if GEOMANAGER_PATH not in sys.path:
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE_DIR = os.path.dirname(PROJECT_DIR)
 
+CAP_COMPOSER_PATH = os.environ.get(
+    'CAP_COMPOSER_PATH',
+    os.path.join(BASE_DIR, 'capcomposer', 'src')
+)
+if CAP_COMPOSER_PATH not in sys.path:
+    sys.path.insert(0, CAP_COMPOSER_PATH)
+
 env = environ.Env(
     # set casting, default value
     DEBUG=(bool, False),
@@ -41,6 +48,12 @@ INSTALLED_APPS = [
     "home",
     "storylines",
     "geomanager",
+    # CAP Composer (Common Alerting Protocol)
+    "capcomposer.capeditor",
+    "capcomposer.cap",
+    "wagtailmodelchooser",
+    "wagtail_newsletter",
+    "django_celery_beat",
     "daphne",
     "channels",
     "base",
@@ -125,6 +138,7 @@ TEMPLATES = [
                 "home.context_processors.theme_context",
                 "home.context_processors.navbar_context",
                 "home.context_processors.language_context",
+                "home.context_processors.analytics_context",
             ],
         },
     },
@@ -313,3 +327,10 @@ MULTIMODAL_FTP_PORT = env.int("ENSEMBLE_FTP_PORT", 21)
 MULTIMODAL_FTP_USER = env.str("ENSEMBLE_FTP_USER", "")
 MULTIMODAL_FTP_PASSWORD = env.str("ENSEMBLE_FTP_PASSWORD", "")
 MULTIMODAL_FTP_DIR = env.str("ENSEMBLE_FTP_DIR", "")
+
+# CAP Composer Configuration
+CAP_CERT_PATH = env.str("CAP_CERT_PATH", default="")
+CAP_PRIVATE_KEY_PATH = env.str("CAP_PRIVATE_KEY_PATH", default="")
+CAP_SIGNATURE_METHOD = env.str("CAP_SIGNATURE_METHOD", default="RSA_SHA256")
+CAP_MQTT_SECRET_KEY = env.str("CAP_MQTT_SECRET_KEY", default="")
+CAP_ALLOW_EDITING = env.bool("CAP_ALLOW_EDITING", default=False)

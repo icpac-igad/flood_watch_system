@@ -30,6 +30,8 @@ from geomanagerweb.api import (
     RiverBasinsView,
     ForecastMajorityRiskView,
     CountryAssessmentPublishView,
+    CAPDraftCreateView,
+    CAPForecastDraftView,
     country_inundation_view,
 )
 
@@ -77,6 +79,9 @@ urlpatterns = [
     path("api/regional-summary/generate", RegionalSummaryView.as_view(), name="regional_summary_generate_noslash"),
     path("api/river-basins/", RiverBasinsView.as_view(), name="river_basins"),
     path("api/river-basins", RiverBasinsView.as_view(), name="river_basins_noslash"),
+    # CAP alert draft creation (used by mapviewer "Generate CAP Alert" button)
+    path("cms-api/cap/create-draft/", CAPDraftCreateView.as_view(), name="cap_create_draft"),
+    path("cms-api/cap/create-forecast-draft/", CAPForecastDraftView.as_view(), name="cap_forecast_draft"),
     # Country inundation endpoint used by the country detail widget
     path("api/country-inundation/", country_inundation_view, name="country_inundation"),
     path("api/country-inundation", country_inundation_view, name="country_inundation_noslash"),
@@ -99,6 +104,8 @@ urlpatterns = [
     # geomanager urls (without namespace so reverse() works in serializers)
     path("", include("geomanager.urls")),
     path("", include("django_nextjs.urls")),
+    # CAP Composer URLs (RSS, GeoJSON, XML feeds)
+    path("", include("capcomposer.cap.urls")),
 ]
 
 if ADMIN_URL_PATH:

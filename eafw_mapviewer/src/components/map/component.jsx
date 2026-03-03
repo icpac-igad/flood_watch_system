@@ -6,6 +6,8 @@ import debounce from "lodash/debounce";
 import cx from "classnames";
 
 import { trackMapLatLon, trackEvent } from "@/utils/analytics";
+import { ALERT_COLORS, CLUSTER_ICON_PREFIX, SYMBOL_LAYOUT, DEFAULT_THRESHOLDS } from "@/utils/multimodal-config";
+import { buildMultimodalClusterIconImageExpression } from "@/utils/layer-utils";
 
 import Loader from "@/components/ui/loader";
 import Icon from "@/components/ui/icon";
@@ -36,6 +38,31 @@ import "./styles.scss";
 
 const EXTERNAL_BASEMAP_SOURCE_ID = "__external-basemap-source";
 const EXTERNAL_BASEMAP_LAYER_ID = "__external-basemap-layer";
+const MULTIMODAL_GAUGE_ICON_PREFIX = "multimodal-gauge-";
+const MULTIMODAL_GAUGE_ICON_IDS = Object.freeze({
+  emergency: `${MULTIMODAL_GAUGE_ICON_PREFIX}emergency`,
+  alarm: `${MULTIMODAL_GAUGE_ICON_PREFIX}alarm`,
+  warning: `${MULTIMODAL_GAUGE_ICON_PREFIX}warning`,
+  normal: `${MULTIMODAL_GAUGE_ICON_PREFIX}normal`,
+});
+
+const MULTIMODAL_ALERT_LEVEL_EXPR = [
+  "downcase",
+  ["to-string", ["coalesce", ["get", "alert_level"], ""]],
+];
+const MULTIMODAL_DAILY_AVG_EXPR = ["to-number", ["coalesce", ["get", "daily_avg"], 0]];
+
+const buildMultimodalGaugeIconExpression = () => ([
+  "case",
+  ["==", MULTIMODAL_ALERT_LEVEL_EXPR, "emergency"], MULTIMODAL_GAUGE_ICON_IDS.emergency,
+  ["==", MULTIMODAL_ALERT_LEVEL_EXPR, "alarm"], MULTIMODAL_GAUGE_ICON_IDS.alarm,
+  ["==", MULTIMODAL_ALERT_LEVEL_EXPR, "warning"], MULTIMODAL_GAUGE_ICON_IDS.warning,
+  ["==", MULTIMODAL_ALERT_LEVEL_EXPR, "normal"], MULTIMODAL_GAUGE_ICON_IDS.normal,
+  [">=", MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.emergency], MULTIMODAL_GAUGE_ICON_IDS.emergency,
+  [">=", MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.alarm], MULTIMODAL_GAUGE_ICON_IDS.alarm,
+  [">=", MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.warning], MULTIMODAL_GAUGE_ICON_IDS.warning,
+  MULTIMODAL_GAUGE_ICON_IDS.normal,
+]);
 
 class RenderMap extends PureComponent {
   render() {
@@ -331,18 +358,142 @@ class MapComponent extends Component {
     if (this.map) {
       this.map.off("styledata", this.onStyleLoad);
       this.map.off("styleimagemissing", this.handleStyleImageMissing);
+      this.map.off("idle", this.syncMultimodalIconOverlays);
     }
     if (this.state.compareMap) {
       this.state.compareMap.remove();
     }
   }
 
+  // Generate a cluster bubble icon as ImageData for a given alert color
+  createClusterIcon = (color, size = 40) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const cx = size / 2;
+    const cy = size / 2;
+    const r = size / 2 - 3;
+
+    // Filled circle with white border
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    return ctx.getImageData(0, 0, size, size);
+  };
+
+  // Generate gauge icon with circular ring around it
+  createGaugeIcon = (color, size = 64) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const ringRadius = size * 0.32;
+    const gaugeRadius = size * 0.18;
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // Outer white halo ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = Math.max(4, size * 0.11);
+    ctx.stroke();
+
+    // CAP colored ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, size * 0.05);
+    ctx.stroke();
+
+    // Gauge arc
+    ctx.beginPath();
+    ctx.arc(cx, cy + size * 0.05, gaugeRadius, Math.PI, 0, false);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = Math.max(3, size * 0.08);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy + size * 0.05, gaugeRadius, Math.PI, 0, false);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, size * 0.05);
+    ctx.stroke();
+
+    // Needle + center pivot
+    const pivotY = cy + size * 0.05;
+    ctx.beginPath();
+    ctx.moveTo(cx, pivotY);
+    ctx.lineTo(cx + size * 0.12, pivotY - size * 0.12);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = Math.max(3, size * 0.08);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(cx, pivotY);
+    ctx.lineTo(cx + size * 0.12, pivotY - size * 0.12);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, size * 0.05);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, pivotY, Math.max(2.2, size * 0.04), 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(cx, pivotY, Math.max(1.4, size * 0.025), 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    return ctx.getImageData(0, 0, size, size);
+  };
+
+  // Register cluster bubble icons for all alert levels
+  loadClusterIcons = () => {
+    if (!this.map) return;
+    Object.entries(ALERT_COLORS).forEach(([level, color]) => {
+      const name = `${CLUSTER_ICON_PREFIX}${level}`;
+      if (this.map.hasImage(name)) return;
+      const imageData = this.createClusterIcon(color);
+      this.map.addImage(name, { width: imageData.width, height: imageData.height, data: imageData.data });
+    });
+  };
+
+  // Register multimodal gauge icons for all alert levels
+  loadGaugeIcons = () => {
+    if (!this.map) return;
+    Object.entries(ALERT_COLORS).forEach(([level, color]) => {
+      const name = MULTIMODAL_GAUGE_ICON_IDS[level];
+      if (!name) return;
+      const imageData = this.createGaugeIcon(color);
+      if (!imageData) return;
+      if (this.map.hasImage(name)) {
+        try {
+          this.map.removeImage(name);
+        } catch (error) {
+          // Ignore race conditions while style is settling.
+        }
+      }
+      this.map.addImage(name, { width: imageData.width, height: imageData.height, data: imageData.data });
+    });
+  };
+
   loadMapImages = async () => {
     const { vectorLayerIcons } = this.props;
 
     if (vectorLayerIcons && !!vectorLayerIcons.length && this.map) {
       vectorLayerIcons.forEach((icon) => {
-        // Check if image already exists to avoid duplicate errors
         if (this.map.hasImage(icon.name)) return;
 
         this.map.loadImage(icon.url, (error, iconImage) => {
@@ -352,6 +503,10 @@ class MapComponent extends Component {
         });
       });
     }
+
+    // Also generate cluster bubble icons
+    this.loadClusterIcons();
+    this.loadGaugeIcons();
   };
 
   // Handle missing images by loading them on-demand
@@ -359,7 +514,33 @@ class MapComponent extends Component {
     const { vectorLayerIcons } = this.props;
     const id = e.id;
 
-    if (!vectorLayerIcons || !this.map) return;
+    if (!this.map) return;
+
+    // Check if it's a cluster icon request
+    if (id.startsWith(CLUSTER_ICON_PREFIX)) {
+      const level = id.replace(CLUSTER_ICON_PREFIX, '');
+      const color = ALERT_COLORS[level];
+      if (color && !this.map.hasImage(id)) {
+        const imageData = this.createClusterIcon(color);
+        this.map.addImage(id, { width: imageData.width, height: imageData.height, data: imageData.data });
+      }
+      return;
+    }
+
+    // Check if it's a multimodal gauge icon request
+    if (id.startsWith(MULTIMODAL_GAUGE_ICON_PREFIX)) {
+      const level = id.replace(MULTIMODAL_GAUGE_ICON_PREFIX, "");
+      const color = ALERT_COLORS[level];
+      if (color && !this.map.hasImage(id)) {
+        const imageData = this.createGaugeIcon(color);
+        if (imageData) {
+          this.map.addImage(id, { width: imageData.width, height: imageData.height, data: imageData.data });
+        }
+      }
+      return;
+    }
+
+    if (!vectorLayerIcons) return;
 
     const icon = vectorLayerIcons.find(i => i.name === id);
     if (icon && !this.map.hasImage(id)) {
@@ -368,6 +549,120 @@ class MapComponent extends Component {
           this.map.addImage(id, iconImage);
         }
       });
+    }
+  };
+
+  // Overlay symbol icon layers on top of multimodal circle layers.
+  // Runs on idle so the circle layers from layer-manager are already added.
+  syncMultimodalIconOverlays = () => {
+    if (!this.map) return;
+    try {
+      const style = this.map.getStyle();
+      if (!style?.layers) return;
+
+      const CLUSTER_ZOOM = 7;
+      const ICON_SUFFIX = '__icon-overlay';
+      const CLUSTER_ICON_SUFFIX = '__cluster-icon-overlay';
+
+      // Find multimodal circle layers
+      const circleLayers = style.layers.filter(
+        (l) =>
+          l.type === 'circle' &&
+          typeof l['source-layer'] === 'string' &&
+          l['source-layer'].includes('multimodal_points')
+      );
+
+      circleLayers.forEach((circleLayer) => {
+        const pointIconId = circleLayer.id + ICON_SUFFIX;
+        const clusterIconId = circleLayer.id + CLUSTER_ICON_SUFFIX;
+
+        // Add individual point icon overlay (z >= cluster_zoom)
+        if (!this.map.getLayer(pointIconId)) {
+          try {
+            this.map.addLayer({
+              id: pointIconId,
+              type: 'symbol',
+              source: circleLayer.source,
+                'source-layer': circleLayer['source-layer'],
+                minzoom: CLUSTER_ZOOM,
+                layout: {
+                'icon-image': buildMultimodalGaugeIconExpression(),
+                'icon-size': [
+                  'interpolate', ['linear'], ['zoom'],
+                  CLUSTER_ZOOM, 0.95,
+                  CLUSTER_ZOOM + 3, 1.15,
+                  14, 1.35
+                ],
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-anchor': 'center',
+              },
+              paint: {
+                'icon-opacity': 0.95,
+              },
+            });
+          } catch (e) { /* layer may already exist or style settling */ }
+        }
+
+        // Add cluster icon overlay (z < cluster_zoom)
+        if (!this.map.getLayer(clusterIconId)) {
+          try {
+            this.map.addLayer({
+              id: clusterIconId,
+              type: 'symbol',
+              source: circleLayer.source,
+              'source-layer': circleLayer['source-layer'],
+              maxzoom: CLUSTER_ZOOM,
+              layout: {
+                'icon-image': buildMultimodalClusterIconImageExpression(),
+                'icon-size': SYMBOL_LAYOUT.clusterIconSize,
+                'icon-allow-overlap': true,
+                'icon-anchor': 'center',
+                'text-field': ['to-string', ['get', 'point_count']],
+                'text-size': SYMBOL_LAYOUT.clusterTextSize,
+                'text-anchor': 'center',
+                'text-offset': [0, 0],
+                'text-allow-overlap': true,
+              },
+              paint: {
+                'text-color': SYMBOL_LAYOUT.clusterTextColor,
+                'text-halo-color': SYMBOL_LAYOUT.clusterTextHaloColor,
+                'text-halo-width': SYMBOL_LAYOUT.clusterTextHaloWidth,
+              },
+            });
+          } catch (e) { /* layer may already exist or style settling */ }
+        }
+      });
+
+      // Hide underlying circles at z >= cluster_zoom where icons show
+      circleLayers.forEach((circleLayer) => {
+        try {
+          // Make circles tiny at high zoom where pin icons display
+          this.map.setPaintProperty(circleLayer.id, 'circle-opacity', [
+            'interpolate', ['linear'], ['zoom'],
+            CLUSTER_ZOOM - 0.5, 0.9,
+            CLUSTER_ZOOM, 0,
+          ]);
+          this.map.setPaintProperty(circleLayer.id, 'circle-stroke-opacity', [
+            'interpolate', ['linear'], ['zoom'],
+            CLUSTER_ZOOM - 0.5, 1,
+            CLUSTER_ZOOM, 0,
+          ]);
+        } catch (e) { /* ignore */ }
+      });
+
+      // Clean up orphan icon overlays (circle layer was removed)
+      const activeCircleIds = new Set(circleLayers.map((l) => l.id));
+      style.layers.forEach((l) => {
+        if (l.id.endsWith(ICON_SUFFIX) || l.id.endsWith(CLUSTER_ICON_SUFFIX)) {
+          const baseId = l.id.replace(ICON_SUFFIX, '').replace(CLUSTER_ICON_SUFFIX, '');
+          if (!activeCircleIds.has(baseId)) {
+            try { this.map.removeLayer(l.id); } catch (e) { /* ignore */ }
+          }
+        }
+      });
+    } catch (e) {
+      // Style may not be ready yet
     }
   };
 
@@ -456,13 +751,12 @@ class MapComponent extends Component {
 
       // Handle missing images on-demand
       this.map.on("styleimagemissing", this.handleStyleImageMissing);
+
+      // Sync icon overlays when map becomes idle (layers are ready)
+      this.map.on("idle", this.syncMultimodalIconOverlays);
     }
 
     this.loadMapImages();
-
-    // add images
-
-    // map.addImage("pulsing-dot", pulsingDot, { pixelRatio: 2 });
   };
 
   checkCompareMapsLoad = () => {

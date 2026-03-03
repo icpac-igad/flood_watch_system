@@ -237,6 +237,7 @@ DECLARE
     tile_bbox_4326 geometry;
     scope_geom geometry;
     effective_geom geometry;
+    whca_countries text[] := ARRAY['Sudan', 'South Sudan', 'Uganda', 'Ethiopia', 'Rwanda'];
     needs_strict_admin0_clip boolean := (
         (region_name IS NOT NULL AND trim(region_name) <> '')
         OR (district_name IS NOT NULL AND trim(district_name) <> '')
@@ -273,6 +274,7 @@ BEGIN
             FROM gha.admin1 a
             WHERE a.geom && effective_geom
               AND ST_Intersects(a.geom, effective_geom)
+              AND a.country = ANY(whca_countries)
         ) AS tile
         WHERE tile.mvt_geom IS NOT NULL;
     ELSIF admin_level = 2 THEN
@@ -292,6 +294,7 @@ BEGIN
             FROM gha.admin2 a
             WHERE a.geom && effective_geom
               AND ST_Intersects(a.geom, effective_geom)
+              AND a.country = ANY(whca_countries)
         ) AS tile
         WHERE tile.mvt_geom IS NOT NULL;
     ELSE
@@ -318,6 +321,7 @@ BEGIN
             FROM gha.admin0 a
             WHERE a.geom && effective_geom
               AND ST_Intersects(a.geom, effective_geom)
+              AND a.country = ANY(whca_countries)
         ) AS tile
         WHERE tile.mvt_geom IS NOT NULL;
     END IF;

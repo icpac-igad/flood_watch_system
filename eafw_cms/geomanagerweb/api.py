@@ -3561,7 +3561,122 @@ def country_inundation_view(request):
     return CountryInundationView.as_view()(request)
 
 
-#Register standard Wagtail API endpoints
+# =============================================================================
+# CAP Alert Draft Creation API
+# =============================================================================
+class CAPDraftCreateView(View):
+    """Create a draft CAP alert from a published expert assessment."""
+
+    @classmethod
+    def as_view(cls, **kwargs):
+        from django.views.decorators.csrf import csrf_exempt
+        return csrf_exempt(super().as_view(**kwargs))
+
+    def post(self, request):
+        import json
+
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            response = JsonResponse({'error': 'Invalid JSON'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        assessment_id = data.get('assessment_id')
+        expires_hours = data.get('expires_hours', 48)
+
+        if not assessment_id:
+            response = JsonResponse({'success': False, 'message': 'assessment_id required'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        try:
+            from home.cap_bridge.creator import create_cap_draft_from_assessment
+            cap_page = create_cap_draft_from_assessment(assessment_id, expires_hours)
+
+            response = JsonResponse({
+                'success': True,
+                'cap_alert_id': cap_page.id,
+                'edit_url': f'/cms-admin/pages/{cap_page.id}/edit/',
+                'message': 'CAP alert draft created',
+            })
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+        except ValueError as e:
+            response = JsonResponse({'success': False, 'message': str(e)}, status=404)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+        except Exception as e:
+            response = JsonResponse({'success': False, 'message': str(e)}, status=500)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+    def options(self, request):
+        response = JsonResponse({})
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
+        return response
+
+
+class CAPForecastDraftView(View):
+    """Create CAP alert drafts from live multimodal forecast data."""
+
+    @classmethod
+    def as_view(cls, **kwargs):
+        from django.views.decorators.csrf import csrf_exempt
+        return csrf_exempt(super().as_view(**kwargs))
+
+    def post(self, request):
+        import json
+
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            response = JsonResponse({'error': 'Invalid JSON'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        country_code = data.get('country_code')  # Optional ISO-2, omit for all countries
+        expires_hours = data.get('expires_hours', 48)
+
+        try:
+            from home.cap_bridge.creator import create_cap_draft_from_forecast
+            results = create_cap_draft_from_forecast(
+                country_code=country_code,
+                expires_hours=expires_hours,
+            )
+
+            if not results:
+                response = JsonResponse({
+                    'success': True,
+                    'message': 'No countries at warning level or above',
+                    'drafts': [],
+                })
+                response['Access-Control-Allow-Origin'] = '*'
+                return response
+
+            response = JsonResponse({
+                'success': True,
+                'message': f'{len(results)} CAP draft(s) created',
+                'drafts': results,
+            })
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+        except Exception as e:
+            response = JsonResponse({'success': False, 'message': str(e)}, status=500)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+    def options(self, request):
+        response = JsonResponse({})
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
+        return response
+
+
+# Register standard Wagtail API endpoints
 try:
     from wagtail.api.v2.views import PagesAPIViewSet
     from wagtail.images.api.v2.views import ImagesAPIViewSet

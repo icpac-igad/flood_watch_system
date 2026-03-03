@@ -8,12 +8,13 @@ import { getCookie } from "@/services/user";
 import Loader from "@/components/ui/loader";
 import Button from "@/components/ui/button";
 
+import CapDraftButton from "./cap-draft-button";
 import "./styles.scss";
 
 const RISK_LEVELS = [
-  { value: "emergency", label: "Emergency", color: ALERT_COLORS.emergency },
-  { value: "alarm", label: "Alarm", color: ALERT_COLORS.alarm },
-  { value: "warning", label: "Warning", color: ALERT_COLORS.warning },
+  { value: "emergency", label: "Extreme", color: ALERT_COLORS.emergency },
+  { value: "alarm", label: "Severe", color: ALERT_COLORS.alarm },
+  { value: "warning", label: "Moderate", color: ALERT_COLORS.warning },
   { value: "watch", label: "Watch", color: ALERT_COLORS.watch || "#2196F3" },
   { value: "normal", label: "Normal", color: ALERT_COLORS.normal },
 ];
@@ -752,6 +753,12 @@ const ExpertAssessmentWidget = ({
         <div className="approval-note">
           Save Draft keeps the report as unapproved. Submit for Review sends it to the draft review queue; admin approval publishes it to the right panel.
         </div>
+
+        {activeReportId && (
+          <div className="cap-draft-section" style={{ marginTop: 12 }}>
+            <CapDraftButton assessmentId={activeReportId} disabled={saveLoading} />
+          </div>
+        )}
 
         {statusMessage && <div className="status-message">{statusMessage}</div>}
       </div>

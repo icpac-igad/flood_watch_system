@@ -3,7 +3,7 @@ import json
 from django.shortcuts import get_object_or_404, render
 from django.utils.translation import gettext as _
 from wagtail.admin.auth import user_passes_test, user_has_any_page_permission
-from wagtail.api.v2.utils import get_full_url
+from geomanager.utils import get_full_url
 from wagtail_modeladmin.helpers import AdminURLHelper
 
 from geomanager.models import Dataset, Category

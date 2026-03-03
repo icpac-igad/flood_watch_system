@@ -22,6 +22,7 @@ from .google_flood import router as google_flood_router
 from .risk import router as risk_router
 from .wrf import router as wrf_router
 from .storylines import router as storylines_router
+from .cap import router as cap_router
 
 router = APIRouter(tags=["v1"])
 
@@ -41,3 +42,4 @@ router.include_router(google_flood_router, prefix="/google-flood", tags=["Google
 router.include_router(risk_router, prefix="/risk", tags=["Risk & Summaries"])
 router.include_router(wrf_router, prefix="/wrf", tags=["WRF Rainfall"])
 router.include_router(storylines_router, prefix="/storylines", tags=["Storylines"])
+router.include_router(cap_router, prefix="/cap", tags=["CAP Alerts"])

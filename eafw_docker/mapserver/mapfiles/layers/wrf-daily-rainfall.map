@@ -1,6 +1,6 @@
 LAYER
     INCLUDE "config/database.map"
-    DATA "geom from (select g.id, r.rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.get_total_rainfall_tiles('%time%') r on g.id = r.id where r.rainfall_mm > 1 and exists (select 1 from gha.admin0 a where a.geom && g.cell and ST_Intersects(g.cell, a.geom))) as subq using unique id using srid=4326"
+    DATA "geom from (select g.id, r.rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.get_total_rainfall_tiles('%time%') r on g.id = r.id where r.rainfall_mm > 1) as subq using unique id using srid=4326"
     MASK "gha_admin_extent_mask"
     INCLUDE "shared/common-layer-properties.map"
     INCLUDE "classifications/wrf-rainfall.classes.map"

@@ -3,7 +3,7 @@ from django.urls import reverse
 from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
-from wagtail.api.v2.utils import get_full_url
+from geomanager.utils import get_full_url
 
 from geomanager.models import Category, VectorLayerIcon, VectorTileLayerIcon, GeomanagerSettings
 from geomanager.serializers import CategorySerializer

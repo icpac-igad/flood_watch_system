@@ -83,8 +83,8 @@ async def _model_geojson(
     elif filter == "emergency":
         filter_sql = f"WHERE daily_avg >= {emergency_threshold}"
 
-    if scope not in ("all", "whca"):
-        raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+    if scope not in ("all", "whca", "project"):
+        raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
     proj_countries = [c.strip() for c in project_countries.split(",") if c.strip()] if project_countries else []
 

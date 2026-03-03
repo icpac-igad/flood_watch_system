@@ -7,36 +7,36 @@
         <div class="partners-container">
             {% if footer and footer.member_countries %}
             <div class="members-group">
-                <h3 class="partners-label" data-default-label="{{ footer.partners_member_countries_title|default:"Partner Countries"|escape }}">{{ footer.partners_member_countries_title|default:"Partner Countries" }}</h3>
-                <div class="member-flags">
-                    {% for block in footer.member_countries|sort_member_countries|unique_member_countries %}
-                    {% with block.value as item %}
-                    {% if item.url %}
-                    <a
-                        href="{{ item.url }}"
-                        target="_blank"
-                        rel="noopener"
-                        class="member-flag"
-                        data-country-code="{{ item.country|upper }}"
-                        data-country-name="{{ item.country|country_name|escape }}"
-                        title="{{ item.country|country_name }}"
-                    >
-                        <img src="https://flagcdn.com/w160/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
-                        <span class="member-flag-name">{{ item.country|country_name }}</span>
-                    </a>
-                    {% else %}
-                    <div
-                        class="member-flag"
-                        data-country-code="{{ item.country|upper }}"
-                        data-country-name="{{ item.country|country_name|escape }}"
-                        title="{{ item.country|country_name }}"
-                    >
-                        <img src="https://flagcdn.com/w160/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
-                        <span class="member-flag-name">{{ item.country|country_name }}</span>
+                <h3 class="partners-label" data-default-label="{{ footer.partners_member_countries_title|default:"Member Countries"|escape }}">{{ footer.partners_member_countries_title|default:"Member Countries" }}</h3>
+                <div class="member-flags-shell">
+                    <div class="member-flags" data-slider-threshold="6">
+                        {% for block in footer.member_countries|sort_member_countries|unique_member_countries %}
+                        {% with block.value as item %}
+                        {% if item.url %}
+                        <a
+                            href="{{ item.url }}"
+                            target="_blank"
+                            rel="noopener"
+                            class="member-flag"
+                            data-country-code="{{ item.country|upper }}"
+                            data-country-name="{{ item.country|country_name|escape }}"
+                            title="{{ item.country|country_name }}"
+                        >
+                            <img src="https://flagcdn.com/w160/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
+                        </a>
+                        {% else %}
+                        <div
+                            class="member-flag"
+                            data-country-code="{{ item.country|upper }}"
+                            data-country-name="{{ item.country|country_name|escape }}"
+                            title="{{ item.country|country_name }}"
+                        >
+                            <img src="https://flagcdn.com/w160/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+                        {% endfor %}
                     </div>
-                    {% endif %}
-                    {% endwith %}
-                    {% endfor %}
                 </div>
             </div>
             {% endif %}

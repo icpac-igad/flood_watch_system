@@ -1,4 +1,4 @@
-import { ALERT_COLORS, DEFAULT_THRESHOLDS } from './multimodal-config';
+import { ALERT_COLORS, DEFAULT_THRESHOLDS, ALERT_ICON_NAMES, CLUSTER_ICON_PREFIX, SYMBOL_LAYOUT } from './multimodal-config';
 import { isTitilerTileUrl } from './stac-tiles';
 import { applyTitilerStyleDefaults } from './titiler-style-presets';
 
@@ -51,6 +51,30 @@ const isMultimodalRenderLayer = (renderLayer = {}, tileUrl = '') => {
   return haystack.includes('multimodal_points') || haystack.includes('multimodal');
 };
 
+export const buildMultimodalIconImageExpression = () => ([
+  'case',
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'emergency'], ALERT_ICON_NAMES.emergency,
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'alarm'], ALERT_ICON_NAMES.alarm,
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'warning'], ALERT_ICON_NAMES.warning,
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'normal'], ALERT_ICON_NAMES.normal,
+  ['>=', MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.emergency], ALERT_ICON_NAMES.emergency,
+  ['>=', MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.alarm], ALERT_ICON_NAMES.alarm,
+  ['>=', MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.warning], ALERT_ICON_NAMES.warning,
+  ALERT_ICON_NAMES.normal,
+]);
+
+export const buildMultimodalClusterIconImageExpression = () => ([
+  'case',
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'emergency'], `${CLUSTER_ICON_PREFIX}emergency`,
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'alarm'], `${CLUSTER_ICON_PREFIX}alarm`,
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'warning'], `${CLUSTER_ICON_PREFIX}warning`,
+  ['==', MULTIMODAL_ALERT_LEVEL_EXPR, 'normal'], `${CLUSTER_ICON_PREFIX}normal`,
+  ['>=', MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.emergency], `${CLUSTER_ICON_PREFIX}emergency`,
+  ['>=', MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.alarm], `${CLUSTER_ICON_PREFIX}alarm`,
+  ['>=', MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.warning], `${CLUSTER_ICON_PREFIX}warning`,
+  `${CLUSTER_ICON_PREFIX}normal`,
+]);
+
 const normalizeMultimodalPointStyling = (layerConfig, tileUrl = '') => {
   const renderLayers = layerConfig?.render?.layers;
   if (!Array.isArray(renderLayers) || renderLayers.length === 0) return layerConfig;
@@ -61,6 +85,8 @@ const normalizeMultimodalPointStyling = (layerConfig, tileUrl = '') => {
     if (!isMultimodalRenderLayer(renderLayer, tileUrl)) return renderLayer;
 
     changed = true;
+    // Keep the circle layer but override colors with our alert expressions.
+    // Symbol icon overlays are added separately by the map component.
     return {
       ...renderLayer,
       paint: {
@@ -183,7 +209,10 @@ const absolutizeRuntimeUrl = (url = '') => {
     const parsed = new URL(normalized);
     const loopbackHosts = new Set(['127.0.0.1', 'localhost', '0.0.0.0', '::1']);
     if (loopbackHosts.has(parsed.hostname)) {
-      return `${origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      // Reconstruct from the raw string to preserve template tokens like {z}/{x}/{y}
+      // (new URL() encodes curly braces in pathname which breaks MapLibre tile templates)
+      const afterOrigin = normalized.slice(parsed.origin.length);
+      return `${origin}${afterOrigin}`;
     }
   } catch (error) {
     return normalized;

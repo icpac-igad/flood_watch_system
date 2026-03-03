@@ -8,11 +8,6 @@
     min-height: calc(100vh - 56px - 200px);
     margin-top: rem(56px);
 
-    @media screen and (min-width: $screen-m) {
-      min-height: calc(100vh - 56px - 200px);
-      margin-top: 0;
-    }
-
     &.-error {
       display: flex;
       justify-content: center;

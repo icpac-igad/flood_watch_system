@@ -18,9 +18,9 @@ import "./global-options.scss";
 // Alert level filter options (no Normal per feedback)
 const ALERT_LEVELS = [
   { value: "all", label: "All Points" },
-  { value: "emergency", label: "Emergency" },
-  { value: "alarm", label: "Alarm" },
-  { value: "warning", label: "Warning" },
+  { value: "emergency", label: "Extreme" },
+  { value: "alarm", label: "Severe" },
+  { value: "warning", label: "Moderate" },
 ];
 
 // Countries to exclude from dropdown (merge into parent country)

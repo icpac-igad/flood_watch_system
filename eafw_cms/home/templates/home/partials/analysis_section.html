@@ -24,7 +24,9 @@
                             data-is-default="{% if category.is_default %}1{% else %}0{% endif %}"
                         >
                             <div class="category-icon">
-                                {% if category.icon_name %}
+                                {% if category.icon_fa_class %}
+                                <i class="category-fa-icon {{ category.icon_fa_class }}" aria-hidden="true"></i>
+                                {% elif category.icon_name %}
                                 <svg class="category-svg-icon" aria-hidden="true">
                                     <use href="#icon-{{ category.icon_name }}"></use>
                                 </svg>
@@ -88,10 +90,6 @@
                     &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors
                 </div>
 
-                <a href="/mapviewer/" class="map-cta-btn">
-                    {% trans "Go to mapviewer" %}
-                    <svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
-                </a>
             </div>
 
             {% if page.map_external_links.all %}
@@ -112,9 +110,9 @@
             <div class="country-section-header">
                 <h2 class="country-section-title" id="country-section-title">{{ page.country_cards_title|default:"Flood Alert Level per Country proportion" }}</h2>
                 <div class="alert-legend-pills">
-                    <span class="alert-pill emergency ui-status-pill">{% trans "Emergency" %}</span>
-                    <span class="alert-pill alarm ui-status-pill">{% trans "Alarm" %}</span>
-                    <span class="alert-pill warning ui-status-pill ui-status-pill--warning">{% trans "Warning" %}</span>
+                    <span class="alert-pill emergency ui-status-pill">{% trans "Extreme" %}</span>
+                    <span class="alert-pill alarm ui-status-pill">{% trans "Severe" %}</span>
+                    <span class="alert-pill warning ui-status-pill ui-status-pill--warning">{% trans "Moderate" %}</span>
                 </div>
             </div>
 

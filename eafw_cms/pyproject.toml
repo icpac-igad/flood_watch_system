@@ -25,13 +25,35 @@ dependencies = [
     "wagtail-metadata==5.0.0",
     "wagtail-adminsortable @ git+https://github.com/wmo-raf/wagtail-admin-sortable.git@master",
     "geomanager",
-    "wagtail>=6.3.6,<6.4",
+    "wagtail>=7.0,<7.1",
     "wagtail-color-panel>=1.4.0",
     "django-countries>=7.6",
     "wagtail-localize>=1.12.2",
     # Google Drive API for multimodal data sync
     "google-api-python-client>=2.100.0",
     "google-auth>=2.25.0",
+    # CAP Composer (Common Alerting Protocol)
+    "cap-composer",
+    "wagtail-modelchooser>=4.0.1",
+    "paho-mqtt>=2.1.0",
+    "xmltodict>=0.14.2",
+    "pdf2image>=1.17.0",
+    "lxml>=5.4.0",
+    "signxml>=4.0.3",
+    "loguru>=0.7.3",
+    "feedparser>=6.0.11",
+    "staticmap==0.5.7",
+    "capvalidator==0.1.0.dev4",
+    "python-magic",
+    "wagtail-newsletter==0.2.2",
+    "mailchimp-marketing==3.0.80",
+    "mrml>=0.2",
+    "djangorestframework-xml",
+    "celery>=5.3.0",
+    "django-celery-beat",
+    "weasyprint>=65.1",
+    "Pygments",
+    "markdown",
 ]
 
 [tool.ruff]
@@ -68,3 +90,4 @@ py-modules = []
 
 [tool.uv.sources]
 geomanager = { path = "./geomanager" }
+cap-composer = { path = "./capcomposer" }

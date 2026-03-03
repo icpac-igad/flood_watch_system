@@ -29,9 +29,9 @@ export const ALERT_COLORS = {
 export const ALERT_LEVEL_ORDER = ["emergency", "alarm", "warning", "normal"];
 
 export const ALERT_LEVEL_LABELS = {
-  emergency: "Emergency",
-  alarm: "Alarm",
-  warning: "Warning",
+  emergency: "Extreme",
+  alarm: "Severe",
+  warning: "Moderate",
   normal: "Normal",
 };
 
@@ -44,6 +44,31 @@ export const ALERT_PRIORITY = {
   warning: 2,
   alarm: 3,
   emergency: 4,
+};
+
+// =============================================================================
+// ICON NAMES - for symbol layer icon-image expressions
+// Must match CMS VectorTileLayerIcon names (loaded via vectorLayerIcons)
+// =============================================================================
+
+export const ALERT_ICON_NAMES = {
+  normal: "normal",
+  warning: "warning",
+  alarm: "alarm",
+  emergency: "emergency",
+};
+
+// Cluster icon names (generated at runtime on canvas)
+export const CLUSTER_ICON_PREFIX = "cluster-";
+
+// Symbol layer layout defaults
+export const SYMBOL_LAYOUT = {
+  pointIconSize: 0.55,
+  clusterIconSize: 0.7,
+  clusterTextSize: 12,
+  clusterTextColor: "#ffffff",
+  clusterTextHaloColor: "rgba(0,0,0,0.7)",
+  clusterTextHaloWidth: 1.2,
 };
 
 // =============================================================================

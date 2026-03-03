@@ -3,7 +3,7 @@ from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from wagtail.api.v2.utils import get_full_url
+from geomanager.utils import get_full_url
 from wagtail.fields import StreamField
 
 from geomanager.blocks import FillVectorLayerBlock, LineVectorLayerBlock

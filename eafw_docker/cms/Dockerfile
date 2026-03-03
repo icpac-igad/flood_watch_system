@@ -49,8 +49,9 @@ RUN mkdir -p /root/.ssh && \
 # Copy dependency files to leverage Docker cache
 COPY ./eafw_cms/pyproject.toml ./eafw_cms/uv.lock ./eafw_cms/build-constraints.txt ./
 
-# Copy the geomanager package (local dependency referenced as path = "./geomanager" in pyproject.toml)
+# Copy local dependency packages (referenced as path in pyproject.toml)
 COPY ./eafw_cms/geomanager ./geomanager
+COPY ./eafw_cms/capcomposer ./capcomposer
 
 # Install dependencies (not the project itself yet)
 RUN --mount=type=ssh \
@@ -69,6 +70,7 @@ RUN uv pip install --python $UV_PROJECT_ENVIRONMENT gunicorn uvicorn
 RUN uv pip install --python $UV_PROJECT_ENVIRONMENT watchdog
 
 ENV GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
+ENV CAP_COMPOSER_PATH=/opt/eafw_cms/capcomposer/src
 RUN mkdir -p $GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR
 
 # copy entrypoint

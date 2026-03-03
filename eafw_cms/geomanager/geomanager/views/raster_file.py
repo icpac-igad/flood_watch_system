@@ -27,7 +27,7 @@ from wagtail.admin.auth import (
     user_has_any_page_permission,
     permission_denied,
 )
-from wagtail.api.v2.utils import get_full_url
+from geomanager.utils import get_full_url
 from wagtail.models import Site
 from wagtail.snippets.permissions import get_permission_name
 from wagtail_modeladmin.helpers import AdminURLHelper

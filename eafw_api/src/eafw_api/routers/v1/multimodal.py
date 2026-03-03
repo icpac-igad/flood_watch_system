@@ -84,6 +84,34 @@ POINT_COUNTRY_CODE_SQL = (
 WHCA_SCOPE_SQL_CONDITION = _HELPERS_WHCA_SCOPE_SQL_CONDITION
 
 
+def _build_project_country_filter(project_countries_csv):
+    """Build a SQL condition from comma-separated ISO-3 or ISO-2 country codes.
+
+    Returns a SQL fragment like:
+        (COALESCE(...) IN ('ET','SD','UG'))
+    filtering control points to the specified countries.
+    Returns empty string if no valid codes provided.
+    """
+    if not project_countries_csv:
+        return ""
+    codes = [c.strip().upper() for c in project_countries_csv.split(",") if c.strip()]
+    if not codes:
+        return ""
+    # Normalize ISO-3 to ISO-2 where possible
+    iso2_codes = []
+    for code in codes:
+        alias = COUNTRY_CODE_ALIASES.get(code)
+        if alias:
+            iso2_codes.append(alias)
+        elif len(code) == 2 and code.isalpha():
+            iso2_codes.append(code)
+        # Skip unrecognized codes
+    if not iso2_codes:
+        return ""
+    codes_sql = ",".join(f"'{c}'" for c in iso2_codes)
+    return f"({POINT_COUNTRY_CODE_SQL}) IN ({codes_sql})"
+
+
 def _normalize_country_code(country: Optional[str]) -> Optional[str]:
     if not country:
         return None
@@ -110,7 +138,7 @@ def _normalize_country_code(country: Optional[str]) -> Optional[str]:
 async def get_multimodal_geojson(
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format (defaults to latest)"),
     filter: Optional[str] = Query("all", description="Filter: all, active, alarm, emergency"),
-    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca, project"),
     country: Optional[str] = Query(None, description="Country name or ISO2 code"),
     country_name: Optional[str] = Query(None, description="Admin0 country name filter"),
     region_name: Optional[str] = Query(None, description="Admin1 region name filter"),
@@ -130,15 +158,18 @@ async def get_multimodal_geojson(
     elif filter == 'emergency':
         filter_sql = f"WHERE daily_avg >= {DEFAULT_EMERGENCY_THRESHOLD}"
 
-    if scope not in ("all", "whca"):
-        raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+    if scope not in ("all", "whca", "project"):
+        raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
     country_name = (country_name or "").strip()
     region_name = (region_name or "").strip()
     district_name = (district_name or "").strip()
     project_countries = (project_countries or "").strip()
     project_country_list = [c.strip() for c in project_countries.split(",") if c.strip()] if project_countries else []
-    has_spatial_filter = bool(country_name or region_name or district_name or project_country_list)
+    # When scope=project, filtering is by country code (fast), not spatial geometry.
+    # Only trigger spatial geometry for admin-level filters (country_name, region, district).
+    use_project_code_filter = scope == "project" and project_country_list
+    has_spatial_filter = bool(country_name or region_name or district_name or (project_country_list and not use_project_code_filter))
 
     # Backward-compatible country filter from legacy `country` query param.
     # If `country_name` is provided, it takes precedence for country-code filtering too.
@@ -150,6 +181,10 @@ async def get_multimodal_geojson(
     point_filters = []
     if scope == "whca":
         point_filters.append(WHCA_SCOPE_SQL_CONDITION)
+    elif use_project_code_filter:
+        pc_filter = _build_project_country_filter(",".join(project_country_list))
+        if pc_filter:
+            point_filters.append(pc_filter)
     if country_code:
         point_filters.append(f"({POINT_COUNTRY_CODE_SQL}) = '{country_code}'")
 
@@ -300,19 +335,24 @@ async def get_multimodal_geojson(
 
 @router.get("/country-summary-with-bounds")
 async def get_country_summary_with_bounds(
-    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca, project"),
+    project_countries: Optional[str] = Query(None, description="Comma-separated ISO-3/ISO-2 country codes for project scope filtering"),
 ):
     """
     Get country summary with alert counts and bounds for homepage mini-map.
     Used by the "Regional Flood Situation" widget.
     """
     async with get_connection() as conn:
-        if scope not in ("all", "whca"):
-            raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+        if scope not in ("all", "whca", "project"):
+            raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
         scope_sql = ""
         if scope == "whca":
             scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
+        elif scope == "project" and project_countries:
+            pc_filter = _build_project_country_filter(project_countries)
+            if pc_filter:
+                scope_sql = f"WHERE {pc_filter}"
 
         # Get latest data date
         latest_date = await conn.fetchval(
@@ -451,8 +491,9 @@ async def get_situation_summary(
     horizon: int = Query(7, description="Days ahead for forecast horizon"),
     date_str: Optional[str] = Query(None, alias="date", description="Data date in YYYY-MM-DD format"),
     forecast_date: Optional[str] = Query(None, description="Alias for date"),
-    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca, project"),
     country: Optional[str] = Query(None, description="Country name or ISO2 code"),
+    project_countries: Optional[str] = Query(None, description="Comma-separated ISO-3/ISO-2 country codes for project scope filtering"),
 ):
     """
     Get situation summary for homepage KPIs and ticker.
@@ -460,12 +501,16 @@ async def get_situation_summary(
     """
     async with get_connection() as conn:
         requested_date = date_str or forecast_date
-        if scope not in ("all", "whca"):
-            raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+        if scope not in ("all", "whca", "project"):
+            raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
         scope_where_sql = ""
         if scope == "whca":
             scope_where_sql = f" AND {WHCA_SCOPE_SQL_CONDITION}"
+        elif scope == "project" and project_countries:
+            pc_filter = _build_project_country_filter(project_countries)
+            if pc_filter:
+                scope_where_sql = f" AND {pc_filter}"
 
         country_code = _normalize_country_code(country)
         if country and not country_code:
@@ -719,7 +764,7 @@ async def get_model_behavior_timeseries(
     lead: int = Query(1, ge=1, le=14, description="Fixed lead time in days for historical comparison"),
     history_days: int = Query(90, ge=7, le=730, description="Historical window in days ending on reference date"),
     forecast_horizon_days: int = Query(14, ge=1, le=30, description="Horizon days for latest-run forecast series"),
-    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca, project"),
 ):
     """
     Fixed-lead model behavior comparison for flood-analysis reports.
@@ -728,8 +773,8 @@ async def get_model_behavior_timeseries(
     1) historical_behavior: fixed lead-time values per target date
     2) current_forecast: latest-run forecast values (separate from historical)
     """
-    if scope not in ("all", "whca"):
-        raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+    if scope not in ("all", "whca", "project"):
+        raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
     country_code = _normalize_country_code(country)
     if country and not country_code:

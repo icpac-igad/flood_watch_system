@@ -72,26 +72,47 @@ const StoryCard = ({ story }) => {
   );
 };
 
-const StorylinesHub = () => {
-  const [storylines, setStorylines] = useState([]);
-  const [loading, setLoading] = useState(true);
+const mergeBySlug = (baseStories, apiStories) => {
+  const bySlug = new Map();
+  [...(baseStories || []), ...(apiStories || [])].forEach((story) => {
+    if (!story?.slug) return;
+    bySlug.set(story.slug, story);
+  });
+  return Array.from(bySlug.values());
+};
+
+const StorylinesHub = ({ initialStorylines = [] }) => {
+  const [storylines, setStorylines] = useState(initialStorylines);
+  const [loading, setLoading] = useState(initialStorylines.length === 0);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchStorylines = async () => {
       try {
         const res = await fetch(`${FASTAPI_API}/storylines/`);
         if (!res.ok) throw new Error(`API returned ${res.status}`);
         const data = await res.json();
-        setStorylines(data.storylines || []);
+        if (cancelled) return;
+        setStorylines((prev) => mergeBySlug(prev, data.storylines || []));
       } catch (err) {
-        setError(err.message);
+        if (cancelled) return;
+        // Keep MDX cards visible even if API is temporarily down.
+        if (initialStorylines.length === 0) {
+          setError(err.message);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
+
     fetchStorylines();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialStorylines.length]);
 
   return (
     <div className="c-storylines-hub">
@@ -139,6 +160,10 @@ const StorylinesHub = () => {
       )}
     </div>
   );
+};
+
+StorylinesHub.defaultProps = {
+  initialStorylines: [],
 };
 
 export default StorylinesHub;

@@ -345,9 +345,9 @@ class MapLegendItem(Orderable):
     alert_level = models.CharField(
         max_length=20,
         choices=[
-            ('emergency', _('Emergency')),
-            ('alarm', _('Alarm')),
-            ('warning', _('Warning')),
+            ('emergency', _('Extreme')),
+            ('alarm', _('Severe')),
+            ('warning', _('Moderate')),
             ('normal', _('Normal')),
         ],
         verbose_name=_("Alert Level"),
@@ -356,7 +356,7 @@ class MapLegendItem(Orderable):
     label = models.CharField(
         max_length=100,
         verbose_name=_("Label"),
-        help_text=_("Display label (e.g., 'Emergency: Extreme flood risk')"),
+        help_text=_("Display label (e.g., 'Extreme: Severe flood risk')"),
     )
     icon = models.ForeignKey(
         "wagtailimages.Image",
@@ -437,6 +437,12 @@ class MapCategory(Orderable):
         on_delete=models.SET_NULL,
         related_name="+",
     )
+    fa_icon_class = models.CharField(
+        max_length=120,
+        blank=True,
+        verbose_name=_("Font Awesome Class"),
+        help_text=_("Optional Font Awesome classes, e.g. 'fa-solid fa-cloud-rain'"),
+    )
     is_active = models.BooleanField(
         default=True,
         verbose_name=_("Active"),
@@ -516,7 +522,7 @@ class MapCategory(Orderable):
         default=list,
         blank=True,
         verbose_name=_("Legend Items"),
-        help_text=_('JSON array of legend items, e.g. [{"label": "Emergency", "color": "#d32f2f"}]'),
+        help_text=_('JSON array of legend items, e.g. [{"label": "Extreme", "color": "#d32f2f"}]'),
     )
 
     panels = [
@@ -524,6 +530,7 @@ class MapCategory(Orderable):
             [
                 FieldPanel("name"),
                 FieldPanel("icon"),
+                FieldPanel("fa_icon_class"),
                 FieldPanel("is_active"),
                 FieldPanel("is_default"),
                 FieldPanel("geomanager_category_id"),
@@ -853,9 +860,9 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
     # Point Filter Mode (controls what points API returns)
     POINT_FILTER_CHOICES = [
         ('all', _('All Points')),
-        ('active', _('Active Points Only (Warning+)')),
-        ('alarm', _('Alarm and Above')),
-        ('emergency', _('Emergency Only')),
+        ('active', _('Active Points Only (Moderate+)')),
+        ('alarm', _('Severe and Above')),
+        ('emergency', _('Extreme Only')),
     ]
     point_filter_mode = models.CharField(
         max_length=20,
@@ -1111,6 +1118,7 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
                 mini_map_categories.append({
                     "key": key,
                     "title": menu_label_by_key.get(key, source_name),
+                    "icon_fa_class": map_category.fa_icon_class or "",
                     "icon_name": linked_category.icon if linked_category and linked_category.icon else "",
                     "icon_image": map_category.icon,
                     "category_id": linked_category.id if linked_category else map_category.geomanager_category_id,
@@ -1129,6 +1137,7 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
                 mini_map_categories.append({
                     "key": key,
                     "title": menu_label_by_key.get(key, linked_category.title),
+                    "icon_fa_class": "",
                     "icon_name": linked_category.icon or "",
                     "icon_image": None,
                     "category_id": linked_category.id,
@@ -1154,8 +1163,8 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
 
         if not mini_map_categories:
             mini_map_categories = [
-                {"key": "multimodal", "title": "Multimodal", "icon_name": "", "icon_image": None, "category_id": "", "is_default": True},
-                {"key": "extreme-rainfall", "title": "Extreme Rainfall", "icon_name": "", "icon_image": None, "category_id": "", "is_default": False},
+                {"key": "multimodal", "title": "Multimodal", "icon_fa_class": "", "icon_name": "", "icon_image": None, "category_id": "", "is_default": True},
+                {"key": "extreme-rainfall", "title": "Extreme Rainfall", "icon_fa_class": "", "icon_name": "", "icon_image": None, "category_id": "", "is_default": False},
             ]
 
         # Build CMS-driven layer configs for JavaScript (keyed by category key)
@@ -1611,18 +1620,18 @@ class MultimodalClusterSettings(BaseGenericSetting):
     # Alert thresholds (discharge in m³/s)
     warning_threshold = models.FloatField(
         default=300.0,
-        verbose_name=_("Warning Threshold (m³/s)"),
-        help_text=_("Daily average discharge above this value triggers Warning level"),
+        verbose_name=_("Moderate Threshold (m³/s)"),
+        help_text=_("Daily average discharge above this value triggers Moderate (Warning) level"),
     )
     alarm_threshold = models.FloatField(
         default=500.0,
-        verbose_name=_("Alarm Threshold (m³/s)"),
-        help_text=_("Daily average discharge above this value triggers Alarm level"),
+        verbose_name=_("Severe Threshold (m³/s)"),
+        help_text=_("Daily average discharge above this value triggers Severe (Alarm) level"),
     )
     emergency_threshold = models.FloatField(
         default=750.0,
-        verbose_name=_("Emergency Threshold (m³/s)"),
-        help_text=_("Daily average discharge above this value triggers Emergency level"),
+        verbose_name=_("Extreme Threshold (m³/s)"),
+        help_text=_("Daily average discharge above this value triggers Extreme (Emergency) level"),
     )
 
     # Alert colors
@@ -1635,20 +1644,20 @@ class MultimodalClusterSettings(BaseGenericSetting):
     warning_color = models.CharField(
         max_length=7,
         default="#ffc107",
-        verbose_name=_("Warning Color"),
-        help_text=_("Color for warning alert level (hex format, e.g., #ffc107)"),
+        verbose_name=_("Moderate Color"),
+        help_text=_("Color for Moderate (Warning) alert level (hex format, e.g., #ffc107)"),
     )
     alarm_color = models.CharField(
         max_length=7,
         default="#ff9800",
-        verbose_name=_("Alarm Color"),
-        help_text=_("Color for alarm alert level (hex format, e.g., #ff9800)"),
+        verbose_name=_("Severe Color"),
+        help_text=_("Color for Severe (Alarm) alert level (hex format, e.g., #ff9800)"),
     )
     emergency_color = models.CharField(
         max_length=7,
         default="#d32f2f",
-        verbose_name=_("Emergency Color"),
-        help_text=_("Color for emergency alert level (hex format, e.g., #d32f2f)"),
+        verbose_name=_("Extreme Color"),
+        help_text=_("Color for Extreme (Emergency) alert level (hex format, e.g., #d32f2f)"),
     )
 
     # Cluster configuration

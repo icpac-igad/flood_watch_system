@@ -109,8 +109,8 @@ const AlertSummaryWidget = ({ params, alertData, loading }) => {
       {/* Note about data */}
       <div className="data-note">
         Based on multi-model ensemble forecast for{" "}
-        {params?.placename || "selected region"}. Thresholds: Warning &ge; {DEFAULT_THRESHOLDS.warning},
-        Alarm &ge; {DEFAULT_THRESHOLDS.alarm}, Emergency &ge; {DEFAULT_THRESHOLDS.emergency} m&sup3;/s.
+        {params?.placename || "selected region"}. Thresholds: Moderate &ge; {DEFAULT_THRESHOLDS.warning},
+        Severe &ge; {DEFAULT_THRESHOLDS.alarm}, Extreme &ge; {DEFAULT_THRESHOLDS.emergency} m&sup3;/s.
       </div>
     </div>
   );
