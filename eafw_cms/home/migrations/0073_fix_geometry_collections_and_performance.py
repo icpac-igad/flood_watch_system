@@ -569,7 +569,7 @@ ANALYZE gha.admin2;
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("home", "0072_seed_cap_settings"),
+        ("home", "0067_rename_whca_site_title_hydromet"),
     ]
 
     operations = [
