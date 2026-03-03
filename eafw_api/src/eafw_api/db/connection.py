@@ -28,6 +28,7 @@ async def create_pool() -> Pool:
             password=settings.database_password,
             min_size=settings.db_pool_min_size,
             max_size=settings.db_pool_max_size,
+            statement_cache_size=0,
         )
     return _pool
 
