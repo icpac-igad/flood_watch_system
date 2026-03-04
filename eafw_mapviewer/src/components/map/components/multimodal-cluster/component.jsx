@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import PropTypes from "prop-types";
 import { connect } from "react-redux";
 
@@ -8,11 +8,10 @@ import { getActiveDatasetsFromState } from "@/components/map/selectors";
 
 // Import shared configuration - single source of truth
 import {
-  DEFAULT_THRESHOLDS,
   ALERT_COLORS,
-  ALERT_PRIORITY,
   calculateAlertLevelFromForecasts,
   getAlertPriority,
+  loadStormIconToMap,
   mergeConfig,
 } from "@/utils/multimodal-config";
 
@@ -22,89 +21,56 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 // Source and layer IDs
 const SOURCE_ID = "multimodal-cluster-source";
 const CLUSTER_LAYER_ID = "multimodal-clusters";
-const CLUSTER_COUNT_LAYER_ID = "multimodal-cluster-count";
 const UNCLUSTERED_LAYER_ID = "multimodal-unclustered-point";
-const GAUGE_ICON_IDS = Object.freeze({
-  emergency: "multimodal-gauge-icon-emergency",
-  alarm: "multimodal-gauge-icon-alarm",
-  warning: "multimodal-gauge-icon-warning",
-  normal: "multimodal-gauge-icon-normal",
+
+// Storm icon IDs per alert level (individual points)
+const STORM_ICON_IDS = Object.freeze({
+  emergency: "storm-icon-emergency",
+  alarm: "storm-icon-alarm",
+  warning: "storm-icon-warning",
+  normal: "storm-icon-normal",
 });
 
-const createGaugeIconCanvas = (color = ALERT_COLORS.normal) => {
-  const canvas = document.createElement("canvas");
-  const size = 48;
-  canvas.width = size;
-  canvas.height = size;
+// Cluster storm icon IDs (bigger, colored by worst alert level)
+const CLUSTER_ICON_IDS = Object.freeze({
+  emergency: "storm-cluster-emergency",
+  alarm: "storm-cluster-alarm",
+  warning: "storm-cluster-warning",
+  normal: "storm-cluster-normal",
+});
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    return { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) };
-  }
+const POINT_ICON_SIZE = 28;
+const CLUSTER_ICON_SIZE = 44;
 
-  const centerX = 24;
-  const centerY = 29;
-  const radius = 12;
-
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  // White halo for contrast.
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 7;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(centerX, centerY);
-  ctx.lineTo(centerX + 8, centerY - 8);
-  ctx.stroke();
-  ctx.fillStyle = "#ffffff";
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, 4.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // CAP color layer.
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(centerX, centerY);
-  ctx.lineTo(centerX + 8, centerY - 8);
-  ctx.stroke();
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, 3.2, 0, Math.PI * 2);
-  ctx.fill();
-
-  const imageData = ctx.getImageData(0, 0, size, size);
-  return { width: size, height: size, data: imageData.data };
-};
-
-const ensureGaugeIcons = (map, colors = ALERT_COLORS) => {
-  Object.entries(GAUGE_ICON_IDS).forEach(([level, iconId]) => {
-    if (map.hasImage(iconId)) {
-      try {
-        map.removeImage(iconId);
-      } catch (error) {
-        // Ignore remove race and continue with fresh add.
-      }
-    }
-    map.addImage(iconId, createGaugeIconCanvas(colors[level] || colors.normal || ALERT_COLORS.normal), {
-      pixelRatio: 2,
-    });
+const ensureStormIcons = async (map, colors = ALERT_COLORS) => {
+  const promises = [];
+  // Individual point icons (small)
+  Object.entries(STORM_ICON_IDS).forEach(([level, iconId]) => {
+    promises.push(loadStormIconToMap(map, iconId, colors[level] || colors.normal, POINT_ICON_SIZE));
   });
+  // Cluster icons (big)
+  Object.entries(CLUSTER_ICON_IDS).forEach(([level, iconId]) => {
+    promises.push(loadStormIconToMap(map, iconId, colors[level] || colors.normal, CLUSTER_ICON_SIZE));
+  });
+  await Promise.all(promises);
 };
 
-const buildGaugeIconExpression = () => [
+const buildStormIconExpression = () => [
   "match",
   ["get", "alert_level"],
-  "emergency", GAUGE_ICON_IDS.emergency,
-  "alarm", GAUGE_ICON_IDS.alarm,
-  "warning", GAUGE_ICON_IDS.warning,
-  GAUGE_ICON_IDS.normal,
+  "emergency", STORM_ICON_IDS.emergency,
+  "alarm", STORM_ICON_IDS.alarm,
+  "warning", STORM_ICON_IDS.warning,
+  STORM_ICON_IDS.normal,
+];
+
+// Pick cluster icon by worst alert level in the cluster
+const buildClusterIconExpression = () => [
+  "case",
+  [">", ["get", "has_emergency"], 0], CLUSTER_ICON_IDS.emergency,
+  [">", ["get", "has_alarm"], 0], CLUSTER_ICON_IDS.alarm,
+  [">", ["get", "has_warning"], 0], CLUSTER_ICON_IDS.warning,
+  CLUSTER_ICON_IDS.normal,
 ];
 
 /**
@@ -150,7 +116,7 @@ const MultimodalClusterLayer = ({
   visible = true,
 }) => {
   const [geojsonData, setGeojsonData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const sourceAddedRef = useRef(false);
 
   // Get selected date from active datasets
@@ -161,6 +127,7 @@ const MultimodalClusterLayer = ({
   }, [activeDatasets]);
 
   const clickHandlerRef = useRef(null);
+  const clusterClickHandlerRef = useRef(null);
   const mouseEnterHandlerRef = useRef(null);
   const mouseLeaveHandlerRef = useRef(null);
 
@@ -238,7 +205,7 @@ const MultimodalClusterLayer = ({
   }, [isEnabled, config.thresholds, selectedDate]);
 
   // Add source and layers to map
-  const addClusterLayers = useCallback(() => {
+  const addClusterLayers = useCallback(async () => {
     if (!map || !geojsonData || sourceAddedRef.current || !isEnabled) return;
 
     const { colors } = config;
@@ -246,29 +213,53 @@ const MultimodalClusterLayer = ({
     // Remove existing source/layers if they exist
     try {
       if (map.getLayer(UNCLUSTERED_LAYER_ID)) map.removeLayer(UNCLUSTERED_LAYER_ID);
-      if (map.getLayer(CLUSTER_COUNT_LAYER_ID)) map.removeLayer(CLUSTER_COUNT_LAYER_ID);
       if (map.getLayer(CLUSTER_LAYER_ID)) map.removeLayer(CLUSTER_LAYER_ID);
       if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
     } catch (e) {
       // Layers may not exist
     }
 
-    // Add GeoJSON source (clustering disabled for now - focus on individual points)
+    // Add GeoJSON source with clustering and worst-alert-level aggregation
     map.addSource(SOURCE_ID, {
       type: "geojson",
       data: geojsonData,
-      cluster: false, // Disabled - focus on individual point coloring first
+      cluster: true,
+      clusterRadius: 40,
+      clusterMaxZoom: 10,
+      clusterProperties: {
+        has_emergency: ["+", ["case", ["==", ["get", "alert_level"], "emergency"], 1, 0]],
+        has_alarm: ["+", ["case", ["==", ["get", "alert_level"], "alarm"], 1, 0]],
+        has_warning: ["+", ["case", ["==", ["get", "alert_level"], "warning"], 1, 0]],
+      },
     });
 
-    ensureGaugeIcons(map, colors);
+    await ensureStormIcons(map, colors);
 
-    // Add individual point layer - same gauge icon, CAP color by alert level.
+    // Cluster layer — big storm icon colored by worst alert level
+    map.addLayer({
+      id: CLUSTER_LAYER_ID,
+      type: "symbol",
+      source: SOURCE_ID,
+      filter: ["has", "point_count"],
+      layout: {
+        "icon-image": buildClusterIconExpression(),
+        "icon-size": 1,
+        "icon-allow-overlap": true,
+        "icon-anchor": "center",
+      },
+      paint: {
+        "icon-opacity": 0.92,
+      },
+    });
+
+    // Individual point layer — small storm icon colored by alert level
     map.addLayer({
       id: UNCLUSTERED_LAYER_ID,
       type: "symbol",
       source: SOURCE_ID,
+      filter: ["!", ["has", "point_count"]],
       layout: {
-        "icon-image": buildGaugeIconExpression(),
+        "icon-image": buildStormIconExpression(),
         "icon-size": [
           "interpolate",
           ["linear"],
@@ -279,6 +270,7 @@ const MultimodalClusterLayer = ({
         ],
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
+        "icon-anchor": "center",
       },
       paint: {
         "icon-opacity": 0.9,
@@ -339,7 +331,24 @@ const MultimodalClusterLayer = ({
 
     map.on("click", UNCLUSTERED_LAYER_ID, clickHandlerRef.current);
 
-    // Cursor handlers
+    // Cluster click handler — zoom to expand
+    clusterClickHandlerRef.current = (e) => {
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: [CLUSTER_LAYER_ID],
+      });
+      if (!features.length) return;
+      const clusterId = features[0].properties.cluster_id;
+      map.getSource(SOURCE_ID).getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err) return;
+        map.easeTo({
+          center: features[0].geometry.coordinates,
+          zoom: zoom,
+        });
+      });
+    };
+    map.on("click", CLUSTER_LAYER_ID, clusterClickHandlerRef.current);
+
+    // Cursor handlers for both layers
     mouseEnterHandlerRef.current = () => {
       map.getCanvas().style.cursor = "pointer";
     };
@@ -347,8 +356,10 @@ const MultimodalClusterLayer = ({
       map.getCanvas().style.cursor = "";
     };
 
-    map.on("mouseenter", UNCLUSTERED_LAYER_ID, mouseEnterHandlerRef.current);
-    map.on("mouseleave", UNCLUSTERED_LAYER_ID, mouseLeaveHandlerRef.current);
+    [UNCLUSTERED_LAYER_ID, CLUSTER_LAYER_ID].forEach((layerId) => {
+      map.on("mouseenter", layerId, mouseEnterHandlerRef.current);
+      map.on("mouseleave", layerId, mouseLeaveHandlerRef.current);
+    });
   }, [map, geojsonData, setMapInteractions, isEnabled, config]);
 
   // Update layer visibility
@@ -357,9 +368,11 @@ const MultimodalClusterLayer = ({
 
     const visibility = visible && isEnabled ? "visible" : "none";
     try {
-      if (map.getLayer(UNCLUSTERED_LAYER_ID)) {
-        map.setLayoutProperty(UNCLUSTERED_LAYER_ID, "visibility", visibility);
-      }
+      [UNCLUSTERED_LAYER_ID, CLUSTER_LAYER_ID].forEach((layerId) => {
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(layerId, "visibility", visibility);
+        }
+      });
     } catch (e) {
       // Layer may not exist yet
     }
@@ -373,15 +386,19 @@ const MultimodalClusterLayer = ({
       if (clickHandlerRef.current) {
         map.off("click", UNCLUSTERED_LAYER_ID, clickHandlerRef.current);
       }
-      if (mouseEnterHandlerRef.current) {
-        map.off("mouseenter", UNCLUSTERED_LAYER_ID, mouseEnterHandlerRef.current);
+      if (clusterClickHandlerRef.current) {
+        map.off("click", CLUSTER_LAYER_ID, clusterClickHandlerRef.current);
       }
-      if (mouseLeaveHandlerRef.current) {
-        map.off("mouseleave", UNCLUSTERED_LAYER_ID, mouseLeaveHandlerRef.current);
-      }
+      [UNCLUSTERED_LAYER_ID, CLUSTER_LAYER_ID].forEach((layerId) => {
+        if (mouseEnterHandlerRef.current) {
+          map.off("mouseenter", layerId, mouseEnterHandlerRef.current);
+        }
+        if (mouseLeaveHandlerRef.current) {
+          map.off("mouseleave", layerId, mouseLeaveHandlerRef.current);
+        }
+      });
 
       if (map.getLayer(UNCLUSTERED_LAYER_ID)) map.removeLayer(UNCLUSTERED_LAYER_ID);
-      if (map.getLayer(CLUSTER_COUNT_LAYER_ID)) map.removeLayer(CLUSTER_COUNT_LAYER_ID);
       if (map.getLayer(CLUSTER_LAYER_ID)) map.removeLayer(CLUSTER_LAYER_ID);
       if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
     } catch (e) {

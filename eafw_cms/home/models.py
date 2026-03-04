@@ -1076,6 +1076,8 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
                     return "multimodal"
                 if "impact" in normalized:
                     return "impact"
+                if "total rainfall" in normalized:
+                    return "total-rainfall"
                 if (
                     "extreme rainfall" in normalized
                     or "heavy rainfall" in normalized
@@ -1088,9 +1090,10 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
             menu_label_by_key = {
                 "multimodal": "Multimodal",
                 "extreme-rainfall": "Extreme Rainfall",
+                "total-rainfall": "Total Rainfall",
                 "impact": "Impact",
             }
-            preferred_order = ["multimodal", "extreme-rainfall"]
+            preferred_order = ["multimodal", "extreme-rainfall", "total-rainfall"]
 
             geomanager_by_id = {cat.id: cat for cat in categories}
             geomanager_by_key = {}
@@ -1127,20 +1130,39 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
                 })
                 seen_keys.add(key)
 
-            # Fallback source: mapviewer categories from geomanager CMS
+            # Fallback source: mapviewer categories from geomanager CMS,
+            # plus hardcoded defaults for minimap-only keys (e.g. total-rainfall)
+            # that may be inactive in the mapviewer but still needed on the homepage.
+            default_icons = {
+                "multimodal": "urban-rural",
+                "extreme-rainfall": "heavy-rain",
+                "total-rainfall": "storm",
+            }
+            # Also check inactive categories for icon lookup
+            all_categories_by_key = {}
+            for cat in Category.objects.filter(public=True).order_by("order"):
+                k = normalize_menu_key(cat.title)
+                if k and k not in all_categories_by_key:
+                    all_categories_by_key[k] = cat
+
             for key in preferred_order:
                 if key in seen_keys:
                     continue
-                linked_category = geomanager_by_key.get(key)
-                if not linked_category:
-                    continue
+                linked_category = all_categories_by_key.get(key)
+                icon_name = ""
+                category_id = ""
+                if linked_category:
+                    icon_name = linked_category.icon or ""
+                    category_id = linked_category.id
+                if not icon_name:
+                    icon_name = default_icons.get(key, "")
                 mini_map_categories.append({
                     "key": key,
-                    "title": menu_label_by_key.get(key, linked_category.title),
+                    "title": menu_label_by_key.get(key, linked_category.title if linked_category else key),
                     "icon_fa_class": "",
-                    "icon_name": linked_category.icon or "",
+                    "icon_name": icon_name,
                     "icon_image": None,
-                    "category_id": linked_category.id,
+                    "category_id": category_id,
                     "is_default": key == "multimodal",
                 })
                 seen_keys.add(key)
@@ -1165,6 +1187,7 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
             mini_map_categories = [
                 {"key": "multimodal", "title": "Multimodal", "icon_fa_class": "", "icon_name": "", "icon_image": None, "category_id": "", "is_default": True},
                 {"key": "extreme-rainfall", "title": "Extreme Rainfall", "icon_fa_class": "", "icon_name": "", "icon_image": None, "category_id": "", "is_default": False},
+                {"key": "total-rainfall", "title": "Total Rainfall", "icon_fa_class": "", "icon_name": "", "icon_image": None, "category_id": "", "is_default": False},
             ]
 
         # Build CMS-driven layer configs for JavaScript (keyed by category key)

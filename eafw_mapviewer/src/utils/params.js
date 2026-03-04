@@ -20,6 +20,9 @@ export const PARAMS_CONFIG = {
     project_countries: '',
     basin_filter: false,
     basin_id: '',
+    // Google Flood defaults: keep extended coverage off unless user opts in.
+    confidence: 'high',
+    extended_coverage: false,
   }
 };
 

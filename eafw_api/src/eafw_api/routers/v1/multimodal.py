@@ -58,6 +58,9 @@ COUNTRY_NAMES = {
     'UN': 'Unknown',
 }
 
+# All IGAD/GHoA member countries (always show even if no forecast data)
+IGAD_MEMBER_CODES = ("ET", "ER", "KE", "UG", "SD", "SS", "TZ", "RW", "BI", "SO", "DJ")
+
 WHCA_COUNTRY_CODES = ("SD", "SS", "UG", "ET", "RW")
 WHCA_COUNTRY_CODES_SQL = ",".join(f"'{code}'" for code in WHCA_COUNTRY_CODES)
 
@@ -444,14 +447,18 @@ async def get_country_summary_with_bounds(
                 cb.north
             FROM country_agg ca
             LEFT JOIN country_bounds cb ON cb.country_code = ca.country_code
-            WHERE ca.emergency > 0 OR ca.alarm > 0 OR ca.warning > 0
             ORDER BY ca.severity_score DESC, ca.emergency DESC, ca.alarm DESC, ca.warning DESC
         """)
 
         countries = []
+        seen_codes = set()
         for row in rows:
             code = row['country_code'] or 'UN'
+            # Skip "Unknown" entries (empty country_code)
+            if code == 'UN':
+                continue
             country_name = COUNTRY_NAMES.get(code, code)
+            seen_codes.add(code)
 
             country_data = {
                 'code': code,
@@ -473,6 +480,42 @@ async def get_country_summary_with_bounds(
                 country_data['bounds'] = None
 
             countries.append(country_data)
+
+        # ISO2 → ISO3 for admin0.gid_0 lookup
+        ISO2_TO_ISO3 = {
+            'ET': 'ETH', 'ER': 'ERI', 'KE': 'KEN', 'UG': 'UGA',
+            'SD': 'SDN', 'SS': 'SSD', 'TZ': 'TZA', 'RW': 'RWA',
+            'BI': 'BDI', 'SO': 'SOM', 'DJ': 'DJI',
+        }
+
+        # Add IGAD member countries that have no forecast data (e.g. Eritrea)
+        for member_code in IGAD_MEMBER_CODES:
+            if member_code in seen_codes:
+                continue
+            iso3 = ISO2_TO_ISO3.get(member_code, member_code)
+            bounds_row = await conn.fetchrow(
+                "SELECT ST_XMin(ST_Envelope(geom)) as west, ST_YMin(ST_Envelope(geom)) as south, "
+                "ST_XMax(ST_Envelope(geom)) as east, ST_YMax(ST_Envelope(geom)) as north "
+                "FROM gha.admin0 WHERE UPPER(gid_0) = $1 LIMIT 1",
+                iso3
+            )
+            bounds = None
+            if bounds_row and bounds_row['west'] is not None:
+                bounds = {
+                    'west': float(bounds_row['west']),
+                    'south': float(bounds_row['south']),
+                    'east': float(bounds_row['east']),
+                    'north': float(bounds_row['north'])
+                }
+            countries.append({
+                'code': member_code,
+                'name': COUNTRY_NAMES.get(member_code, member_code),
+                'emergency': 0,
+                'alarm': 0,
+                'warning': 0,
+                'total_points': 0,
+                'bounds': bounds,
+            })
 
         return {
             'data_date': latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') else str(latest_date),

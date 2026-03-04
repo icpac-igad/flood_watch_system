@@ -63,9 +63,9 @@ export const CLUSTER_ICON_PREFIX = "cluster-";
 
 // Symbol layer layout defaults
 export const SYMBOL_LAYOUT = {
-  pointIconSize: 0.55,
-  clusterIconSize: 0.7,
-  clusterTextSize: 12,
+  pointIconSize: 0.45,
+  clusterIconSize: 0.55,
+  clusterTextSize: 11,
   clusterTextColor: "#ffffff",
   clusterTextHaloColor: "rgba(0,0,0,0.7)",
   clusterTextHaloWidth: 1.2,
@@ -151,12 +151,74 @@ export const getAlertLabel = (level) => {
   return ALERT_LEVEL_LABELS[level?.toLowerCase()] || ALERT_LEVEL_LABELS.normal;
 };
 
-export const buildMultimodalLegendItems = (colors = ALERT_COLORS) =>
-  ALERT_LEVEL_ORDER.map((level) => ({
-    name: getAlertLabel(level),
-    color: colors[level] || ALERT_COLORS[level],
-    level,
-  }));
+// Storm SVG path (cloud with lightning bolt — from Wagtail "storm" icon)
+const STORM_SVG_PATH_D = "M38.98 9.01a8.732 8.732 0 0 0-3.16.58l-.01.005a11.49 11.49 0 0 0-22.823 1.757 5.977 5.977 0 0 0-7.91 6.69l-.007-.002a3.81 3.81 0 0 0-.59-.04 4.5 4.5 0 0 0 0 9h34.5a9.003 9.003 0 0 0 8.83-7.24 9.297 9.297 0 0 0 .17-1.76 8.992 8.992 0 0 0-9-8.99zM28.48 37h-6.293l3.565-5.705a1.5 1.5 0 1 0-2.544-1.59l-5 8A1.5 1.5 0 0 0 19.48 40h6.293l-3.565 5.705a1.5 1.5 0 1 0 2.544 1.59l5-8A1.5 1.5 0 0 0 28.48 37z";
+
+const buildStormSvg = (color = ALERT_COLORS.normal, size = 28) => `
+<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 48 48">
+  <path d="${STORM_SVG_PATH_D}" fill="${color}"/>
+</svg>
+`;
+
+export const getStormIconDataUri = (color = ALERT_COLORS.normal, size = 28) => {
+  const svg = buildStormSvg(color || ALERT_COLORS.normal, size).trim();
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
+
+// Keep pin exports for backward compatibility but they now use storm icon
+export const getAlertPinIconDataUri = (color) => getStormIconDataUri(color, 24);
+
+export const createAlertPinImageData = () => {
+  // Not used for storm SVG approach — kept for API compat
+  return null;
+};
+
+/**
+ * Load a storm SVG icon into a MapLibre map via Image().
+ * @param {object} map - MapLibre map instance
+ * @param {string} iconId - ID for map.addImage()
+ * @param {string} color - Fill color
+ * @param {number} size - Icon size in pixels
+ * @returns {Promise<void>}
+ */
+export const loadStormIconToMap = (map, iconId, color, size = 28) => {
+  return new Promise((resolve) => {
+    if (map.hasImage(iconId)) {
+      try { map.removeImage(iconId); } catch (_) { /* ignore */ }
+    }
+    const img = new Image();
+    img.onload = () => {
+      map.addImage(iconId, img);
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = getStormIconDataUri(color, size);
+  });
+};
+
+export const buildMultimodalLegendItems = (
+  colors = ALERT_COLORS,
+  options = {}
+) => {
+  const { includePinIcon = false, iconWidth = 12, iconHeight = 16 } = options;
+
+  return ALERT_LEVEL_ORDER.map((level) => {
+    const color = colors[level] || ALERT_COLORS[level];
+    const item = {
+      name: getAlertLabel(level),
+      color,
+      level,
+    };
+
+    if (includePinIcon) {
+      item.icon = getAlertPinIconDataUri(color);
+      item.iconWidth = iconWidth;
+      item.iconHeight = iconHeight;
+    }
+
+    return item;
+  });
+};
 
 /**
  * Get priority for an alert level (for cluster aggregation)

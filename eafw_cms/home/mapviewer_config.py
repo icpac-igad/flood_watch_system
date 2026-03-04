@@ -5,26 +5,43 @@ from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from wagtail.api.v2.utils import get_full_url as wagtail_get_full_url
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 from geomanager.models import Category, VectorLayerIcon, VectorTileLayerIcon, GeomanagerSettings, Dataset
 from geomanager.serializers import CategorySerializer, DatasetSerializer
 from home.models import MultimodalClusterSettings
 
 
-def _build_shared_multimodal_legend_config(multimodal_settings=None):
+def _build_shared_multimodal_legend_config(request=None, multimodal_settings=None):
     normal_color = getattr(multimodal_settings, "normal_color", "#b0b0b0")
     warning_color = getattr(multimodal_settings, "warning_color", "#ffc107")
     alarm_color = getattr(multimodal_settings, "alarm_color", "#ff9800")
     emergency_color = getattr(multimodal_settings, "emergency_color", "#d32f2f")
 
+    def _build_pin_icon_data_uri(color):
+        svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">'
+            f'<path d="M12 1.5C7.86 1.5 4.5 4.86 4.5 9c0 5.17 7.5 13.5 7.5 13.5s7.5-8.33 7.5-13.5c0-4.14-3.36-7.5-7.5-7.5z" fill="{color}"/>'
+            "</svg>"
+        )
+        return f"data:image/svg+xml;charset=UTF-8,{quote(svg)}"
+
+    def _item(name, color):
+        return {
+            "name": name,
+            "color": color,
+            "icon": _build_pin_icon_data_uri(color),
+            "iconWidth": 12,
+            "iconHeight": 16,
+        }
+
     return {
         "type": "basic",
         "items": [
-            {"name": "Emergency", "color": emergency_color},
-            {"name": "Alarm", "color": alarm_color},
-            {"name": "Warning", "color": warning_color},
-            {"name": "Normal", "color": normal_color},
+            _item("Emergency", emergency_color),
+            _item("Alarm", alarm_color),
+            _item("Warning", warning_color),
+            _item("Normal", normal_color),
         ],
     }
 
@@ -103,47 +120,82 @@ def get_full_url(request, path):
     return wagtail_get_full_url(request, path)
 
 
-def _build_modular_model_layer_config(request, endpoint_path, multimodal_settings=None):
-    normal_color = getattr(multimodal_settings, "normal_color", "#b0b0b0")
-    warning_color = getattr(multimodal_settings, "warning_color", "#ffc107")
-    alarm_color = getattr(multimodal_settings, "alarm_color", "#ff9800")
-    emergency_color = getattr(multimodal_settings, "emergency_color", "#d32f2f")
+def _build_alert_icon_image_expression(multimodal_settings=None):
+    warning_threshold = float(getattr(multimodal_settings, "warning_threshold", 300) or 300)
+    alarm_threshold = float(getattr(multimodal_settings, "alarm_threshold", 500) or 500)
+    emergency_threshold = float(getattr(multimodal_settings, "emergency_threshold", 750) or 750)
 
+    alert_level_expr = [
+        "downcase",
+        ["to-string", ["coalesce", ["get", "alert_level"], ""]],
+    ]
+    daily_avg_expr = ["to-number", ["coalesce", ["get", "daily_avg"], 0]]
+
+    pin_ids = {
+        "emergency": "multimodal-pin-v2-emergency",
+        "alarm": "multimodal-pin-v2-alarm",
+        "warning": "multimodal-pin-v2-warning",
+        "normal": "multimodal-pin-v2-normal",
+    }
+
+    return [
+        "case",
+        ["==", alert_level_expr, "emergency"], pin_ids["emergency"],
+        ["==", alert_level_expr, "alarm"], pin_ids["alarm"],
+        ["==", alert_level_expr, "warning"], pin_ids["warning"],
+        ["==", alert_level_expr, "normal"], pin_ids["normal"],
+        [">=", daily_avg_expr, emergency_threshold], pin_ids["emergency"],
+        [">=", daily_avg_expr, alarm_threshold], pin_ids["alarm"],
+        [">=", daily_avg_expr, warning_threshold], pin_ids["warning"],
+        pin_ids["normal"],
+    ]
+
+
+def _build_pin_symbol_render(source_layer=None, multimodal_settings=None):
+    symbol_layer = {
+        "type": "symbol",
+        "layout": {
+            "icon-image": _build_alert_icon_image_expression(multimodal_settings),
+            "icon-size": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                3, 0.45,
+                6, 0.55,
+                10, 0.70,
+                14, 0.85,
+            ],
+            "icon-anchor": "bottom",
+            "icon-allow-overlap": True,
+            "icon-ignore-placement": True,
+        },
+        "paint": {
+            "icon-opacity": 0.95,
+        },
+        "metadata": {"position": "top"},
+    }
+    if source_layer:
+        symbol_layer["source-layer"] = source_layer
+
+    return {
+        "layers": [symbol_layer],
+    }
+
+
+def _build_modular_model_layer_config(request, endpoint_path, multimodal_settings=None):
     return {
         "type": "geojson",
         "source": {
             "type": "geojson",
             "data": get_full_url(request, endpoint_path),
         },
-        "render": {
-            "layers": [
-                {
-                    "type": "circle",
-                    "paint": {
-                        "circle-color": [
-                            "match",
-                            ["get", "alert_level"],
-                            "emergency", emergency_color,
-                            "alarm", alarm_color,
-                            "warning", warning_color,
-                            "normal", normal_color,
-                            normal_color,
-                        ],
-                        "circle-radius": 5,
-                        "circle-opacity": 0.85,
-                        "circle-stroke-color": "#ffffff",
-                        "circle-stroke-width": 1.2,
-                    },
-                    "metadata": {"position": "top"},
-                }
-            ]
-        },
+        "render": _build_pin_symbol_render(multimodal_settings=multimodal_settings),
     }
 
 
 def _patch_modular_model_datasets(request, datasets_data, multimodal_settings=None):
     """Patch placeholder model layers to true GeoJSON sources with popup fields."""
-    shared_multimodal_legend = _build_shared_multimodal_legend_config(multimodal_settings)
+    shared_multimodal_legend = _build_shared_multimodal_legend_config(request, multimodal_settings)
 
     overrides = {
         "GeoSFM Flood Forecast": {
@@ -257,6 +309,24 @@ def _patch_modular_model_datasets(request, datasets_data, multimodal_settings=No
         for layer in dataset.get("layers", []):
             if applies_shared_legend:
                 layer["legendConfig"] = shared_multimodal_legend
+
+                # Force non-overridden multimodal provider layers (e.g. Multi Model, Hype)
+                # to use the same balloon/pin symbol style.
+                if not override:
+                    layer_config = layer.get("layerConfig") or {}
+                    source = layer_config.get("source") or {}
+                    source_type = source.get("type")
+                    if source_type in ("vector", "geojson"):
+                        source_layer = None
+                        for render_layer in (layer_config.get("render", {}) or {}).get("layers", []) or []:
+                            if isinstance(render_layer, dict) and render_layer.get("source-layer"):
+                                source_layer = render_layer.get("source-layer")
+                                break
+                        layer_config["render"] = _build_pin_symbol_render(
+                            source_layer=source_layer,
+                            multimodal_settings=multimodal_settings,
+                        )
+                        layer["layerConfig"] = layer_config
 
             if not override:
                 continue

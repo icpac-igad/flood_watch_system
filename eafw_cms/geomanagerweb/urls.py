@@ -12,7 +12,7 @@ from wagtailcache.cache import cache_page
 # Homepage widget APIs are served directly from Django views (DRF-style /api/* paths).
 
 from home.views import map_view, partners_view, flood_analysis_view
-from storylines.views import storylines_hub_view, storyline_detail_view
+
 from home.mapviewer_config import get_mapviewer_config
 from geomanagerweb.api import (
     MultimodalForecastGeoJSONView,
@@ -94,9 +94,6 @@ urlpatterns = [
     path("partners/", partners_view, name="partners"),
     # Flood Analysis report page - renders Next.js flood-analysis page
     path("flood-analysis/", flood_analysis_view, name="flood_analysis"),
-    # Storylines pages - interactive flood event narratives
-    path("storylines/", storylines_hub_view, name="storylines_hub"),
-    path("storylines/<slug:slug>/", storyline_detail_view, name="storyline_detail"),
     path("mapviewer/<str:location_type>/", map_view, name="mapview_location"),
     path("mapviewer/<str:location_type>/<str:adm0>/", map_view, name="mapview_adm0"),
     path("mapviewer/<str:location_type>/<str:adm0>/<str:adm1>/", map_view, name="mapview_adm1"),

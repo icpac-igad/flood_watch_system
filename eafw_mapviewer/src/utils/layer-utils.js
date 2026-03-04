@@ -353,6 +353,10 @@ const WHCA_TILE_REPLACEMENTS = {
   'gha.admin_clipped': { replacement: 'gha.admin_whca' },
   // If project filter was previously active, also allow swapping from project function.
   'gha.admin_by_project': { replacement: 'gha.admin_whca' },
+  // WRF rainfall layers - same function, clipping params appended by pg_tileserv
+  'wrf.get_total_rainfall_tiles': { replacement: 'wrf.get_total_rainfall_tiles' },
+  'wrf.get_extreme_rainfall_tiles': { replacement: 'wrf.get_extreme_rainfall_tiles' },
+  'wrf.get_daily_rainfall_tiles': { replacement: 'wrf.get_daily_rainfall_tiles' },
 };
 
 // =============================================================================
@@ -372,6 +376,10 @@ const ADMIN_TILE_REPLACEMENTS = {
   'gha.admin_whca': { replacement: 'gha.admin_clipped' },
   // Climate layers - inundation history supports admin clipping (same function, just needs params)
   'climate.inundation_history_clipped': { replacement: 'climate.inundation_history_clipped' },
+  // WRF rainfall layers - same function, clipping params appended by pg_tileserv
+  'wrf.get_total_rainfall_tiles': { replacement: 'wrf.get_total_rainfall_tiles' },
+  'wrf.get_extreme_rainfall_tiles': { replacement: 'wrf.get_extreme_rainfall_tiles' },
+  'wrf.get_daily_rainfall_tiles': { replacement: 'wrf.get_daily_rainfall_tiles' },
 };
 
 // =============================================================================
@@ -398,6 +406,10 @@ const PROJECT_TILE_REPLACEMENTS = {
   'gha.admin2': { replacement: 'gha.admin_by_project', params: 'admin_level=2' },
   'gha.admin_clipped': { replacement: 'gha.admin_by_project' },
   'gha.admin_whca': { replacement: 'gha.admin_by_project' },
+  // WRF rainfall layers - same function, clipping params appended by pg_tileserv
+  'wrf.get_total_rainfall_tiles': { replacement: 'wrf.get_total_rainfall_tiles' },
+  'wrf.get_extreme_rainfall_tiles': { replacement: 'wrf.get_extreme_rainfall_tiles' },
+  'wrf.get_daily_rainfall_tiles': { replacement: 'wrf.get_daily_rainfall_tiles' },
 };
 
 const applyBasinFilter = (tileUrl) => {
@@ -726,20 +738,29 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
 
     // If the source was already a filtered function (e.g. gha.admin_clipped),
     // we still need to append admin params even when no swap happened.
+    // WRF rainfall functions accept country_name/project_countries directly
+    const isWrfRainfallLayer =
+      tiles.includes('tileserv/wrf.get_total_rainfall_tiles') ||
+      tiles.includes('tileserv/wrf.get_extreme_rainfall_tiles') ||
+      tiles.includes('tileserv/wrf.get_daily_rainfall_tiles');
+
     const isAlreadyFilteredLayer =
       (isProjectFilterActive && (
         tiles.includes('tileserv/gha.multimodal_points_by_project') ||
-        tiles.includes('tileserv/gha.admin_by_project')
+        tiles.includes('tileserv/gha.admin_by_project') ||
+        isWrfRainfallLayer
       )) ||
       (isWHCAFilterActive && (
         tiles.includes('tileserv/gha.multimodal_points_clustered_whca') ||
         tiles.includes('tileserv/gha.admin_whca') ||
-        tiles.includes('tileserv/gha.admin_clipped')
+        tiles.includes('tileserv/gha.admin_clipped') ||
+        isWrfRainfallLayer
       )) ||
       (isAdminFilterActive && (
         tiles.includes('tileserv/gha.admin_clipped') ||
         tiles.includes('tileserv/gha.multimodal_points_by_admin') ||
-        tiles.includes('tileserv/climate.inundation_history_clipped')
+        tiles.includes('tileserv/climate.inundation_history_clipped') ||
+        isWrfRainfallLayer
       )) ||
       (isBasinFilterActive && tiles.includes('tileserv/gha.multimodal_points_by_basin'));
 

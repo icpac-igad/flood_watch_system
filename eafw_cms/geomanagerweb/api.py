@@ -1330,9 +1330,19 @@ class GoogleFloodGeoJSONView(View):
                             g.status_quality_verified,
                             COALESCE(g.forecasts_json, '[]'::jsonb) AS forecasts,
                             CASE
-                                WHEN g.latest_severity = 'MAJOR_FLOODING' THEN 'emergency'
-                                WHEN g.latest_severity = 'MODERATE_FLOODING' THEN 'alarm'
-                                WHEN g.latest_severity = 'MINOR_FLOODING' THEN 'warning'
+                                -- Prefer explicit Google severity classes when provided.
+                                WHEN UPPER(COALESCE(g.latest_severity, '')) IN ('EXTREME', 'EXTREME_FLOODING', 'MAJOR_FLOODING') THEN 'emergency'
+                                WHEN UPPER(COALESCE(g.latest_severity, '')) IN ('SEVERE', 'DANGER', 'MODERATE_FLOODING') THEN 'alarm'
+                                WHEN UPPER(COALESCE(g.latest_severity, '')) IN ('WARNING', 'WATCH', 'MINOR_FLOODING', 'ALERT') THEN 'warning'
+
+                                -- Fallback to threshold-based classification using forecast discharge.
+                                WHEN g.daily_max IS NOT NULL AND g.threshold_emergency IS NOT NULL AND g.daily_max >= g.threshold_emergency THEN 'emergency'
+                                WHEN g.daily_max IS NOT NULL AND g.threshold_alarm IS NOT NULL AND g.daily_max >= g.threshold_alarm THEN 'alarm'
+                                WHEN g.daily_max IS NOT NULL AND g.threshold_alert IS NOT NULL AND g.daily_max >= g.threshold_alert THEN 'warning'
+
+                                WHEN g.daily_avg IS NOT NULL AND g.threshold_emergency IS NOT NULL AND g.daily_avg >= g.threshold_emergency THEN 'emergency'
+                                WHEN g.daily_avg IS NOT NULL AND g.threshold_alarm IS NOT NULL AND g.daily_avg >= g.threshold_alarm THEN 'alarm'
+                                WHEN g.daily_avg IS NOT NULL AND g.threshold_alert IS NOT NULL AND g.daily_avg >= g.threshold_alert THEN 'warning'
                                 ELSE 'normal'
                             END AS alert_level,
                             g.geom

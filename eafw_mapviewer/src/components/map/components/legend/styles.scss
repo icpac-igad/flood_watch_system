@@ -190,3 +190,53 @@
     }
   }
 }
+
+.c-google-extended-coverage-modal {
+  .modal-content {
+    max-width: rem(560px) !important;
+    width: calc(100vw - rem(40px));
+  }
+
+  .google-extended-coverage-modal-content {
+    h3 {
+      margin: 0 0 rem(14px);
+      font-size: rem(20px);
+      line-height: 1.35;
+      color: #2a2a2a;
+      font-weight: 700;
+    }
+
+    p {
+      margin: 0 0 rem(12px);
+      font-size: rem(14px);
+      line-height: 1.5;
+      color: #4a4a4a;
+    }
+  }
+
+  .google-extended-coverage-modal-actions {
+    margin-top: rem(18px);
+    display: flex;
+    justify-content: flex-end;
+    gap: rem(10px);
+
+    button {
+      border: 0;
+      border-radius: rem(6px);
+      padding: rem(8px) rem(14px);
+      font-size: rem(13px);
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .btn-cancel {
+      background: #e9edf3;
+      color: #2f3a4a;
+    }
+
+    .btn-accept {
+      background: #2b7de9;
+      color: #fff;
+    }
+  }
+}

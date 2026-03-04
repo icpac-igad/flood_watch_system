@@ -7,7 +7,14 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "
 import PropTypes from "prop-types";
 import maplibregl from "maplibre-gl";
 import { CMS_API } from "@/utils/constants";
-import { ALERT_COLORS as SHARED_ALERT_COLORS, ALERT_LEVEL_ORDER, ALERT_LEVEL_LABELS } from "@/utils/multimodal-config";
+import {
+  ALERT_COLORS as SHARED_ALERT_COLORS,
+  ALERT_LEVEL_ORDER,
+  ALERT_LEVEL_LABELS,
+  DEFAULT_THRESHOLDS,
+  createAlertPinImageData,
+  getAlertPinIconDataUri,
+} from "@/utils/multimodal-config";
 import Loader from "@/components/ui/loader";
 
 import "./styles.scss";
@@ -42,6 +49,58 @@ const ISO2_TO_COUNTRY_NAME = {
 
 // Alert level colors - from shared config for consistency
 const ALERT_COLORS = SHARED_ALERT_COLORS;
+const FORECAST_POINT_ICON_PREFIX = "regional-multimodal-pin-";
+const FORECAST_POINT_ICON_IDS = Object.freeze({
+  emergency: `${FORECAST_POINT_ICON_PREFIX}emergency`,
+  alarm: `${FORECAST_POINT_ICON_PREFIX}alarm`,
+  warning: `${FORECAST_POINT_ICON_PREFIX}warning`,
+  normal: `${FORECAST_POINT_ICON_PREFIX}normal`,
+});
+const FORECAST_ALERT_LEVEL_EXPR = [
+  "downcase",
+  ["to-string", ["coalesce", ["get", "alert_level"], ""]],
+];
+const FORECAST_DAILY_AVG_EXPR = ["to-number", ["coalesce", ["get", "daily_avg"], 0]];
+
+const buildForecastPointIconExpression = () => ([
+  "case",
+  ["==", FORECAST_ALERT_LEVEL_EXPR, "emergency"], FORECAST_POINT_ICON_IDS.emergency,
+  ["==", FORECAST_ALERT_LEVEL_EXPR, "alarm"], FORECAST_POINT_ICON_IDS.alarm,
+  ["==", FORECAST_ALERT_LEVEL_EXPR, "warning"], FORECAST_POINT_ICON_IDS.warning,
+  ["==", FORECAST_ALERT_LEVEL_EXPR, "normal"], FORECAST_POINT_ICON_IDS.normal,
+  [">=", FORECAST_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.emergency], FORECAST_POINT_ICON_IDS.emergency,
+  [">=", FORECAST_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.alarm], FORECAST_POINT_ICON_IDS.alarm,
+  [">=", FORECAST_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.warning], FORECAST_POINT_ICON_IDS.warning,
+  FORECAST_POINT_ICON_IDS.normal,
+]);
+
+const ensureForecastPointIcons = (map) => {
+  ALERT_LEVEL_ORDER.forEach((level) => {
+    const iconId = FORECAST_POINT_ICON_IDS[level];
+    const imageData = createAlertPinImageData(ALERT_COLORS[level] || ALERT_COLORS.normal);
+    if (!iconId || !imageData) return;
+
+    if (map.hasImage(iconId)) {
+      try {
+        map.removeImage(iconId);
+      } catch (error) {
+        // Ignore image remove races while the style settles.
+      }
+    }
+
+    map.addImage(iconId, {
+      width: imageData.width,
+      height: imageData.height,
+      data: imageData.data,
+    });
+  });
+};
+
+const ALERT_PIN_LEGEND_ICONS = ALERT_LEVEL_ORDER.reduce((icons, level) => {
+  const color = ALERT_COLORS[level] || ALERT_COLORS.normal;
+  icons[level] = getAlertPinIconDataUri(color);
+  return icons;
+}, {});
 
 // GHA region bounds
 const GHA_BOUNDS = [[21, -12], [52, 23]];
@@ -143,24 +202,30 @@ const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCo
         data: { type: "FeatureCollection", features: [] },
       });
 
-      // Forecast points layer with alert colors
+      ensureForecastPointIcons(map.current);
+
+      // Forecast points layer with multimodal pin icons
       map.current.addLayer({
         id: "forecast-points-layer",
-        type: "circle",
+        type: "symbol",
         source: "forecast-points",
-        paint: {
-          "circle-radius": 5,
-          "circle-color": [
-            "match",
-            ["get", "alert_level"],
-            "emergency", ALERT_COLORS.emergency,
-            "alarm", ALERT_COLORS.alarm,
-            "warning", ALERT_COLORS.warning,
-            "normal", ALERT_COLORS.normal,
-            "#FFC107",
+        layout: {
+          "icon-image": buildForecastPointIconExpression(),
+          "icon-size": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            3, 0.56,
+            7, 0.68,
+            10, 0.82,
+            13, 0.95,
           ],
-          "circle-stroke-width": 1,
-          "circle-stroke-color": "#fff",
+          "icon-anchor": "bottom",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+        paint: {
+          "icon-opacity": 0.96,
         },
       });
 
@@ -261,7 +326,11 @@ const RegionalOverview = memo(({ forecastDate, alertFilter, countrySummary, onCo
             <div className="legend-title">Alert Levels</div>
             {ALERT_LEVEL_ORDER.map((level) => (
               <div key={level} className="legend-item">
-                <span className="legend-dot" style={{ backgroundColor: ALERT_COLORS[level] }} />
+                <img
+                  className="legend-pin"
+                  src={ALERT_PIN_LEGEND_ICONS[level]}
+                  alt={`${ALERT_LEVEL_LABELS[level]} pin`}
+                />
                 {ALERT_LEVEL_LABELS[level]}
               </div>
             ))}
@@ -355,23 +424,29 @@ const CountryDetailView = memo(({ country, forecastDate, alertFilter, onBack }) 
         data: { type: "FeatureCollection", features: [] },
       });
 
+      ensureForecastPointIcons(map.current);
+
       map.current.addLayer({
         id: "forecast-points-layer",
-        type: "circle",
+        type: "symbol",
         source: "forecast-points",
-        paint: {
-          "circle-radius": 6,
-          "circle-color": [
-            "match",
-            ["get", "alert_level"],
-            "emergency", ALERT_COLORS.emergency,
-            "alarm", ALERT_COLORS.alarm,
-            "warning", ALERT_COLORS.warning,
-            "normal", ALERT_COLORS.normal,
-            "#FFC107",
+        layout: {
+          "icon-image": buildForecastPointIconExpression(),
+          "icon-size": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            4, 0.6,
+            7, 0.72,
+            10, 0.86,
+            13, 1.0,
           ],
-          "circle-stroke-width": 1,
-          "circle-stroke-color": "#fff",
+          "icon-anchor": "bottom",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+        paint: {
+          "icon-opacity": 0.96,
         },
       });
 
@@ -426,7 +501,7 @@ const CountryDetailView = memo(({ country, forecastDate, alertFilter, onBack }) 
     }
 
     return () => controller.abort();
-  }, [forecastDate, alertFilter, country.code]);
+  }, [forecastDate, alertFilter, country.code, country.adminPrefix]);
 
   // Fetch inundation data
   useEffect(() => {
@@ -475,7 +550,11 @@ const CountryDetailView = memo(({ country, forecastDate, alertFilter, onBack }) 
             <div className="legend-title">Alert Levels</div>
             {ALERT_LEVEL_ORDER.map((level) => (
               <div key={level} className="legend-item">
-                <span className="legend-dot" style={{ backgroundColor: ALERT_COLORS[level] }} />
+                <img
+                  className="legend-pin"
+                  src={ALERT_PIN_LEGEND_ICONS[level]}
+                  alt={`${ALERT_LEVEL_LABELS[level]} pin`}
+                />
                 {ALERT_LEVEL_LABELS[level]}
               </div>
             ))}

@@ -6,7 +6,7 @@ import debounce from "lodash/debounce";
 import cx from "classnames";
 
 import { trackMapLatLon, trackEvent } from "@/utils/analytics";
-import { ALERT_COLORS, CLUSTER_ICON_PREFIX, SYMBOL_LAYOUT, DEFAULT_THRESHOLDS } from "@/utils/multimodal-config";
+import { ALERT_COLORS, CLUSTER_ICON_PREFIX, SYMBOL_LAYOUT, DEFAULT_THRESHOLDS, loadStormIconToMap } from "@/utils/multimodal-config";
 import { buildMultimodalClusterIconImageExpression } from "@/utils/layer-utils";
 
 import Loader from "@/components/ui/loader";
@@ -38,7 +38,7 @@ import "./styles.scss";
 
 const EXTERNAL_BASEMAP_SOURCE_ID = "__external-basemap-source";
 const EXTERNAL_BASEMAP_LAYER_ID = "__external-basemap-layer";
-const MULTIMODAL_GAUGE_ICON_PREFIX = "multimodal-gauge-";
+const MULTIMODAL_GAUGE_ICON_PREFIX = "multimodal-pin-v2-";
 const MULTIMODAL_GAUGE_ICON_IDS = Object.freeze({
   emergency: `${MULTIMODAL_GAUGE_ICON_PREFIX}emergency`,
   alarm: `${MULTIMODAL_GAUGE_ICON_PREFIX}alarm`,
@@ -387,78 +387,6 @@ class MapComponent extends Component {
     return ctx.getImageData(0, 0, size, size);
   };
 
-  // Generate gauge icon with circular ring around it
-  createGaugeIcon = (color, size = 64) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-
-    const cx = size / 2;
-    const cy = size / 2;
-    const ringRadius = size * 0.32;
-    const gaugeRadius = size * 0.18;
-
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    // Outer white halo ring
-    ctx.beginPath();
-    ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = Math.max(4, size * 0.11);
-    ctx.stroke();
-
-    // CAP colored ring
-    ctx.beginPath();
-    ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(2, size * 0.05);
-    ctx.stroke();
-
-    // Gauge arc
-    ctx.beginPath();
-    ctx.arc(cx, cy + size * 0.05, gaugeRadius, Math.PI, 0, false);
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = Math.max(3, size * 0.08);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(cx, cy + size * 0.05, gaugeRadius, Math.PI, 0, false);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(2, size * 0.05);
-    ctx.stroke();
-
-    // Needle + center pivot
-    const pivotY = cy + size * 0.05;
-    ctx.beginPath();
-    ctx.moveTo(cx, pivotY);
-    ctx.lineTo(cx + size * 0.12, pivotY - size * 0.12);
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = Math.max(3, size * 0.08);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(cx, pivotY);
-    ctx.lineTo(cx + size * 0.12, pivotY - size * 0.12);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(2, size * 0.05);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(cx, pivotY, Math.max(2.2, size * 0.04), 0, Math.PI * 2);
-    ctx.fillStyle = "#ffffff";
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(cx, pivotY, Math.max(1.4, size * 0.025), 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-
-    return ctx.getImageData(0, 0, size, size);
-  };
-
   // Register cluster bubble icons for all alert levels
   loadClusterIcons = () => {
     if (!this.map) return;
@@ -470,23 +398,15 @@ class MapComponent extends Component {
     });
   };
 
-  // Register multimodal gauge icons for all alert levels
-  loadGaugeIcons = () => {
+  // Register multimodal gauge icons as storm SVG icons for all alert levels
+  loadGaugeIcons = async () => {
     if (!this.map) return;
-    Object.entries(ALERT_COLORS).forEach(([level, color]) => {
+    const promises = Object.entries(ALERT_COLORS).map(([level, color]) => {
       const name = MULTIMODAL_GAUGE_ICON_IDS[level];
-      if (!name) return;
-      const imageData = this.createGaugeIcon(color);
-      if (!imageData) return;
-      if (this.map.hasImage(name)) {
-        try {
-          this.map.removeImage(name);
-        } catch (error) {
-          // Ignore race conditions while style is settling.
-        }
-      }
-      this.map.addImage(name, { width: imageData.width, height: imageData.height, data: imageData.data });
+      if (!name) return Promise.resolve();
+      return loadStormIconToMap(this.map, name, color, 48);
     });
+    await Promise.all(promises);
   };
 
   loadMapImages = async () => {
@@ -532,10 +452,7 @@ class MapComponent extends Component {
       const level = id.replace(MULTIMODAL_GAUGE_ICON_PREFIX, "");
       const color = ALERT_COLORS[level];
       if (color && !this.map.hasImage(id)) {
-        const imageData = this.createGaugeIcon(color);
-        if (imageData) {
-          this.map.addImage(id, { width: imageData.width, height: imageData.height, data: imageData.data });
-        }
+        loadStormIconToMap(this.map, id, color, 48);
       }
       return;
     }
@@ -560,7 +477,8 @@ class MapComponent extends Component {
       const style = this.map.getStyle();
       if (!style?.layers) return;
 
-      const CLUSTER_ZOOM = 7;
+      // Always render multimodal points as pin icons (no low-zoom circle fallback).
+      const CLUSTER_ZOOM = 0;
       const ICON_SUFFIX = '__icon-overlay';
       const CLUSTER_ICON_SUFFIX = '__cluster-icon-overlay';
 
@@ -589,13 +507,15 @@ class MapComponent extends Component {
                 'icon-image': buildMultimodalGaugeIconExpression(),
                 'icon-size': [
                   'interpolate', ['linear'], ['zoom'],
-                  CLUSTER_ZOOM, 0.95,
-                  CLUSTER_ZOOM + 3, 1.15,
-                  14, 1.35
+                  0, 0.30,
+                  4, 0.40,
+                  7, 0.50,
+                  10, 0.60,
+                  14, 0.70
                 ],
                 'icon-allow-overlap': true,
                 'icon-ignore-placement': true,
-                'icon-anchor': 'center',
+                'icon-anchor': 'bottom',
               },
               paint: {
                 'icon-opacity': 0.95,

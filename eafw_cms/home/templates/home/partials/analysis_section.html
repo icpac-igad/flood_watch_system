@@ -65,7 +65,7 @@
                     {% endfor %}
                 </div>
 
-                <div class="c-legend legend-{{ page.legend_position|default:'bottom-left' }}">
+                <div class="c-legend legend-{{ page.legend_position|default:'bottom-left' }}" style="display:none">
                     <div class="c-legend-title">{{ page.legend_title|default:"Current Flood Alerts" }}</div>
                     <ul class="c-legend-basic">
                         {% for item in page.map_legend_items.all %}

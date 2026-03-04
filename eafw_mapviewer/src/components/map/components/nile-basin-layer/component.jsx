@@ -44,10 +44,10 @@ const NileBasinLayer = ({ map, paramInteractions }) => {
         type: 'line',
         source: NILE_SOURCE_ID,
         paint: {
-          'line-color': '#032eb0',
-          'line-width': 1.5,
+          'line-color': '#90a4ae',
+          'line-width': 1.2,
           'line-dasharray': [6, 4],
-          'line-opacity': 0.9,
+          'line-opacity': 0.45,
         },
       },
     );
