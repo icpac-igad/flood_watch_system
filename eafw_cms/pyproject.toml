@@ -12,7 +12,7 @@ requires-python = ">=3.11, <3.14"
 dependencies = [
     "channels==4.0.0",
     "daphne==4.0.0",
-    "django==4.2.28",
+    "django==4.2.29",
     "django-cleanup==8.0.0",
     "django-cors-headers==4.3.1",
     "django-deep-translator==1.5.1",

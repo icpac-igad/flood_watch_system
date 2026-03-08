@@ -133,7 +133,9 @@
     "micromatch": "^4.0.8",
     "braces": "^3.0.3",
     "d3-color": "^3.1.0",
-    "glob": "^10.5.0"
+    "glob": "^10.5.0",
+    "immutable": "^4.3.8",
+    "minimatch": "^9.0.7"
   },
   "cacheDirectories": [
     ".next/cache"
