@@ -56,7 +56,7 @@
     "html2canvas": "^1.4.1",
     "iso8601-duration": "^2.1.1",
     "javascript-color-gradient": "^2.4.4",
-    "jspdf": "^2.5.2",
+    "jspdf": "^4.2.0",
     "jszip": "^3.10.1",
     "jszip-utils": "^0.1.0",
     "lodash": "^4.17.21",
@@ -135,7 +135,9 @@
     "d3-color": "^3.1.0",
     "glob": "^10.5.0",
     "immutable": "^4.3.8",
-    "minimatch": "^9.0.7"
+    "minimatch": "^9.0.7",
+    "dompurify": "^3.2.4",
+    "jsondiffpatch": "^0.7.2"
   },
   "cacheDirectories": [
     ".next/cache"
