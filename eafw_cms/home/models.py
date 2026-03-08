@@ -2013,6 +2013,7 @@ class MultimodalDataUpload(models.Model):
         self.save()
 
         try:
+            from django.utils import timezone
             log_lines = []
             log_lines.append(f"Starting processing at {timezone.now()}")
 

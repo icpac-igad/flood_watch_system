@@ -236,6 +236,23 @@ async def get_multimodal_geojson(
         else:
             query_date_sql = "(SELECT MAX(data_date) FROM gha.multimodal_forecasts)"
 
+        forecasts_sql = "'[]'::json" if lite else """COALESCE((
+                        SELECT json_agg(json_build_object(
+                            'date', fc.forecast_date,
+                            'daily_avg', fc.daily_avg,
+                            'daily_max', fc.daily_max,
+                            'daily_min', fc.daily_min,
+                            'GeoSFM', fc.geosfm,
+                            'Floodproof', fc.floodproof,
+                            'Mike_Hydro_RFE', fc.mike_hydro_rfe,
+                            'Mike_Hydro_CHIRP', fc.mike_hydro_chirp,
+                            'Mike_Hydro_IMERG', fc.mike_hydro_imerg
+                        ) ORDER BY fc.forecast_date)
+                        FROM gha.multimodal_forecasts fc, query_params qp
+                        WHERE fc.point_id = cp.point_id
+                          AND fc.data_date = qp.query_date
+                    ), '[]'::json)"""
+
         query = f"""
             WITH query_params AS (
                 SELECT {query_date_sql} as query_date
@@ -272,22 +289,7 @@ async def get_multimodal_geojson(
                     f.mike_hydro_rfe,
                     f.mike_hydro_chirp,
                     f.mike_hydro_imerg,
-                    {"'[]'::json" if lite else """COALESCE((
-                        SELECT json_agg(json_build_object(
-                            'date', fc.forecast_date,
-                            'daily_avg', fc.daily_avg,
-                            'daily_max', fc.daily_max,
-                            'daily_min', fc.daily_min,
-                            'GeoSFM', fc.geosfm,
-                            'Floodproof', fc.floodproof,
-                            'Mike_Hydro_RFE', fc.mike_hydro_rfe,
-                            'Mike_Hydro_CHIRP', fc.mike_hydro_chirp,
-                            'Mike_Hydro_IMERG', fc.mike_hydro_imerg
-                        ) ORDER BY fc.forecast_date)
-                        FROM gha.multimodal_forecasts fc, query_params qp
-                        WHERE fc.point_id = cp.point_id
-                          AND fc.data_date = qp.query_date
-                    ), '[]'::json)"""} as forecasts
+                    {forecasts_sql} as forecasts
                 FROM gha.multimodal_control_points cp
                 {_THRESHOLD_JOIN_SQL}
                 CROSS JOIN query_params qp
