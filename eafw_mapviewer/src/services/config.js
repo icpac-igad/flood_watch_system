@@ -1,4 +1,10 @@
-import { apiRequest } from "@/utils/request";
+import request from "@/utils/request";
+import { FASTAPI_API } from "@/utils/constants";
 
 export const getConfig = () =>
-  apiRequest.get("/mapviewer-config").then((res) => res?.data);
+  request
+    .get(`${FASTAPI_API}/mapviewer-config`, {
+      params: { _ts: Date.now() },
+      headers: { "Cache-Control": "no-cache" },
+    })
+    .then((res) => res?.data);

@@ -343,9 +343,14 @@ def generate_mapcache_xml(
                         )
 
             # Add <dimensions> if specified, allowing for dynamic tile requests (e.g., time, scenario).
-            if "dimensions" in tileset_data or "dimensions" in config["tileset_attrs"]:
-                tileset_dims = tileset_data.get("dimensions", [])
-                tileset_dims.extend(config["tileset_attrs"].get("dimensions", []))
+            # Tilesets with "no_dimensions": true skip all dimensions (useful for static layers).
+            # Tilesets with "own_dimensions_only": true use only their own dimensions, not shared ones.
+            if not tileset_data.get("no_dimensions", False) and (
+                "dimensions" in tileset_data or "dimensions" in config["tileset_attrs"]
+            ):
+                tileset_dims = list(tileset_data.get("dimensions", []))
+                if not tileset_data.get("own_dimensions_only", False):
+                    tileset_dims.extend(config["tileset_attrs"].get("dimensions", []))
                 dimensions_elem = create_element(tileset_elem, "dimensions")
                 for dim_data in tileset_dims:
                     dimension_attribs = {

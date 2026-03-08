@@ -13,6 +13,8 @@ class LegendItem extends React.PureComponent {
     icon: PropTypes.string, // triangle, circle, square, line
     hideIcon: PropTypes.bool,
     iconSource: PropTypes.string,
+    iconWidth: PropTypes.number,
+    iconHeight: PropTypes.number,
   };
 
   static defaultProps = {
@@ -22,10 +24,12 @@ class LegendItem extends React.PureComponent {
     icon: "square",
     hideIcon: false,
     iconSource: "url",
+    iconWidth: null,
+    iconHeight: null,
   };
 
   getIconHtml = (iconName) => {
-    const { name, hideIcon, color, size, icon, iconSource } = this.props;
+    const { name, hideIcon, color, size, icon, iconSource, iconWidth, iconHeight } = this.props;
 
     if (hideIcon) {
       return null;
@@ -77,9 +81,13 @@ class LegendItem extends React.PureComponent {
       );
     }
 
+    const customIconStyle = {};
+    if (iconWidth) customIconStyle.width = `${iconWidth}px`;
+    if (iconHeight) customIconStyle.height = `${iconHeight}px`;
+
     return (
-      <div className="custom-icon">
-        <img src={icon} alt={name} />
+      <div className="custom-icon" style={customIconStyle}>
+        <img src={icon} alt={name} style={{ width: "100%", height: "100%" }} />
       </div>
     );
   };

@@ -3,6 +3,7 @@ LAYER
     TYPE RASTER
     STATUS ON
     DATA "data/return_periods/M6_25y_clipped.tif"
+    MASK "gha_admin_extent_mask"
     PROCESSING "NODATA=0"
     INCLUDE "shared/common-layer-properties.map"
     TYPE RASTER
@@ -19,6 +20,7 @@ LAYER
     TYPE RASTER
     STATUS ON
     DATA "data/return_periods/M6_100y_clipped.tif"
+    MASK "gha_admin_extent_mask"
     PROCESSING "NODATA=0"
     INCLUDE "shared/common-layer-properties.map"
     TYPE RASTER

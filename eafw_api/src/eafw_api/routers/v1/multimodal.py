@@ -9,13 +9,16 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from eafw_api.db import get_connection
+from ._helpers import (
+    resolve_filter_geometry_ewkt,
+    WHCA_SCOPE_SQL_CONDITION as _HELPERS_WHCA_SCOPE_SQL_CONDITION,
+    THRESHOLD_JOIN_SQL as _THRESHOLD_JOIN_SQL,
+    WARNING_SQL as _WARNING_SQL,
+    ALARM_SQL as _ALARM_SQL,
+    EMERGENCY_SQL as _EMERGENCY_SQL,
+)
 
 router = APIRouter()
-
-# Default thresholds (same as CMS defaults)
-DEFAULT_WARNING_THRESHOLD = 300.0
-DEFAULT_ALARM_THRESHOLD = 500.0
-DEFAULT_EMERGENCY_THRESHOLD = 750.0
 
 # Country name to ISO code mapping
 COUNTRY_CODES = {
@@ -54,6 +57,9 @@ COUNTRY_NAMES = {
     'UN': 'Unknown',
 }
 
+# All IGAD/GHoA member countries (always show even if no forecast data)
+IGAD_MEMBER_CODES = ("ET", "ER", "KE", "UG", "SD", "SS", "TZ", "RW", "BI", "SO", "DJ")
+
 WHCA_COUNTRY_CODES = ("SD", "SS", "UG", "ET", "RW")
 WHCA_COUNTRY_CODES_SQL = ",".join(f"'{code}'" for code in WHCA_COUNTRY_CODES)
 
@@ -76,10 +82,36 @@ POINT_COUNTRY_CODE_SQL = (
     "WHERE ST_Within(cp.geom, a0.geom) LIMIT 1), "
     "'UN')"
 )
-WHCA_SCOPE_SQL_CONDITION = (
-    "(COALESCE(cp.whca_selected, FALSE) IS TRUE OR "
-    f"{POINT_COUNTRY_CODE_SQL} IN ({WHCA_COUNTRY_CODES_SQL}))"
-)
+# Use the unified condition from _helpers (includes country-code fallback)
+WHCA_SCOPE_SQL_CONDITION = _HELPERS_WHCA_SCOPE_SQL_CONDITION
+
+
+def _build_project_country_filter(project_countries_csv):
+    """Build a SQL condition from comma-separated ISO-3 or ISO-2 country codes.
+
+    Returns a SQL fragment like:
+        (COALESCE(...) IN ('ET','SD','UG'))
+    filtering control points to the specified countries.
+    Returns empty string if no valid codes provided.
+    """
+    if not project_countries_csv:
+        return ""
+    codes = [c.strip().upper() for c in project_countries_csv.split(",") if c.strip()]
+    if not codes:
+        return ""
+    # Normalize ISO-3 to ISO-2 where possible
+    iso2_codes = []
+    for code in codes:
+        alias = COUNTRY_CODE_ALIASES.get(code)
+        if alias:
+            iso2_codes.append(alias)
+        elif len(code) == 2 and code.isalpha():
+            iso2_codes.append(code)
+        # Skip unrecognized codes
+    if not iso2_codes:
+        return ""
+    codes_sql = ",".join(f"'{c}'" for c in iso2_codes)
+    return f"({POINT_COUNTRY_CODE_SQL}) IN ({codes_sql})"
 
 
 def _normalize_country_code(country: Optional[str]) -> Optional[str]:
@@ -107,46 +139,119 @@ def _normalize_country_code(country: Optional[str]) -> Optional[str]:
 @router.get("/geojson")
 async def get_multimodal_geojson(
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format (defaults to latest)"),
-    filter: Optional[str] = Query("all", description="Filter: all, active, alarm, emergency"),
-    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    filter: Optional[str] = Query(
+        "all",
+        description="Filter: all, active, moderate|warning, severe|alarm, extreme|emergency",
+    ),
+    scope: Optional[str] = Query("all", description="Scope: all, whca, project"),
     country: Optional[str] = Query(None, description="Country name or ISO2 code"),
+    country_name: Optional[str] = Query(None, description="Admin0 country name filter"),
+    region_name: Optional[str] = Query(None, description="Admin1 region name filter"),
+    district_name: Optional[str] = Query(None, description="Admin2 district name filter"),
+    project_countries: Optional[str] = Query(None, description="Comma-separated project country names"),
+    lite: bool = Query(False, description="Lite mode: skip forecast timeseries for faster response (homepage minimap)"),
 ):
     """
     Get multimodal ensemble forecast data as GeoJSON for map display.
     Uses normalized gha.multimodal_control_points and gha.multimodal_forecasts tables.
     """
-    # Build filter SQL based on filter mode
+    # Build filter SQL based on filter mode (uses alert_level computed from per-point thresholds)
+    filter_mode = (filter or "all").strip().lower()
     filter_sql = ""
-    if filter == 'active':
-        filter_sql = f"WHERE daily_avg >= {DEFAULT_WARNING_THRESHOLD}"
-    elif filter == 'alarm':
-        filter_sql = f"WHERE daily_avg >= {DEFAULT_ALARM_THRESHOLD}"
-    elif filter == 'emergency':
-        filter_sql = f"WHERE daily_avg >= {DEFAULT_EMERGENCY_THRESHOLD}"
+    if filter_mode == "active":
+        filter_sql = "WHERE alert_level NOT IN ('normal', 'none')"
+    elif filter_mode in ("moderate", "warning"):
+        filter_sql = (
+            "WHERE alert_level IN "
+            "('warning', 'alarm', 'emergency', 'moderate', 'severe', 'extreme')"
+        )
+    elif filter_mode in ("severe", "alarm"):
+        filter_sql = "WHERE alert_level IN ('alarm', 'emergency', 'severe', 'extreme')"
+    elif filter_mode in ("extreme", "emergency"):
+        filter_sql = "WHERE alert_level IN ('emergency', 'extreme')"
+    elif filter_mode != "all":
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid filter. Use all, active, moderate, severe, or extreme.",
+        )
 
-    if scope not in ("all", "whca"):
-        raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+    if scope not in ("all", "whca", "project"):
+        raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
-    country_code = _normalize_country_code(country)
-    if country and not country_code:
+    country_name = (country_name or "").strip()
+    region_name = (region_name or "").strip()
+    district_name = (district_name or "").strip()
+    project_countries = (project_countries or "").strip()
+    project_country_list = [c.strip() for c in project_countries.split(",") if c.strip()] if project_countries else []
+    # When scope=project, filtering is by country code (fast), not spatial geometry.
+    # Only trigger spatial geometry for admin-level filters (country_name, region, district).
+    use_project_code_filter = scope == "project" and project_country_list
+    has_spatial_filter = bool(country_name or region_name or district_name or (project_country_list and not use_project_code_filter))
+
+    # Backward-compatible country filter from legacy `country` query param.
+    # If `country_name` is provided, it takes precedence for country-code filtering too.
+    country_lookup_value = country_name or country
+    country_code = _normalize_country_code(country_lookup_value)
+    if country and not _normalize_country_code(country):
         raise HTTPException(status_code=400, detail="Invalid country. Use country name or ISO2 code")
 
     point_filters = []
     if scope == "whca":
         point_filters.append(WHCA_SCOPE_SQL_CONDITION)
+    elif use_project_code_filter:
+        pc_filter = _build_project_country_filter(",".join(project_country_list))
+        if pc_filter:
+            point_filters.append(pc_filter)
     if country_code:
         point_filters.append(f"({POINT_COUNTRY_CODE_SQL}) = '{country_code}'")
 
-    point_where_sql = ""
-    if point_filters:
-        point_where_sql = f"WHERE {' AND '.join(point_filters)}"
-
     async with get_connection() as conn:
+        point_filter_params = []
+
+        # Resolve clipping geometry once per request to avoid expensive per-row calls.
+        if has_spatial_filter:
+            clip_geom_ewkt = await resolve_filter_geometry_ewkt(
+                conn,
+                country_name=country_name,
+                region_name=region_name,
+                district_name=district_name,
+                project_countries=project_country_list,
+            )
+
+            # If a spatial filter was requested but no matching geometry exists,
+            # return an empty collection rather than silently dropping the filter.
+            if not clip_geom_ewkt:
+                return {"type": "FeatureCollection", "features": []}
+
+            point_filters.append(f"ST_Within(cp.geom, ST_GeomFromEWKT(${len(point_filter_params) + 1}))")
+            point_filter_params.append(clip_geom_ewkt)
+
+        point_where_sql = ""
+        if point_filters:
+            point_where_sql = f"WHERE {' AND '.join(point_filters)}"
+
         # Determine query date
         if date:
             query_date_sql = f"'{date}'::date"
         else:
             query_date_sql = "(SELECT MAX(data_date) FROM gha.multimodal_forecasts)"
+
+        forecasts_sql = "'[]'::json" if lite else """COALESCE((
+                        SELECT json_agg(json_build_object(
+                            'date', fc.forecast_date,
+                            'daily_avg', fc.daily_avg,
+                            'daily_max', fc.daily_max,
+                            'daily_min', fc.daily_min,
+                            'GeoSFM', fc.geosfm,
+                            'Floodproof', fc.floodproof,
+                            'Mike_Hydro_RFE', fc.mike_hydro_rfe,
+                            'Mike_Hydro_CHIRP', fc.mike_hydro_chirp,
+                            'Mike_Hydro_IMERG', fc.mike_hydro_imerg
+                        ) ORDER BY fc.forecast_date)
+                        FROM gha.multimodal_forecasts fc, query_params qp
+                        WHERE fc.point_id = cp.point_id
+                          AND fc.data_date = qp.query_date
+                    ), '[]'::json)"""
 
         query = f"""
             WITH query_params AS (
@@ -172,9 +277,9 @@ async def get_multimodal_geojson(
                     f.forecast_date,
                     COALESCE(f.daily_avg, 0) as daily_avg,
                     CASE
-                        WHEN COALESCE(f.daily_avg, 0) >= {DEFAULT_EMERGENCY_THRESHOLD} THEN 'emergency'
-                        WHEN COALESCE(f.daily_avg, 0) >= {DEFAULT_ALARM_THRESHOLD} THEN 'alarm'
-                        WHEN COALESCE(f.daily_avg, 0) >= {DEFAULT_WARNING_THRESHOLD} THEN 'warning'
+                        WHEN COALESCE(f.daily_avg, 0) >= {_EMERGENCY_SQL} THEN 'emergency'
+                        WHEN COALESCE(f.daily_avg, 0) >= {_ALARM_SQL} THEN 'alarm'
+                        WHEN COALESCE(f.daily_avg, 0) >= {_WARNING_SQL} THEN 'warning'
                         ELSE 'normal'
                     END as alert_level,
                     f.daily_max,
@@ -184,23 +289,9 @@ async def get_multimodal_geojson(
                     f.mike_hydro_rfe,
                     f.mike_hydro_chirp,
                     f.mike_hydro_imerg,
-                    COALESCE((
-                        SELECT json_agg(json_build_object(
-                            'date', fc.forecast_date,
-                            'daily_avg', fc.daily_avg,
-                            'daily_max', fc.daily_max,
-                            'daily_min', fc.daily_min,
-                            'GeoSFM', fc.geosfm,
-                            'Floodproof', fc.floodproof,
-                            'Mike_Hydro_RFE', fc.mike_hydro_rfe,
-                            'Mike_Hydro_CHIRP', fc.mike_hydro_chirp,
-                            'Mike_Hydro_IMERG', fc.mike_hydro_imerg
-                        ) ORDER BY fc.forecast_date)
-                        FROM gha.multimodal_forecasts fc, query_params qp
-                        WHERE fc.point_id = cp.point_id
-                          AND fc.data_date = qp.query_date
-                    ), '[]'::json) as forecasts
+                    {forecasts_sql} as forecasts
                 FROM gha.multimodal_control_points cp
+                {_THRESHOLD_JOIN_SQL}
                 CROSS JOIN query_params qp
                 CROSS JOIN first_forecast ff
                 LEFT JOIN gha.multimodal_forecasts f
@@ -243,7 +334,10 @@ async def get_multimodal_geojson(
             {filter_sql}
         """
 
-        row = await conn.fetchrow(query)
+        if point_filter_params:
+            row = await conn.fetchrow(query, *point_filter_params)
+        else:
+            row = await conn.fetchrow(query)
 
         if not row or not row['geojson']:
             raise HTTPException(status_code=404, detail="No forecast data available")
@@ -261,19 +355,24 @@ async def get_multimodal_geojson(
 
 @router.get("/country-summary-with-bounds")
 async def get_country_summary_with_bounds(
-    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca, project"),
+    project_countries: Optional[str] = Query(None, description="Comma-separated ISO-3/ISO-2 country codes for project scope filtering"),
 ):
     """
     Get country summary with alert counts and bounds for homepage mini-map.
     Used by the "Regional Flood Situation" widget.
     """
     async with get_connection() as conn:
-        if scope not in ("all", "whca"):
-            raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+        if scope not in ("all", "whca", "project"):
+            raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
         scope_sql = ""
         if scope == "whca":
             scope_sql = f"WHERE {WHCA_SCOPE_SQL_CONDITION}"
+        elif scope == "project" and project_countries:
+            pc_filter = _build_project_country_filter(project_countries)
+            if pc_filter:
+                scope_sql = f"WHERE {pc_filter}"
 
         # Get latest data date
         latest_date = await conn.fetchval(
@@ -299,8 +398,15 @@ async def get_country_summary_with_bounds(
                 SELECT
                     cp.point_id,
                     ({POINT_COUNTRY_CODE_SQL}) as country_code,
-                    COALESCE(f.daily_avg, 0) as daily_avg
+                    COALESCE(f.daily_avg, 0) as daily_avg,
+                    CASE
+                        WHEN COALESCE(f.daily_avg, 0) >= {_EMERGENCY_SQL} THEN 'emergency'
+                        WHEN COALESCE(f.daily_avg, 0) >= {_ALARM_SQL} THEN 'alarm'
+                        WHEN COALESCE(f.daily_avg, 0) >= {_WARNING_SQL} THEN 'warning'
+                        ELSE 'normal'
+                    END as risk_level
                 FROM gha.multimodal_control_points cp
+                {_THRESHOLD_JOIN_SQL}
                 CROSS JOIN query_params qp
                 CROSS JOIN first_forecast ff
                 LEFT JOIN gha.multimodal_forecasts f
@@ -308,19 +414,6 @@ async def get_country_summary_with_bounds(
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
                 {scope_sql}
-            ),
-            point_risk AS (
-                SELECT
-                    point_id,
-                    country_code,
-                    daily_avg,
-                    CASE
-                        WHEN daily_avg >= {DEFAULT_EMERGENCY_THRESHOLD} THEN 'emergency'
-                        WHEN daily_avg >= {DEFAULT_ALARM_THRESHOLD} THEN 'alarm'
-                        WHEN daily_avg >= {DEFAULT_WARNING_THRESHOLD} THEN 'warning'
-                        ELSE 'normal'
-                    END as risk_level
-                FROM point_data
             ),
             country_agg AS (
                 SELECT
@@ -332,7 +425,7 @@ async def get_country_summary_with_bounds(
                     SUM(CASE WHEN risk_level = 'emergency' THEN 100 ELSE 0 END) +
                     SUM(CASE WHEN risk_level = 'alarm' THEN 10 ELSE 0 END) +
                     SUM(CASE WHEN risk_level = 'warning' THEN 1 ELSE 0 END) as severity_score
-                FROM point_risk
+                FROM point_data
                 GROUP BY country_code
             ),
             country_bounds AS (
@@ -365,14 +458,28 @@ async def get_country_summary_with_bounds(
                 cb.north
             FROM country_agg ca
             LEFT JOIN country_bounds cb ON cb.country_code = ca.country_code
-            WHERE ca.emergency > 0 OR ca.alarm > 0 OR ca.warning > 0
             ORDER BY ca.severity_score DESC, ca.emergency DESC, ca.alarm DESC, ca.warning DESC
         """)
 
+        # Determine which countries to include based on scope
+        if scope == "whca":
+            allowed_codes = set(WHCA_COUNTRY_CODES)
+        elif scope == "project" and project_countries:
+            allowed_codes = set(c.strip().upper() for c in project_countries.split(",") if c.strip())
+            allowed_codes = {COUNTRY_CODE_ALIASES.get(c, c) for c in allowed_codes}
+        else:
+            allowed_codes = None  # no filter
+
         countries = []
+        seen_codes = set()
         for row in rows:
             code = row['country_code'] or 'UN'
+            if code == 'UN':
+                continue
+            if allowed_codes and code not in allowed_codes:
+                continue
             country_name = COUNTRY_NAMES.get(code, code)
+            seen_codes.add(code)
 
             country_data = {
                 'code': code,
@@ -395,15 +502,54 @@ async def get_country_summary_with_bounds(
 
             countries.append(country_data)
 
+        # ISO2 → ISO3 for admin0.gid_0 lookup
+        ISO2_TO_ISO3 = {
+            'ET': 'ETH', 'ER': 'ERI', 'KE': 'KEN', 'UG': 'UGA',
+            'SD': 'SDN', 'SS': 'SSD', 'TZ': 'TZA', 'RW': 'RWA',
+            'BI': 'BDI', 'SO': 'SOM', 'DJ': 'DJI',
+        }
+
+        # Add member countries that have no forecast data (e.g. Eritrea)
+        # When scope is active, only pad with countries in that scope
+        if scope == "whca":
+            pad_codes = WHCA_COUNTRY_CODES
+        elif scope == "project" and project_countries:
+            pad_codes = tuple(c.strip().upper()[:2] for c in project_countries.split(",") if c.strip())
+        else:
+            pad_codes = IGAD_MEMBER_CODES
+        for member_code in pad_codes:
+            if member_code in seen_codes:
+                continue
+            iso3 = ISO2_TO_ISO3.get(member_code, member_code)
+            bounds_row = await conn.fetchrow(
+                "SELECT ST_XMin(ST_Envelope(geom)) as west, ST_YMin(ST_Envelope(geom)) as south, "
+                "ST_XMax(ST_Envelope(geom)) as east, ST_YMax(ST_Envelope(geom)) as north "
+                "FROM gha.admin0 WHERE UPPER(gid_0) = $1 LIMIT 1",
+                iso3
+            )
+            bounds = None
+            if bounds_row and bounds_row['west'] is not None:
+                bounds = {
+                    'west': float(bounds_row['west']),
+                    'south': float(bounds_row['south']),
+                    'east': float(bounds_row['east']),
+                    'north': float(bounds_row['north'])
+                }
+            countries.append({
+                'code': member_code,
+                'name': COUNTRY_NAMES.get(member_code, member_code),
+                'emergency': 0,
+                'alarm': 0,
+                'warning': 0,
+                'total_points': 0,
+                'bounds': bounds,
+            })
+
         return {
             'data_date': latest_date.strftime('%Y-%m-%d') if hasattr(latest_date, 'strftime') else str(latest_date),
             'scope': scope,
             'countries': countries,
-            'thresholds': {
-                'warning': DEFAULT_WARNING_THRESHOLD,
-                'alarm': DEFAULT_ALARM_THRESHOLD,
-                'emergency': DEFAULT_EMERGENCY_THRESHOLD,
-            }
+            'thresholds': 'per-point (gha.point_alert_thresholds)',
         }
 
 
@@ -412,8 +558,9 @@ async def get_situation_summary(
     horizon: int = Query(7, description="Days ahead for forecast horizon"),
     date_str: Optional[str] = Query(None, alias="date", description="Data date in YYYY-MM-DD format"),
     forecast_date: Optional[str] = Query(None, description="Alias for date"),
-    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca, project"),
     country: Optional[str] = Query(None, description="Country name or ISO2 code"),
+    project_countries: Optional[str] = Query(None, description="Comma-separated ISO-3/ISO-2 country codes for project scope filtering"),
 ):
     """
     Get situation summary for homepage KPIs and ticker.
@@ -421,12 +568,16 @@ async def get_situation_summary(
     """
     async with get_connection() as conn:
         requested_date = date_str or forecast_date
-        if scope not in ("all", "whca"):
-            raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+        if scope not in ("all", "whca", "project"):
+            raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
         scope_where_sql = ""
         if scope == "whca":
             scope_where_sql = f" AND {WHCA_SCOPE_SQL_CONDITION}"
+        elif scope == "project" and project_countries:
+            pc_filter = _build_project_country_filter(project_countries)
+            if pc_filter:
+                scope_where_sql = f" AND {pc_filter}"
 
         country_code = _normalize_country_code(country)
         if country and not country_code:
@@ -477,8 +628,15 @@ async def get_situation_summary(
                 SELECT
                     cp.point_id,
                     ({POINT_COUNTRY_CODE_SQL}) as country_code,
-                    COALESCE(f.daily_avg, 0) as daily_avg
+                    COALESCE(f.daily_avg, 0) as daily_avg,
+                    CASE
+                        WHEN COALESCE(f.daily_avg, 0) >= {_EMERGENCY_SQL} THEN 'emergency'
+                        WHEN COALESCE(f.daily_avg, 0) >= {_ALARM_SQL} THEN 'alarm'
+                        WHEN COALESCE(f.daily_avg, 0) >= {_WARNING_SQL} THEN 'warning'
+                        ELSE 'normal'
+                    END as risk_level
                 FROM gha.multimodal_control_points cp
+                {_THRESHOLD_JOIN_SQL}
                 CROSS JOIN query_params qp
                 CROSS JOIN first_forecast ff
                 LEFT JOIN gha.multimodal_forecasts f
@@ -487,40 +645,28 @@ async def get_situation_summary(
                     AND f.forecast_date = ff.forecast_date
                 WHERE 1=1 {scope_where_sql} {country_where_sql}
             ),
-            risk_levels AS (
-                SELECT
-                    point_id,
-                    country_code,
-                    daily_avg,
-                    CASE
-                        WHEN daily_avg >= {DEFAULT_EMERGENCY_THRESHOLD} THEN 'emergency'
-                        WHEN daily_avg >= {DEFAULT_ALARM_THRESHOLD} THEN 'alarm'
-                        WHEN daily_avg >= {DEFAULT_WARNING_THRESHOLD} THEN 'warning'
-                        ELSE 'normal'
-                    END as risk_level
-                FROM point_data
-            ),
             risk_by_date AS (
                 SELECT
                     mf.forecast_date,
                     CASE
-                        WHEN mf.daily_avg >= {DEFAULT_EMERGENCY_THRESHOLD} THEN 'emergency'
-                        WHEN mf.daily_avg >= {DEFAULT_ALARM_THRESHOLD} THEN 'alarm'
-                        WHEN mf.daily_avg >= {DEFAULT_WARNING_THRESHOLD} THEN 'warning'
+                        WHEN COALESCE(mf.daily_avg, 0) >= {_EMERGENCY_SQL} THEN 'emergency'
+                        WHEN COALESCE(mf.daily_avg, 0) >= {_ALARM_SQL} THEN 'alarm'
+                        WHEN COALESCE(mf.daily_avg, 0) >= {_WARNING_SQL} THEN 'warning'
                         ELSE 'normal'
                     END as risk_level
                 FROM gha.multimodal_forecasts mf
                 JOIN gha.multimodal_control_points cp ON cp.point_id = mf.point_id
+                {_THRESHOLD_JOIN_SQL}
                 CROSS JOIN query_params qp
                 WHERE mf.data_date = qp.query_date
                 {scope_where_sql} {country_where_sql}
             )
             SELECT
-                (SELECT COUNT(*) FROM risk_levels WHERE risk_level = 'emergency') as emergency_count,
-                (SELECT COUNT(*) FROM risk_levels WHERE risk_level = 'alarm') as alarm_count,
-                (SELECT COUNT(*) FROM risk_levels WHERE risk_level = 'warning') as warning_count,
-                (SELECT COUNT(*) FROM risk_levels WHERE risk_level = 'normal') as normal_count,
-                (SELECT COUNT(*) FROM risk_levels) as total_points,
+                (SELECT COUNT(*) FROM point_data WHERE risk_level = 'emergency') as emergency_count,
+                (SELECT COUNT(*) FROM point_data WHERE risk_level = 'alarm') as alarm_count,
+                (SELECT COUNT(*) FROM point_data WHERE risk_level = 'warning') as warning_count,
+                (SELECT COUNT(*) FROM point_data WHERE risk_level = 'normal') as normal_count,
+                (SELECT COUNT(*) FROM point_data) as total_points,
                 (
                     SELECT forecast_date
                     FROM risk_by_date
@@ -546,8 +692,15 @@ async def get_situation_summary(
                 SELECT
                     cp.point_id,
                     ({POINT_COUNTRY_CODE_SQL}) as country_code,
-                    COALESCE(f.daily_avg, 0) as daily_avg
+                    COALESCE(f.daily_avg, 0) as daily_avg,
+                    CASE
+                        WHEN COALESCE(f.daily_avg, 0) >= {_EMERGENCY_SQL} THEN 'emergency'
+                        WHEN COALESCE(f.daily_avg, 0) >= {_ALARM_SQL} THEN 'alarm'
+                        WHEN COALESCE(f.daily_avg, 0) >= {_WARNING_SQL} THEN 'warning'
+                        ELSE 'normal'
+                    END as risk_level
                 FROM gha.multimodal_control_points cp
+                {_THRESHOLD_JOIN_SQL}
                 CROSS JOIN query_params qp
                 CROSS JOIN first_forecast ff
                 LEFT JOIN gha.multimodal_forecasts f
@@ -555,18 +708,6 @@ async def get_situation_summary(
                     AND f.data_date = qp.query_date
                     AND f.forecast_date = ff.forecast_date
                 WHERE 1=1 {scope_where_sql} {country_where_sql}
-            ),
-            risk_levels AS (
-                SELECT
-                    point_id,
-                    country_code,
-                    CASE
-                        WHEN daily_avg >= {DEFAULT_EMERGENCY_THRESHOLD} THEN 'emergency'
-                        WHEN daily_avg >= {DEFAULT_ALARM_THRESHOLD} THEN 'alarm'
-                        WHEN daily_avg >= {DEFAULT_WARNING_THRESHOLD} THEN 'warning'
-                        ELSE 'normal'
-                    END as risk_level
-                FROM point_data
             )
             SELECT
                 country_code,
@@ -574,7 +715,7 @@ async def get_situation_summary(
                 SUM(CASE WHEN risk_level = 'alarm' THEN 1 ELSE 0 END) as alarm,
                 SUM(CASE WHEN risk_level = 'warning' THEN 1 ELSE 0 END) as warning,
                 COUNT(*) as total
-            FROM risk_levels
+            FROM point_data
             WHERE risk_level != 'normal'
             GROUP BY country_code
             HAVING SUM(CASE WHEN risk_level IN ('emergency', 'alarm', 'warning') THEN 1 ELSE 0 END) > 0
@@ -611,11 +752,7 @@ async def get_situation_summary(
                 },
                 'peak_day': str(row['peak_day']) if row['peak_day'] else None,
                 'country_breakdown': country_breakdown,
-                'thresholds': {
-                    'warning': DEFAULT_WARNING_THRESHOLD,
-                    'alarm': DEFAULT_ALARM_THRESHOLD,
-                    'emergency': DEFAULT_EMERGENCY_THRESHOLD,
-                }
+                'thresholds': 'per-point (gha.point_alert_thresholds)',
             }
         else:
             summary = {
@@ -631,11 +768,7 @@ async def get_situation_summary(
                 },
                 'peak_day': None,
                 'country_breakdown': [],
-                'thresholds': {
-                    'warning': DEFAULT_WARNING_THRESHOLD,
-                    'alarm': DEFAULT_ALARM_THRESHOLD,
-                    'emergency': DEFAULT_EMERGENCY_THRESHOLD,
-                }
+                'thresholds': 'per-point (gha.point_alert_thresholds)',
             }
 
         return summary
@@ -680,7 +813,7 @@ async def get_model_behavior_timeseries(
     lead: int = Query(1, ge=1, le=14, description="Fixed lead time in days for historical comparison"),
     history_days: int = Query(90, ge=7, le=730, description="Historical window in days ending on reference date"),
     forecast_horizon_days: int = Query(14, ge=1, le=30, description="Horizon days for latest-run forecast series"),
-    scope: Optional[str] = Query("all", description="Scope: all, whca"),
+    scope: Optional[str] = Query("all", description="Scope: all, whca, project"),
 ):
     """
     Fixed-lead model behavior comparison for flood-analysis reports.
@@ -689,8 +822,8 @@ async def get_model_behavior_timeseries(
     1) historical_behavior: fixed lead-time values per target date
     2) current_forecast: latest-run forecast values (separate from historical)
     """
-    if scope not in ("all", "whca"):
-        raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+    if scope not in ("all", "whca", "project"):
+        raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
     country_code = _normalize_country_code(country)
     if country and not country_code:
@@ -859,11 +992,7 @@ async def get_model_behavior_timeseries(
             "selected_points_count": selected_points_count,
             "historical_behavior": historical_behavior,
             "current_forecast": current_forecast,
-            "thresholds": {
-                "warning": DEFAULT_WARNING_THRESHOLD,
-                "alarm": DEFAULT_ALARM_THRESHOLD,
-                "emergency": DEFAULT_EMERGENCY_THRESHOLD,
-            },
+            "thresholds": "per-point (gha.point_alert_thresholds)",
         }
 
 

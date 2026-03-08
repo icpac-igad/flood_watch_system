@@ -1,12 +1,12 @@
 @import '@/styles/settings.scss';
 
-$map-menu-items-size: rem(82px);
+$map-menu-items-size: rem(76px);
 
 .c-map-menu-tile {
   position: relative;
   width: 100%;
   max-height: $map-menu-items-size;
-  height: rem(82px);
+  height: rem(76px);
 
   &.active {
     background-color: $white;
@@ -24,7 +24,7 @@ $map-menu-items-size: rem(82px);
     align-items: center;
     width: 100%;
     height: 100%;
-    font-size: 12px;
+    font-size: 10px;
     line-height: 0.91;
     letter-spacing: -0.2px;
     color: $greyish-brown;
@@ -53,10 +53,10 @@ $map-menu-items-size: rem(82px);
     }
 
     .tile-icon {
-      width: rem(33px);
-      height: rem(33px);
+      width: rem(28px);
+      height: rem(28px);
       fill: $greyish-brown;
-      margin-bottom: rem(7px);
+      margin-bottom: rem(6px);
     }
   }
 

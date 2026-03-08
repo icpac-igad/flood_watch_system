@@ -9,7 +9,7 @@ from wagtail.admin.panels import (
     ObjectList,
     MultiFieldPanel,
 )
-from wagtail.api.v2.utils import get_full_url
+from geomanager.utils import get_full_url
 from wagtail.contrib.settings.models import BaseSiteSetting
 from wagtail.contrib.settings.registry import register_setting
 from wagtail.fields import StreamField

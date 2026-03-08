@@ -911,7 +911,7 @@ const MultiModelChart = ({
               stroke="#ffc107"
               strokeDasharray="4 4"
               strokeWidth={1}
-              label={{ value: "Warning", position: "right", fontSize: 9, fill: "#b38400" }}
+              label={{ value: "Moderate", position: "right", fontSize: 9, fill: "#b38400" }}
             />
           )}
           {thresholdLines.alarm !== null && (
@@ -921,7 +921,7 @@ const MultiModelChart = ({
               stroke="#ff9800"
               strokeDasharray="4 4"
               strokeWidth={1}
-              label={{ value: "Alarm", position: "right", fontSize: 9, fill: "#c66a00" }}
+              label={{ value: "Severe", position: "right", fontSize: 9, fill: "#c66a00" }}
             />
           )}
           {thresholdLines.emergency !== null && (
@@ -931,7 +931,7 @@ const MultiModelChart = ({
               stroke="#d32f2f"
               strokeDasharray="4 4"
               strokeWidth={1}
-              label={{ value: "Emergency", position: "right", fontSize: 9, fill: "#9b1c1c" }}
+              label={{ value: "Extreme", position: "right", fontSize: 9, fill: "#9b1c1c" }}
             />
           )}
 

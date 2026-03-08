@@ -6,11 +6,11 @@
     <div class="footer-top-row">
       <div class="footer-brand">
         {% if footer.logo %}
-          {% image footer.logo max-50x50 class="footer-logo" %}
+          {% image footer.logo max-50x50 class="footer-logo" alt="ICPAC" %}
         {% endif %}
         <div class="footer-info">
-          <span class="footer-title">East Africa Flood Watch</span>
-          <span class="footer-desc">{{ footer.description }}</span>
+          <span class="footer-title" id="footer-site-title">East Africa Flood Watch</span>
+          <span class="footer-desc" id="footer-site-desc">{{ footer.description }}</span>
         </div>
       </div>
       <div class="footer-links">
@@ -103,6 +103,14 @@
   }
 
   @media screen and (max-width: 768px) {
+    .footer-professional {
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      position: relative;
+      z-index: 2;
+    }
+
     .footer-top-row {
       flex-direction: column;
       align-items: center;

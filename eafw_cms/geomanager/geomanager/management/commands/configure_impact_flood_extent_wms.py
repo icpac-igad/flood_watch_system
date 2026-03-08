@@ -53,8 +53,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--map-base-url",
-            default="/mapserver/",
-            help="Base WMS URL used by Flood extent/Hazard layers (default: /mapserver/)",
+            default="/cog-tiles/",
+            help="Base tile URL used by Flood extent/Hazard layers (default: /cog-tiles/)",
         )
         parser.add_argument(
             "--keep-only-required",

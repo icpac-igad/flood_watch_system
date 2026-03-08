@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import PropTypes from "prop-types";
 import { connect } from "react-redux";
 
@@ -8,11 +8,10 @@ import { getActiveDatasetsFromState } from "@/components/map/selectors";
 
 // Import shared configuration - single source of truth
 import {
-  DEFAULT_THRESHOLDS,
   ALERT_COLORS,
-  ALERT_PRIORITY,
   calculateAlertLevelFromForecasts,
   getAlertPriority,
+  loadStormIconToMap,
   mergeConfig,
 } from "@/utils/multimodal-config";
 
@@ -22,8 +21,57 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 // Source and layer IDs
 const SOURCE_ID = "multimodal-cluster-source";
 const CLUSTER_LAYER_ID = "multimodal-clusters";
-const CLUSTER_COUNT_LAYER_ID = "multimodal-cluster-count";
 const UNCLUSTERED_LAYER_ID = "multimodal-unclustered-point";
+
+// Storm icon IDs per alert level (individual points)
+const STORM_ICON_IDS = Object.freeze({
+  emergency: "storm-icon-emergency",
+  alarm: "storm-icon-alarm",
+  warning: "storm-icon-warning",
+  normal: "storm-icon-normal",
+});
+
+// Cluster storm icon IDs (bigger, colored by worst alert level)
+const CLUSTER_ICON_IDS = Object.freeze({
+  emergency: "storm-cluster-emergency",
+  alarm: "storm-cluster-alarm",
+  warning: "storm-cluster-warning",
+  normal: "storm-cluster-normal",
+});
+
+const POINT_ICON_SIZE = 28;
+const CLUSTER_ICON_SIZE = 44;
+
+const ensureStormIcons = async (map, colors = ALERT_COLORS) => {
+  const promises = [];
+  // Individual point icons (small)
+  Object.entries(STORM_ICON_IDS).forEach(([level, iconId]) => {
+    promises.push(loadStormIconToMap(map, iconId, colors[level] || colors.normal, POINT_ICON_SIZE));
+  });
+  // Cluster icons (big)
+  Object.entries(CLUSTER_ICON_IDS).forEach(([level, iconId]) => {
+    promises.push(loadStormIconToMap(map, iconId, colors[level] || colors.normal, CLUSTER_ICON_SIZE));
+  });
+  await Promise.all(promises);
+};
+
+const buildStormIconExpression = () => [
+  "match",
+  ["get", "alert_level"],
+  "emergency", STORM_ICON_IDS.emergency,
+  "alarm", STORM_ICON_IDS.alarm,
+  "warning", STORM_ICON_IDS.warning,
+  STORM_ICON_IDS.normal,
+];
+
+// Pick cluster icon by worst alert level in the cluster
+const buildClusterIconExpression = () => [
+  "case",
+  [">", ["get", "has_emergency"], 0], CLUSTER_ICON_IDS.emergency,
+  [">", ["get", "has_alarm"], 0], CLUSTER_ICON_IDS.alarm,
+  [">", ["get", "has_warning"], 0], CLUSTER_ICON_IDS.warning,
+  CLUSTER_ICON_IDS.normal,
+];
 
 /**
  * Get selected date from multimodal layer params in active datasets
@@ -68,7 +116,7 @@ const MultimodalClusterLayer = ({
   visible = true,
 }) => {
   const [geojsonData, setGeojsonData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const sourceAddedRef = useRef(false);
 
   // Get selected date from active datasets
@@ -79,6 +127,7 @@ const MultimodalClusterLayer = ({
   }, [activeDatasets]);
 
   const clickHandlerRef = useRef(null);
+  const clusterClickHandlerRef = useRef(null);
   const mouseEnterHandlerRef = useRef(null);
   const mouseLeaveHandlerRef = useRef(null);
 
@@ -95,7 +144,7 @@ const MultimodalClusterLayer = ({
     console.log(`[MultimodalCluster] fetchData called with selectedDate: ${selectedDate}`);
     setLoading(true);
     try {
-      let url = `${API_BASE_URL}/api/multimodal/geojson/`;
+      let url = `${API_BASE_URL}/api/v1/multimodal/geojson/`;
       if (selectedDate) {
         url += `?date=${selectedDate}`;
       }
@@ -156,7 +205,7 @@ const MultimodalClusterLayer = ({
   }, [isEnabled, config.thresholds, selectedDate]);
 
   // Add source and layers to map
-  const addClusterLayers = useCallback(() => {
+  const addClusterLayers = useCallback(async () => {
     if (!map || !geojsonData || sourceAddedRef.current || !isEnabled) return;
 
     const { colors } = config;
@@ -164,40 +213,67 @@ const MultimodalClusterLayer = ({
     // Remove existing source/layers if they exist
     try {
       if (map.getLayer(UNCLUSTERED_LAYER_ID)) map.removeLayer(UNCLUSTERED_LAYER_ID);
-      if (map.getLayer(CLUSTER_COUNT_LAYER_ID)) map.removeLayer(CLUSTER_COUNT_LAYER_ID);
       if (map.getLayer(CLUSTER_LAYER_ID)) map.removeLayer(CLUSTER_LAYER_ID);
       if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
     } catch (e) {
       // Layers may not exist
     }
 
-    // Add GeoJSON source (clustering disabled for now - focus on individual points)
+    // Add GeoJSON source with clustering and worst-alert-level aggregation
     map.addSource(SOURCE_ID, {
       type: "geojson",
       data: geojsonData,
-      cluster: false, // Disabled - focus on individual point coloring first
+      cluster: true,
+      clusterRadius: 40,
+      clusterMaxZoom: 10,
+      clusterProperties: {
+        has_emergency: ["+", ["case", ["==", ["get", "alert_level"], "emergency"], 1, 0]],
+        has_alarm: ["+", ["case", ["==", ["get", "alert_level"], "alarm"], 1, 0]],
+        has_warning: ["+", ["case", ["==", ["get", "alert_level"], "warning"], 1, 0]],
+      },
     });
 
-    // Add individual point layer - colors based on alert_level
+    await ensureStormIcons(map, colors);
+
+    // Cluster layer — big storm icon colored by worst alert level
+    map.addLayer({
+      id: CLUSTER_LAYER_ID,
+      type: "symbol",
+      source: SOURCE_ID,
+      filter: ["has", "point_count"],
+      layout: {
+        "icon-image": buildClusterIconExpression(),
+        "icon-size": 1,
+        "icon-allow-overlap": true,
+        "icon-anchor": "center",
+      },
+      paint: {
+        "icon-opacity": 0.92,
+      },
+    });
+
+    // Individual point layer — small storm icon colored by alert level
     map.addLayer({
       id: UNCLUSTERED_LAYER_ID,
-      type: "circle",
+      type: "symbol",
       source: SOURCE_ID,
-      paint: {
-        // Color based on alert level - uses colors from shared config
-        "circle-color": [
-          "match",
-          ["get", "alert_level"],
-          "emergency", colors.emergency,
-          "alarm", colors.alarm,
-          "warning", colors.warning,
-          "normal", colors.normal,
-          colors.normal, // default
+      filter: ["!", ["has", "point_count"]],
+      layout: {
+        "icon-image": buildStormIconExpression(),
+        "icon-size": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          3, 0.52,
+          8, 0.72,
+          12, 0.92,
         ],
-        "circle-radius": 3,
-        "circle-stroke-width": 1,
-        "circle-stroke-color": "#fff",
-        "circle-opacity": 0.85,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-anchor": "center",
+      },
+      paint: {
+        "icon-opacity": 0.9,
       },
     });
 
@@ -255,7 +331,24 @@ const MultimodalClusterLayer = ({
 
     map.on("click", UNCLUSTERED_LAYER_ID, clickHandlerRef.current);
 
-    // Cursor handlers
+    // Cluster click handler — zoom to expand
+    clusterClickHandlerRef.current = (e) => {
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: [CLUSTER_LAYER_ID],
+      });
+      if (!features.length) return;
+      const clusterId = features[0].properties.cluster_id;
+      map.getSource(SOURCE_ID).getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err) return;
+        map.easeTo({
+          center: features[0].geometry.coordinates,
+          zoom: zoom,
+        });
+      });
+    };
+    map.on("click", CLUSTER_LAYER_ID, clusterClickHandlerRef.current);
+
+    // Cursor handlers for both layers
     mouseEnterHandlerRef.current = () => {
       map.getCanvas().style.cursor = "pointer";
     };
@@ -263,8 +356,10 @@ const MultimodalClusterLayer = ({
       map.getCanvas().style.cursor = "";
     };
 
-    map.on("mouseenter", UNCLUSTERED_LAYER_ID, mouseEnterHandlerRef.current);
-    map.on("mouseleave", UNCLUSTERED_LAYER_ID, mouseLeaveHandlerRef.current);
+    [UNCLUSTERED_LAYER_ID, CLUSTER_LAYER_ID].forEach((layerId) => {
+      map.on("mouseenter", layerId, mouseEnterHandlerRef.current);
+      map.on("mouseleave", layerId, mouseLeaveHandlerRef.current);
+    });
   }, [map, geojsonData, setMapInteractions, isEnabled, config]);
 
   // Update layer visibility
@@ -273,9 +368,11 @@ const MultimodalClusterLayer = ({
 
     const visibility = visible && isEnabled ? "visible" : "none";
     try {
-      if (map.getLayer(UNCLUSTERED_LAYER_ID)) {
-        map.setLayoutProperty(UNCLUSTERED_LAYER_ID, "visibility", visibility);
-      }
+      [UNCLUSTERED_LAYER_ID, CLUSTER_LAYER_ID].forEach((layerId) => {
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(layerId, "visibility", visibility);
+        }
+      });
     } catch (e) {
       // Layer may not exist yet
     }
@@ -289,15 +386,19 @@ const MultimodalClusterLayer = ({
       if (clickHandlerRef.current) {
         map.off("click", UNCLUSTERED_LAYER_ID, clickHandlerRef.current);
       }
-      if (mouseEnterHandlerRef.current) {
-        map.off("mouseenter", UNCLUSTERED_LAYER_ID, mouseEnterHandlerRef.current);
+      if (clusterClickHandlerRef.current) {
+        map.off("click", CLUSTER_LAYER_ID, clusterClickHandlerRef.current);
       }
-      if (mouseLeaveHandlerRef.current) {
-        map.off("mouseleave", UNCLUSTERED_LAYER_ID, mouseLeaveHandlerRef.current);
-      }
+      [UNCLUSTERED_LAYER_ID, CLUSTER_LAYER_ID].forEach((layerId) => {
+        if (mouseEnterHandlerRef.current) {
+          map.off("mouseenter", layerId, mouseEnterHandlerRef.current);
+        }
+        if (mouseLeaveHandlerRef.current) {
+          map.off("mouseleave", layerId, mouseLeaveHandlerRef.current);
+        }
+      });
 
       if (map.getLayer(UNCLUSTERED_LAYER_ID)) map.removeLayer(UNCLUSTERED_LAYER_ID);
-      if (map.getLayer(CLUSTER_COUNT_LAYER_ID)) map.removeLayer(CLUSTER_COUNT_LAYER_ID);
       if (map.getLayer(CLUSTER_LAYER_ID)) map.removeLayer(CLUSTER_LAYER_ID);
       if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
     } catch (e) {

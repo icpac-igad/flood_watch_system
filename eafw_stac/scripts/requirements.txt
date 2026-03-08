@@ -1,0 +1,8 @@
+rasterio
+rio-cogeo
+pystac
+click
+shapely
+httpx
+pypgstac[psycopg]==0.9.5
+psycopg[binary]

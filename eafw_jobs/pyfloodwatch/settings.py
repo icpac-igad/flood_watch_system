@@ -81,6 +81,22 @@ GOOGLE_FLOOD_CONFIG = {
     'base_backoff_seconds': float(os.getenv('GOOGLE_FLOOD_BASE_BACKOFF_SECONDS', 1.0)),
 }
 
+# Email notification settings
+# Supports both SMTP_HOST and legacy SMTP_EMAIL_HOST env var names
+EMAIL_CONFIG = {
+    'enabled': os.getenv('EMAIL_NOTIFICATIONS_ENABLED', 'true').lower() == 'true',
+    'smtp_host': os.getenv('SMTP_HOST', os.getenv('SMTP_EMAIL_HOST', 'smtp.gmail.com')),
+    'smtp_port': next((int(v) for v in [os.getenv('SMTP_PORT', ''), os.getenv('SMTP_EMAIL_PORT', '')] if v.strip().isdigit()), 587),
+    'smtp_user': os.getenv('SMTP_USER', os.getenv('SMTP_EMAIL_HOST_USER', '')),
+    'smtp_password': os.getenv('SMTP_PASSWORD', os.getenv('SMTP_EMAIL_HOST_PASSWORD', '')),
+    'from_addr': os.getenv('EMAIL_FROM', os.getenv('SMTP_USER', os.getenv('SMTP_EMAIL_HOST_USER', ''))),
+    'to_addrs': [
+        addr.strip()
+        for addr in os.getenv('EMAIL_TO', 'hkoros@icpac.net').split(',')
+        if addr.strip()
+    ],
+}
+
 # Create directories
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)

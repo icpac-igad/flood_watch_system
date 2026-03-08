@@ -145,3 +145,39 @@ export const getFeatureInfo = (url) => {
     )
     .catch((err) => {});
 };
+
+// ---------------------------------------------------------------------------
+// TiTiler point value query (replacement for WMS GetFeatureInfo on raster layers
+// that have been migrated from MapServer/MapCache to TiTiler).
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the raster pixel value at a given point from a TiTiler search or collection.
+ *
+ * For search-based tiles:
+ *   /cog-tiles/searches/{searchId}/point/{lng},{lat}?assets=data
+ *
+ * For collection-based tiles:
+ *   /cog-tiles/collections/{collectionId}/point/{lng},{lat}?assets=data
+ *
+ * @param {string} tileUrl - The tile URL template (used to infer search/collection path)
+ * @param {number} lng
+ * @param {number} lat
+ * @returns {Promise<object|null>} Point value response or null
+ */
+export const getTitilerPointValue = async (tileUrl, lng, lat) => {
+  try {
+    // Derive the point URL from the tile URL pattern
+    // Search-based: /cog-tiles/searches/{hash}/tiles/... -> /cog-tiles/searches/{hash}/point/{lng},{lat}
+    // Collection-based: /cog-tiles/collections/{id}/tiles/... -> /cog-tiles/collections/{id}/point/{lng},{lat}
+    const basePath = tileUrl.split('/tiles/')[0];
+    if (!basePath || !basePath.includes('/cog-tiles/')) return null;
+
+    const pointUrl = `${basePath}/point/${lng},${lat}?assets=data`;
+    const response = await request.get(pointUrl);
+    return response?.data || null;
+  } catch (err) {
+    console.error('TiTiler point query failed:', err?.message || err);
+    return null;
+  }
+};

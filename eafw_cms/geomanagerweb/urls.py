@@ -12,6 +12,7 @@ from wagtailcache.cache import cache_page
 # Homepage widget APIs are served directly from Django views (DRF-style /api/* paths).
 
 from home.views import map_view, partners_view, flood_analysis_view
+
 from home.mapviewer_config import get_mapviewer_config
 from geomanagerweb.api import (
     MultimodalForecastGeoJSONView,
@@ -29,6 +30,9 @@ from geomanagerweb.api import (
     RiverBasinsView,
     ForecastMajorityRiskView,
     CountryAssessmentPublishView,
+    CAPDraftCreateView,
+    CAPForecastDraftView,
+    country_inundation_view,
 )
 
 ADMIN_URL_PATH = getattr(settings, "ADMIN_URL_PATH", None)
@@ -75,6 +79,12 @@ urlpatterns = [
     path("api/regional-summary/generate", RegionalSummaryView.as_view(), name="regional_summary_generate_noslash"),
     path("api/river-basins/", RiverBasinsView.as_view(), name="river_basins"),
     path("api/river-basins", RiverBasinsView.as_view(), name="river_basins_noslash"),
+    # CAP alert draft creation (used by mapviewer "Generate CAP Alert" button)
+    path("cms-api/cap/create-draft/", CAPDraftCreateView.as_view(), name="cap_create_draft"),
+    path("cms-api/cap/create-forecast-draft/", CAPForecastDraftView.as_view(), name="cap_forecast_draft"),
+    # Country inundation endpoint used by the country detail widget
+    path("api/country-inundation/", country_inundation_view, name="country_inundation"),
+    path("api/country-inundation", country_inundation_view, name="country_inundation_noslash"),
     # Custom mapviewer config (includes datasets and layers)
     path("mapviewer-config", get_mapviewer_config, name="mapview_config_alias"),
     path("api/mapviewer-config", get_mapviewer_config, name="mapview_config"),
@@ -91,6 +101,8 @@ urlpatterns = [
     # geomanager urls (without namespace so reverse() works in serializers)
     path("", include("geomanager.urls")),
     path("", include("django_nextjs.urls")),
+    # CAP Composer URLs (RSS, GeoJSON, XML feeds)
+    path("", include("capcomposer.cap.urls")),
 ]
 
 if ADMIN_URL_PATH:

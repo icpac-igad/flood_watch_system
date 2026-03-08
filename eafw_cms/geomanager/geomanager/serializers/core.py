@@ -17,16 +17,24 @@ def _get_full_url(request, path: str) -> str:
     """
     Build absolute URLs for API endpoints.
 
-    Prefer CMS_BASE_URL when set (useful behind nginx/reverse proxies),
-    otherwise fall back to request.build_absolute_uri.
+    Prefer request-derived host/protocol so responses always match the
+    environment serving the request. Fall back to CMS_BASE_URL when request
+    context is unavailable.
     """
+    if not path:
+        return path
+
+    if request:
+        return request.build_absolute_uri(path)
+
     cms_base_url = getattr(settings, "CMS_BASE_URL", None)
     if cms_base_url:
+        if str(path).startswith(("http://", "https://")):
+            return path
         if path and not path.startswith("/"):
             path = "/" + path
         return urljoin(cms_base_url, path)
-    if request:
-        return request.build_absolute_uri(path)
+
     return path
 
 
@@ -113,7 +121,7 @@ class DatasetSerializer(serializers.ModelSerializer):
             # These are placeholder CMS datasets that should render from the
             # modular API endpoints (DB-backed or derived from multimodal tables).
             "GeoSFM Flood Forecast": {
-                "endpoint": "/api/geosfm/geojson/",
+                "endpoint": "/api/v1/models/geosfm/geojson/",
                 "interaction_output": [
                     {"column": "admin_name", "property": "Location", "type": "string"},
                     {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
@@ -129,7 +137,7 @@ class DatasetSerializer(serializers.ModelSerializer):
                 ],
             },
             "Mike Hydro": {
-                "endpoint": "/api/mike-hydro/geojson/",
+                "endpoint": "/api/v1/models/mike-hydro/geojson/",
                 "interaction_output": [
                     {"column": "admin_name", "property": "Location", "type": "string"},
                     {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
@@ -148,7 +156,7 @@ class DatasetSerializer(serializers.ModelSerializer):
                 ],
             },
             "Google Flood Forecast": {
-                "endpoint": "/api/google-flood/geojson/",
+                "endpoint": "/api/v1/google-flood/geojson/",
                 "interaction_output": [
                     {"column": "admin_name", "property": "Location", "type": "string"},
                     {"column": "gauge_id", "property": "Gauge ID", "type": "string"},
@@ -170,7 +178,7 @@ class DatasetSerializer(serializers.ModelSerializer):
             # subcategory can display the same control points as Multimodal, but showing only the
             # Floodproof model series in the popup chart.
             "Floodproofs Discharge Forecast": {
-                "endpoint": "/api/floodproof/geojson/",
+                "endpoint": "/api/v1/models/floodproof/geojson/",
                 "interaction_output": [
                     {"column": "admin_name", "property": "Location", "type": "string"},
                     {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},

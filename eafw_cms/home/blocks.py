@@ -161,6 +161,12 @@ class LogoItemBlock(blocks.StructBlock):
     )
     image = ImageChooserBlock(label=_("Image/Logo/Banner"))
     url = blocks.CharBlock(max_length=500, required=False, label=_("Link URL"))
+    show_on_homepage = blocks.BooleanBlock(
+        required=False,
+        default=False,
+        label=_("Major Partner (Show on Homepage)"),
+        help_text=_("Enable this to feature the partner in the homepage partner strip"),
+    )
 
     class Meta:
         icon = "image"

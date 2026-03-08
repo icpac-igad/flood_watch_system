@@ -17,7 +17,7 @@
   }
 
   .name {
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1.4;
     letter-spacing: -0.3px;
     color: $slate;
@@ -31,7 +31,7 @@
   }
 
   .subtitle {
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.5;
     letter-spacing: -0.3px;
     color: $hot-grey;
@@ -43,6 +43,11 @@
 
   .info-button {
     margin-left: rem(5px);
+
+    .c-icon {
+      width: rem(8px);
+      height: rem(8px);
+    }
 
     &.-help {
       cursor: help;
@@ -56,7 +61,7 @@
     }
 
     .name {
-      font-size: rem(12px);
+      font-size: rem(11px);
       margin-top: -2px;
     }
   }

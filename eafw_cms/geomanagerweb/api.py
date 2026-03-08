@@ -15,7 +15,6 @@ WHCA_SCOPE_SQL_CONDITION = (
 COUNTRY_NAME_TO_ISO2 = {
     "burundi": "BD",
     "djibouti": "DJ",
-    "eritrea": "ER",
     "ethiopia": "ET",
     "kenya": "KE",
     "rwanda": "RW",
@@ -32,7 +31,6 @@ COUNTRY_NAME_TO_ISO2 = {
 ISO2_TO_COUNTRY_NAME = {
     "BD": "Burundi",
     "DJ": "Djibouti",
-    "ER": "Eritrea",
     "ET": "Ethiopia",
     "KE": "Kenya",
     "RW": "Rwanda",
@@ -159,6 +157,103 @@ def _format_report_key(expert_type, country_code, assessment_date):
     country_suffix = (_normalize_country_code(country_code) or "REGION").upper()
     date_part = (assessment_date or "").strip()
     return f"{expert_prefix}_{country_suffix}_{date_part}"
+
+
+def _normalize_role_name(value):
+    return str(value or '').strip().lower().replace('-', '_').replace(' ', '_')
+
+
+def _resolve_request_user(request):
+    user = getattr(request, 'user', None)
+    if user and getattr(user, 'is_authenticated', False):
+        return user
+
+    auth_header = (
+        request.headers.get('Authorization')
+        or request.META.get('HTTP_AUTHORIZATION')
+        or ''
+    ).strip()
+    if not auth_header.lower().startswith('bearer '):
+        return None
+
+    token = auth_header.split(' ', 1)[1].strip() if ' ' in auth_header else ''
+    if not token:
+        return None
+
+    try:
+        from django.contrib.auth import get_user_model
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        parsed = AccessToken(token)
+        user_id = parsed.get('user_id')
+        if not user_id:
+            return None
+
+        user_model = get_user_model()
+        return user_model.objects.filter(id=user_id).first()
+    except Exception:
+        return None
+
+
+def _user_role_names(user):
+    if not user:
+        return set()
+    try:
+        return {
+            _normalize_role_name(group.name)
+            for group in user.groups.all()
+            if getattr(group, 'name', None)
+        }
+    except Exception:
+        return set()
+
+
+def _can_submit_expert_assessment(user, expert_type):
+    if not user:
+        return False
+    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+        return True
+
+    role_names = _user_role_names(user)
+    role = _normalize_role_name(expert_type)
+    role_aliases = {
+        'hydrologist': {'hydrologist', 'hydrologists', 'expert_hydrologist', 'flood_hydrologist'},
+        'meteorologist': {'meteorologist', 'meteorologists', 'expert_meteorologist', 'flood_meteorologist'},
+    }
+    required = role_aliases.get(role, {role})
+    return any(name in role_names for name in required)
+
+
+def _can_publish_expert_assessment(user):
+    if not user:
+        return False
+    if getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False):
+        return True
+
+    role_names = _user_role_names(user)
+    publish_roles = {
+        'hydrologist',
+        'meteorologist',
+        'flood_report_publisher',
+        'flood_reports_publisher',
+        'flood_report_admin',
+        'flood_reports_admin',
+    }
+    return any(name in role_names for name in publish_roles)
+
+
+def _user_display_name(user):
+    if not user:
+        return ''
+    full_name = ''
+    try:
+        full_name = (user.get_full_name() or '').strip()
+    except Exception:
+        full_name = ''
+    if full_name:
+        return full_name
+    username = getattr(user, 'username', '') or getattr(user, 'email', '')
+    return str(username).strip()
 
 
 def _resolve_filter_geometry_ewkt(
@@ -1235,9 +1330,19 @@ class GoogleFloodGeoJSONView(View):
                             g.status_quality_verified,
                             COALESCE(g.forecasts_json, '[]'::jsonb) AS forecasts,
                             CASE
-                                WHEN g.latest_severity = 'MAJOR_FLOODING' THEN 'emergency'
-                                WHEN g.latest_severity = 'MODERATE_FLOODING' THEN 'alarm'
-                                WHEN g.latest_severity = 'MINOR_FLOODING' THEN 'warning'
+                                -- Prefer explicit Google severity classes when provided.
+                                WHEN UPPER(COALESCE(g.latest_severity, '')) IN ('EXTREME', 'EXTREME_FLOODING', 'MAJOR_FLOODING') THEN 'emergency'
+                                WHEN UPPER(COALESCE(g.latest_severity, '')) IN ('SEVERE', 'DANGER', 'MODERATE_FLOODING') THEN 'alarm'
+                                WHEN UPPER(COALESCE(g.latest_severity, '')) IN ('WARNING', 'WATCH', 'MINOR_FLOODING', 'ALERT') THEN 'warning'
+
+                                -- Fallback to threshold-based classification using forecast discharge.
+                                WHEN g.daily_max IS NOT NULL AND g.threshold_emergency IS NOT NULL AND g.daily_max >= g.threshold_emergency THEN 'emergency'
+                                WHEN g.daily_max IS NOT NULL AND g.threshold_alarm IS NOT NULL AND g.daily_max >= g.threshold_alarm THEN 'alarm'
+                                WHEN g.daily_max IS NOT NULL AND g.threshold_alert IS NOT NULL AND g.daily_max >= g.threshold_alert THEN 'warning'
+
+                                WHEN g.daily_avg IS NOT NULL AND g.threshold_emergency IS NOT NULL AND g.daily_avg >= g.threshold_emergency THEN 'emergency'
+                                WHEN g.daily_avg IS NOT NULL AND g.threshold_alarm IS NOT NULL AND g.daily_avg >= g.threshold_alarm THEN 'alarm'
+                                WHEN g.daily_avg IS NOT NULL AND g.threshold_alert IS NOT NULL AND g.daily_avg >= g.threshold_alert THEN 'warning'
                                 ELSE 'normal'
                             END AS alert_level,
                             g.geom
@@ -1357,14 +1462,18 @@ class AdminBoundaryView(View):
                                    ST_XMax(ST_Envelope(geom)) as right,
                                    ST_YMax(ST_Envelope(geom)) as top
                             FROM gha.admin0
-                            WHERE country IS NOT NULL AND country != ''
+                            WHERE country IS NOT NULL
+                              AND country != ''
+                              AND LOWER(TRIM(country)) != 'eritrea'
                             ORDER BY country
                         """)
                     else:
                         cursor.execute("""
                             SELECT country as code, country as name
                             FROM gha.admin0
-                            WHERE country IS NOT NULL AND country != ''
+                            WHERE country IS NOT NULL
+                              AND country != ''
+                              AND LOWER(TRIM(country)) != 'eritrea'
                             ORDER BY country
                         """)
                 elif admin_level == '0':
@@ -1377,14 +1486,20 @@ class AdminBoundaryView(View):
                                    ST_XMax(ST_Envelope(geom)) as right,
                                    ST_YMax(ST_Envelope(geom)) as top
                             FROM gha.admin1
-                            WHERE country = %s AND name_1 IS NOT NULL AND name_1 != ''
+                            WHERE country = %s
+                              AND name_1 IS NOT NULL
+                              AND name_1 != ''
+                              AND LOWER(TRIM(country)) != 'eritrea'
                             ORDER BY name_1
                         """, [unit_id])
                     else:
                         cursor.execute("""
                             SELECT name_1 as code, name_1 as name
                             FROM gha.admin1
-                            WHERE country = %s AND name_1 IS NOT NULL AND name_1 != ''
+                            WHERE country = %s
+                              AND name_1 IS NOT NULL
+                              AND name_1 != ''
+                              AND LOWER(TRIM(country)) != 'eritrea'
                             ORDER BY name_1
                         """, [unit_id])
                 elif admin_level == '1':
@@ -1400,7 +1515,11 @@ class AdminBoundaryView(View):
                                        ST_XMax(ST_Envelope(geom)) as right,
                                        ST_YMax(ST_Envelope(geom)) as top
                                 FROM gha.admin2
-                                WHERE country = %s AND name_1 = %s AND name_2 IS NOT NULL AND name_2 != ''
+                                WHERE country = %s
+                                  AND name_1 = %s
+                                  AND name_2 IS NOT NULL
+                                  AND name_2 != ''
+                                  AND LOWER(TRIM(country)) != 'eritrea'
                                 ORDER BY name_2
                             """, [country_id, unit_id])
                         else:
@@ -1411,7 +1530,10 @@ class AdminBoundaryView(View):
                                        ST_XMax(ST_Envelope(geom)) as right,
                                        ST_YMax(ST_Envelope(geom)) as top
                                 FROM gha.admin2
-                                WHERE name_1 = %s AND name_2 IS NOT NULL AND name_2 != ''
+                                WHERE name_1 = %s
+                                  AND name_2 IS NOT NULL
+                                  AND name_2 != ''
+                                  AND LOWER(TRIM(country)) != 'eritrea'
                                 ORDER BY name_2
                             """, [unit_id])
                     else:
@@ -1419,14 +1541,21 @@ class AdminBoundaryView(View):
                             cursor.execute("""
                                 SELECT name_2 as code, name_2 as name
                                 FROM gha.admin2
-                                WHERE country = %s AND name_1 = %s AND name_2 IS NOT NULL AND name_2 != ''
+                                WHERE country = %s
+                                  AND name_1 = %s
+                                  AND name_2 IS NOT NULL
+                                  AND name_2 != ''
+                                  AND LOWER(TRIM(country)) != 'eritrea'
                                 ORDER BY name_2
                             """, [country_id, unit_id])
                         else:
                             cursor.execute("""
                                 SELECT name_2 as code, name_2 as name
                                 FROM gha.admin2
-                                WHERE name_1 = %s AND name_2 IS NOT NULL AND name_2 != ''
+                                WHERE name_1 = %s
+                                  AND name_2 IS NOT NULL
+                                  AND name_2 != ''
+                                  AND LOWER(TRIM(country)) != 'eritrea'
                                 ORDER BY name_2
                             """, [unit_id])
                 else:
@@ -1758,7 +1887,7 @@ class CountrySummaryWithBoundsView(View):
                             COALESCE(
                                 CASE
                                     WHEN UPPER(SUBSTRING(COALESCE(pd.admin_name, '') FROM 1 FOR 2)) IN (
-                                        'ET', 'KE', 'UG', 'SD', 'SS', 'TZ', 'RW', 'BI', 'SO', 'DJ', 'ER'
+                                        'ET', 'KE', 'UG', 'SD', 'SS', 'TZ', 'RW', 'BI', 'SO', 'DJ'
                                     ) THEN UPPER(SUBSTRING(pd.admin_name FROM 1 FOR 2))
                                     ELSE NULL
                                 END,
@@ -1774,7 +1903,6 @@ class CountrySummaryWithBoundsView(View):
                                         WHEN LOWER(TRIM(a0.country)) = 'burundi' THEN 'BI'
                                         WHEN LOWER(TRIM(a0.country)) = 'somalia' THEN 'SO'
                                         WHEN LOWER(TRIM(a0.country)) = 'djibouti' THEN 'DJ'
-                                        WHEN LOWER(TRIM(a0.country)) = 'eritrea' THEN 'ER'
                                         ELSE 'UN'
                                     END
                                     FROM gha.admin0 a0
@@ -1833,7 +1961,6 @@ class CountrySummaryWithBoundsView(View):
                                     WHEN LOWER(TRIM(a0.country)) = 'burundi' THEN 'BI'
                                     WHEN LOWER(TRIM(a0.country)) = 'somalia' THEN 'SO'
                                     WHEN LOWER(TRIM(a0.country)) = 'djibouti' THEN 'DJ'
-                                    WHEN LOWER(TRIM(a0.country)) = 'eritrea' THEN 'ER'
                                     ELSE 'UN'
                                 END as country_code,
                                 a0.geom
@@ -1866,7 +1993,7 @@ class CountrySummaryWithBoundsView(View):
                     'ET': 'Ethiopia', 'KE': 'Kenya', 'UG': 'Uganda',
                     'SD': 'Sudan', 'SS': 'South Sudan', 'TZ': 'Tanzania',
                     'RW': 'Rwanda', 'BI': 'Burundi', 'SO': 'Somalia',
-                    'DJ': 'Djibouti', 'ER': 'Eritrea', 'UN': 'Unknown'
+                    'DJ': 'Djibouti', 'UN': 'Unknown'
                 }
 
                 for row in cursor.fetchall():
@@ -2127,18 +2254,56 @@ class SituationSummaryView(View):
                         SUM(CASE WHEN risk_level = 'warning' THEN 1 ELSE 0 END) DESC
                 """, [query_date, emergency_threshold, alarm_threshold, warning_threshold])
 
+                # Load exposure scores from floodreport for enrichment
+                exposure_by_country = {}
+                try:
+                    from floodreport.models import FloodExposureScore
+                    from django.db.models import Sum, Avg
+                    for code, cname in ISO2_TO_COUNTRY_NAME.items():
+                        if code == "REGION":
+                            continue
+                        qs = FloodExposureScore.objects.filter(country__iexact=cname, admin_level=0)
+                        if qs.exists():
+                            agg = qs.aggregate(
+                                pop=Sum("affected_population"),
+                                area=Sum("flooded_area_km2"),
+                                score=Avg("composite_score"),
+                            )
+                            exposure_by_country[code] = {
+                                'affected_population': agg['pop'] or 0,
+                                'affected_area_km2': round(agg['area'] or 0, 1),
+                                'composite_score': round(agg['score'] or 0, 4),
+                            }
+                except Exception:
+                    pass
+
                 country_breakdown = []
                 for c_row in cursor.fetchall():
                     code = c_row[0]
                     # Only include if code is a valid 2-letter alphabetic code
                     if code and len(code) == 2 and code.isalpha():
-                        country_breakdown.append({
+                        entry = {
                             'code': code,
                             'name': code,  # Frontend can map to full name if needed
                             'emergency': c_row[1] or 0,
                             'alarm': c_row[2] or 0,
                             'warning': c_row[3] or 0,
                             'total_at_risk': (c_row[1] or 0) + (c_row[2] or 0) + (c_row[3] or 0),
+                        }
+                        # Enrich with exposure data
+                        if code in exposure_by_country:
+                            entry.update(exposure_by_country[code])
+                        country_breakdown.append(entry)
+
+                # Add countries that have exposure scores but no point-based alerts
+                seen_codes = {e['code'] for e in country_breakdown}
+                for code, exp_data in exposure_by_country.items():
+                    if code not in seen_codes and exp_data['composite_score'] > 0:
+                        country_breakdown.append({
+                            'code': code,
+                            'name': code,
+                            'emergency': 0, 'alarm': 0, 'warning': 0, 'total_at_risk': 0,
+                            **exp_data,
                         })
 
                 if row:
@@ -2405,12 +2570,30 @@ class CountryAssessmentsView(View):
         report_group = (request.GET.get('report_group') or 'all').strip().lower()
         assessment_id = request.GET.get('id')
         include_districts = _coerce_bool(request.GET.get('include_districts'), default=False)
+        request_user = _resolve_request_user(request)
+        can_view_unpublished = _can_publish_expert_assessment(request_user)
 
         published_only = request.GET.get('published')
         if published_only is not None:
             published_only = _coerce_bool(published_only, default=False)
         else:
             published_only = None
+
+        if not can_view_unpublished:
+            if status in ('draft', 'unapproved'):
+                response = JsonResponse({'error': 'Authentication is required to access draft reports'}, status=403)
+                response['Access-Control-Allow-Origin'] = '*'
+                response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+                response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
+                return response
+            if published_only is False:
+                response = JsonResponse({'error': 'Authentication is required to access unpublished reports'}, status=403)
+                response['Access-Control-Allow-Origin'] = '*'
+                response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+                response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
+                return response
+            # Anonymous consumers can only read published assessments.
+            published_only = True
 
         with connection.cursor() as cursor:
             try:
@@ -2574,13 +2757,13 @@ class CountryAssessmentsView(View):
                 response = JsonResponse({'error': f'Failed to fetch assessments: {str(exc)}'}, status=500)
                 response['Access-Control-Allow-Origin'] = '*'
                 response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-                response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
+                response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
                 return response
 
         response = JsonResponse({'assessments': assessments, 'count': len(assessments)})
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
         return response
 
     def post(self, request):
@@ -2647,27 +2830,30 @@ class CountryAssessmentsView(View):
             data.get('is_published'),
             default=save_mode in ('submitted', 'publish', 'published'),
         )
-        is_authenticated = bool(getattr(request, "user", None) and request.user.is_authenticated)
-        logged_in = _coerce_bool(data.get('logged_in'), default=is_authenticated)
-
-        if country_code != 'REGION' and not logged_in:
+        request_user = _resolve_request_user(request)
+        is_authenticated = bool(request_user)
+        if not is_authenticated:
             response = JsonResponse(
-                {'error': 'Sign-in is required for member-state expert assessments'},
+                {'error': 'Sign-in is required for expert assessments'},
+                status=403,
+            )
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        if not _can_submit_expert_assessment(request_user, expert_type):
+            response = JsonResponse(
+                {'error': f'Permission denied. {expert_type.title()} role is required.'},
                 status=403,
             )
             response['Access-Control-Allow-Origin'] = '*'
             return response
 
         if country_code == 'REGION':
-            display_name = contributor_name or explicit_creator or 'public-user'
+            display_name = explicit_creator or _user_display_name(request_user) or contributor_name or 'authenticated-user'
             display_country = contributor_country or 'REGION'
             created_by = f"public|{display_name}|{display_country}"
         else:
-            if is_authenticated:
-                username = getattr(request.user, 'get_username', lambda: '')() or str(request.user)
-                display_name = explicit_creator or username
-            else:
-                display_name = explicit_creator or contributor_name or 'authenticated-user'
+            display_name = explicit_creator or _user_display_name(request_user) or contributor_name or 'authenticated-user'
             created_by = f"kpp|{display_name}|{country_code}"
 
         if not assessment_date:
@@ -2800,14 +2986,14 @@ class CountryAssessmentsView(View):
         })
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
         return response
 
     def options(self, request):
         response = JsonResponse({})
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
         return response
 
 
@@ -2817,6 +3003,17 @@ class CountryAssessmentPublishView(View):
     def post(self, request, assessment_id):
         from django.db import connection
         import json
+
+        request_user = _resolve_request_user(request)
+        if not _can_publish_expert_assessment(request_user):
+            response = JsonResponse(
+                {'error': 'Permission denied. Expert publisher role is required.'},
+                status=403,
+            )
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
+            return response
 
         try:
             data = json.loads(request.body) if request.body else {}
@@ -2851,14 +3048,14 @@ class CountryAssessmentPublishView(View):
         })
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
         return response
 
     def options(self, request, assessment_id):
         response = JsonResponse({})
         response['Access-Control-Allow-Origin'] = '*'
         response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
         return response
 
 
@@ -3308,7 +3505,188 @@ class RiskAssessmentView(View):
         return response
 
 
-#Register standard Wagtail API endpoints
+class CountryInundationView(View):
+    """
+    GET /api/country-inundation/?country=KE&date=...
+    Serves exposure-based inundation impact stats from floodreport.flood_exposure_scores.
+    Compatible with frontend CountryDetailView inundation widget.
+    """
+
+    def get(self, request):
+        from django.db.models import Sum, Avg, Count, Q
+
+        country_param = request.GET.get("country", "").strip()
+        if not country_param:
+            data = {"affected_population": "N/A", "affected_area_km2": "N/A",
+                    "affected_cropland_km2": "N/A", "affected_infrastructure": "N/A"}
+            return _add_cors_headers(JsonResponse(data))
+
+        # Resolve country code to name
+        country_name = ISO2_TO_COUNTRY_NAME.get(country_param.upper())
+        if not country_name:
+            # Try direct name match
+            country_name = country_param
+
+        try:
+            from floodreport.models import FloodExposureScore
+
+            qs = FloodExposureScore.objects.filter(country__iexact=country_name)
+            if not qs.exists():
+                # Try broader match
+                qs = FloodExposureScore.objects.filter(country__icontains=country_name)
+
+            if qs.exists():
+                agg = qs.aggregate(
+                    total_affected_pop=Sum("affected_population"),
+                    total_flooded_area=Sum("flooded_area_km2"),
+                    total_rp25_area=Sum("rp25_area_km2"),
+                    total_rp100_area=Sum("rp100_area_km2"),
+                    avg_score=Avg("composite_score"),
+                )
+                data = {
+                    "affected_population": agg["total_affected_pop"] or 0,
+                    "affected_area_km2": round(agg["total_flooded_area"] or 0, 1),
+                    "affected_cropland_km2": "N/A",
+                    "affected_infrastructure": "N/A",
+                    "composite_score": round(agg["avg_score"] or 0, 4),
+                    "rp25_area_km2": round(agg["total_rp25_area"] or 0, 1),
+                    "rp100_area_km2": round(agg["total_rp100_area"] or 0, 1),
+                }
+            else:
+                data = {"affected_population": 0, "affected_area_km2": 0,
+                        "affected_cropland_km2": "N/A", "affected_infrastructure": "N/A"}
+
+        except Exception:
+            data = {"affected_population": "N/A", "affected_area_km2": "N/A",
+                    "affected_cropland_km2": "N/A", "affected_infrastructure": "N/A"}
+
+        return _add_cors_headers(JsonResponse(data))
+
+    def options(self, request):
+        response = JsonResponse({})
+        return _add_cors_headers(response)
+
+
+def country_inundation_view(request):
+    return CountryInundationView.as_view()(request)
+
+
+# =============================================================================
+# CAP Alert Draft Creation API
+# =============================================================================
+class CAPDraftCreateView(View):
+    """Create a draft CAP alert from a published expert assessment."""
+
+    @classmethod
+    def as_view(cls, **kwargs):
+        from django.views.decorators.csrf import csrf_exempt
+        return csrf_exempt(super().as_view(**kwargs))
+
+    def post(self, request):
+        import json
+
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            response = JsonResponse({'error': 'Invalid JSON'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        assessment_id = data.get('assessment_id')
+        expires_hours = data.get('expires_hours', 48)
+
+        if not assessment_id:
+            response = JsonResponse({'success': False, 'message': 'assessment_id required'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        try:
+            from home.cap_bridge.creator import create_cap_draft_from_assessment
+            cap_page = create_cap_draft_from_assessment(assessment_id, expires_hours)
+
+            response = JsonResponse({
+                'success': True,
+                'cap_alert_id': cap_page.id,
+                'edit_url': f'/cms-admin/pages/{cap_page.id}/edit/',
+                'message': 'CAP alert draft created',
+            })
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+        except ValueError as e:
+            response = JsonResponse({'success': False, 'message': str(e)}, status=404)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+        except Exception as e:
+            response = JsonResponse({'success': False, 'message': str(e)}, status=500)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+    def options(self, request):
+        response = JsonResponse({})
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
+        return response
+
+
+class CAPForecastDraftView(View):
+    """Create CAP alert drafts from live multimodal forecast data."""
+
+    @classmethod
+    def as_view(cls, **kwargs):
+        from django.views.decorators.csrf import csrf_exempt
+        return csrf_exempt(super().as_view(**kwargs))
+
+    def post(self, request):
+        import json
+
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            response = JsonResponse({'error': 'Invalid JSON'}, status=400)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+        country_code = data.get('country_code')  # Optional ISO-2, omit for all countries
+        expires_hours = data.get('expires_hours', 48)
+
+        try:
+            from home.cap_bridge.creator import create_cap_draft_from_forecast
+            results = create_cap_draft_from_forecast(
+                country_code=country_code,
+                expires_hours=expires_hours,
+            )
+
+            if not results:
+                response = JsonResponse({
+                    'success': True,
+                    'message': 'No countries at warning level or above',
+                    'drafts': [],
+                })
+                response['Access-Control-Allow-Origin'] = '*'
+                return response
+
+            response = JsonResponse({
+                'success': True,
+                'message': f'{len(results)} CAP draft(s) created',
+                'drafts': results,
+            })
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+        except Exception as e:
+            response = JsonResponse({'success': False, 'message': str(e)}, status=500)
+            response['Access-Control-Allow-Origin'] = '*'
+            return response
+
+    def options(self, request):
+        response = JsonResponse({})
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, X-CSRFToken, Authorization'
+        return response
+
+
+# Register standard Wagtail API endpoints
 try:
     from wagtail.api.v2.views import PagesAPIViewSet
     from wagtail.images.api.v2.views import ImagesAPIViewSet

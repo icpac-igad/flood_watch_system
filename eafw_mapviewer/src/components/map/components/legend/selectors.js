@@ -48,10 +48,7 @@ const isMultimodalProviderLayer = (group = {}, layer = {}) => {
 const normalizeMultimodalLegend = (legendConfig = {}) => ({
   ...(legendConfig || {}),
   type: "basic",
-  items: buildMultimodalLegendItems().map(({ name, color }) => ({
-    name,
-    color,
-  })),
+  items: buildMultimodalLegendItems(undefined, { includePinIcon: true }),
 });
 
 export const getLoading = createSelector(

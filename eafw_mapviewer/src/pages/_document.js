@@ -13,11 +13,31 @@ export default class MyDocument extends Document {
           <meta charSet="utf-8" />
           <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
 
+          {/* Google Analytics (gtag.js) */}
+          {process.env.ANALYTICS_PROPERTY_ID && (
+            <>
+              <script
+                async
+                src={`https://www.googletagmanager.com/gtag/js?id=${process.env.ANALYTICS_PROPERTY_ID}`}
+              />
+              <script
+                dangerouslySetInnerHTML={{
+                  __html: `
+                    window.dataLayer = window.dataLayer || [];
+                    function gtag(){dataLayer.push(arguments);}
+                    gtag('js', new Date());
+                    gtag('config', '${process.env.ANALYTICS_PROPERTY_ID}');
+                  `,
+                }}
+              />
+            </>
+          )}
+
           <meta name="google-site-verification" content="" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
           <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+            href="https://fonts.googleapis.com/css?family=Fira+Sans:300,300i,400,400i,500,500i"
             rel="stylesheet"
           />
 

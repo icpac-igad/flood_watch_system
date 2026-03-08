@@ -17,9 +17,9 @@ import "./styles.scss";
 // Risk level configuration
 const RISK_LEVELS = [
   { value: "normal", label: "Normal", color: "#b0b0b0", description: "No flood risk expected" },
-  { value: "warning", label: "Warning", color: "#FFC107", description: "Moderate flood risk - monitor situation" },
-  { value: "alarm", label: "Alarm", color: "#FF9800", description: "High flood risk - prepare for action" },
-  { value: "emergency", label: "Emergency", color: "#F44336", description: "Severe flood risk - immediate action required" },
+  { value: "warning", label: "Moderate", color: "#FFC107", description: "Moderate flood risk - monitor situation" },
+  { value: "alarm", label: "Severe", color: "#FF9800", description: "High flood risk - prepare for action" },
+  { value: "emergency", label: "Extreme", color: "#F44336", description: "Extreme flood risk - immediate action required" },
 ];
 
 // Default map style (simple basemap)

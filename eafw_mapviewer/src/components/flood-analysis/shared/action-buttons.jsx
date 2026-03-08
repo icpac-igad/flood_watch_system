@@ -1,76 +1,55 @@
 /**
  * Action Buttons Component
- * Server-side PDF export via WeasyPrint, share, print, subscribe
+ * Client-side PDF export via jsPDF, share, print, subscribe
  */
-import React, { useState, useCallback } from "react";
-import { isEmpty } from "lodash";
-
-import { REPORTS_API } from "@/utils/constants";
-import Button from "@/components/ui/button";
+import React, { useState, useCallback, useEffect } from "react";
 
 import "./action-buttons.scss";
 
 /**
- * Capture a MapLibre GL canvas as a base64 PNG string (without the data URI prefix).
+ * Render the active report UI to a canvas for jsPDF export.
  */
-const captureMapCanvas = () => {
-  const canvas = document.querySelector(".maplibregl-canvas");
-  if (!canvas) return null;
+const captureReportCanvas = async () => {
+  const reportRoot = document.querySelector(".c-flood-analysis-body");
+  if (!reportRoot) return null;
 
+  const html2canvas = (await import("html2canvas")).default;
   try {
-    const dataUrl = canvas.toDataURL("image/png");
-    // Strip the "data:image/png;base64," prefix
-    return dataUrl.replace(/^data:image\/png;base64,/, "");
-  } catch (e) {
-    console.warn("Could not capture map canvas:", e);
-    return null;
-  }
-};
-
-/**
- * Capture a Recharts SVG chart as base64 PNG.
- */
-const captureChartSvg = () => {
-  const svgEl = document.querySelector(".c-timeseries-chart .recharts-wrapper svg");
-  if (!svgEl) return null;
-
-  try {
-    const serializer = new XMLSerializer();
-    const svgString = serializer.serializeToString(svgEl);
-    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(svgBlob);
-
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width * 2;
-        canvas.height = img.height * 2;
-        const ctx = canvas.getContext("2d");
-        ctx.scale(2, 2);
-        ctx.drawImage(img, 0, 0);
-        URL.revokeObjectURL(url);
-        const dataUrl = canvas.toDataURL("image/png");
-        resolve(dataUrl.replace(/^data:image\/png;base64,/, ""));
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve(null);
-      };
-      img.src = url;
+    return await html2canvas(reportRoot, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      windowWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+      windowHeight: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
     });
   } catch (e) {
-    console.warn("Could not capture chart:", e);
+    console.warn("Could not capture report body:", e);
     return null;
   }
 };
 
-const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
+const ActionButtons = ({ params }) => {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [subscribeDialogOpen, setSubscribeDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({ show: false, message: "", type: "info" });
   const [shareUrl, setShareUrl] = useState("");
+  const [activeReport, setActiveReport] = useState(null);
+
+  useEffect(() => {
+    const handleActiveSelection = (event) => {
+      const selected = event?.detail;
+      if (!selected || !selected.id) {
+        setActiveReport(null);
+        return;
+      }
+      setActiveReport(selected);
+    };
+
+    window.addEventListener("flood-report-active-selection", handleActiveSelection);
+    return () => window.removeEventListener("flood-report-active-selection", handleActiveSelection);
+  }, []);
 
   // Show snackbar notification
   const showSnackbar = (message, type = "info") => {
@@ -78,59 +57,100 @@ const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
     setTimeout(() => setSnackbar({ show: false, message: "", type: "info" }), 4000);
   };
 
-  // Generate PDF via server-side WeasyPrint
+  // Generate PDF directly in browser via jsPDF + html2canvas
   const handleGeneratePdf = useCallback(async () => {
     setPdfLoading(true);
     showSnackbar("Generating PDF report...", "info");
 
     try {
-      // Capture map and chart images from the DOM
-      const mapImage = captureMapCanvas();
-      const chartImage = await captureChartSvg();
+      const { jsPDF } = await import("jspdf");
+      const canvas = await captureReportCanvas();
+      const pdf = new jsPDF("p", "mm", "a4");
+      const margin = 8;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
 
-      // Build request payload
-      const payload = {
-        forecast_date: params?.forecast_date || new Date().toISOString().split("T")[0],
-        placename: params?.placename || "East Africa Region",
-        unit_id: params?.unit_id || null,
-        admin_level: params?.admin_level || null,
-        map_image: mapImage,
-        chart_image: chartImage,
-      };
+      if (canvas) {
+        const imageData = canvas.toDataURL("image/jpeg", 0.92);
+        const printableWidth = pageWidth - (margin * 2);
+        const printableHeight = (canvas.height * printableWidth) / canvas.width;
+        const pageBodyHeight = pageHeight - (margin * 2);
 
-      // POST to server-side PDF endpoint
-      const response = await fetch(`${REPORTS_API}/flood-analysis/pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+        let heightLeft = printableHeight;
+        let yPosition = margin;
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Server returned ${response.status}`);
+        pdf.addImage(
+          imageData,
+          "JPEG",
+          margin,
+          yPosition,
+          printableWidth,
+          printableHeight,
+          undefined,
+          "FAST"
+        );
+        heightLeft -= pageBodyHeight;
+
+        while (heightLeft > 0) {
+          pdf.addPage();
+          yPosition = margin - (printableHeight - heightLeft);
+          pdf.addImage(
+            imageData,
+            "JPEG",
+            margin,
+            yPosition,
+            printableWidth,
+            printableHeight,
+            undefined,
+            "FAST"
+          );
+          heightLeft -= pageBodyHeight;
+        }
+      } else {
+        // Fallback text-only PDF when canvas capture fails.
+        let y = 16;
+        const lineGap = 7;
+        const maxTextWidth = pageWidth - (margin * 2);
+
+        pdf.setFontSize(15);
+        pdf.text("Flood Analysis Report", margin, y);
+        y += lineGap + 1;
+
+        pdf.setFontSize(10);
+        const fallbackLines = [
+          `Reference date: ${params?.forecast_date || "N/A"}`,
+          `Area: ${params?.placename || "East Africa Region"}`,
+          activeReport?.report_key ? `Selected report: ${activeReport.report_key}` : "Selected report: none",
+          activeReport?.status ? `Status: ${activeReport.status}` : "Status: draft/unapproved",
+          "Report body screenshot failed, so this fallback summary was generated.",
+        ];
+        fallbackLines.forEach((line) => {
+          const wrapped = pdf.splitTextToSize(line, maxTextWidth);
+          pdf.text(wrapped, margin, y);
+          y += (wrapped.length * 4.8) + 1;
+        });
       }
 
-      // Download the PDF blob
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
       const dateStr = params?.forecast_date || new Date().toISOString().split("T")[0];
-      const regionStr = (params?.placename || "East_Africa").replace(/\s+/g, "_");
-      a.href = url;
-      a.download = `FloodAnalysis_${regionStr}_${dateStr}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const regionStr = (params?.placename || "East_Africa_Region").replace(/\s+/g, "_");
+      const reportKey = activeReport?.report_key ? `_${activeReport.report_key}` : "";
+      pdf.save(`FloodAnalysis_${regionStr}_${dateStr}${reportKey}.pdf`);
 
-      showSnackbar("PDF downloaded successfully!", "success");
+      if (activeReport?.id) {
+        showSnackbar(
+          `Interactive ${activeReport.status === "published" ? "published" : "draft"} PDF downloaded.`,
+          "success"
+        );
+      } else {
+        showSnackbar("PDF downloaded successfully!", "success");
+      }
     } catch (error) {
       console.error("PDF generation error:", error);
       showSnackbar(error.message || "Failed to generate PDF. Please try again.", "error");
     } finally {
       setPdfLoading(false);
     }
-  }, [params]);
+  }, [params, activeReport]);
 
   // Handle share button click
   const handleShare = useCallback(() => {
@@ -181,7 +201,7 @@ const ActionButtons = ({ params, settings, forecastData, updateSettings }) => {
             Generating...
           </>
         ) : (
-          <>Export PDF</>
+          <>{activeReport?.id ? "Export Interactive PDF" : "Export PDF"}</>
         )}
       </button>
 

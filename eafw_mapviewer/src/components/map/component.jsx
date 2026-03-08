@@ -6,6 +6,7 @@ import debounce from "lodash/debounce";
 import cx from "classnames";
 
 import { trackMapLatLon, trackEvent } from "@/utils/analytics";
+import { ALERT_COLORS, ALERT_ICON_NAMES, CLUSTER_ICON_PREFIX, loadStormIconToMap } from "@/utils/multimodal-config";
 
 import Loader from "@/components/ui/loader";
 import Icon from "@/components/ui/icon";
@@ -22,10 +23,8 @@ import Attributions from "./components/attributions";
 
 // Components
 import LayerManagerWrapper from "./components/layer-manager";
-import MultimodalClusterLayer from "./components/multimodal-cluster";
-import AlertPulse from "./components/emergency-pulse";
-import EmergencyClusterPulse from "./components/emergency-cluster-pulse";
 import BasinLayer from "./components/basin-layer";
+import NileBasinLayer from "./components/nile-basin-layer";
 // import { pulsingDot } from "./mapImages";
 
 import mapStyleForNoStyle from "./style";
@@ -84,17 +83,9 @@ class RenderMap extends PureComponent {
             {/* LAYER MANAGER */}
             <LayerManagerWrapper map={map} mapSide={mapSide} />
 
-            {/* MULTIMODAL CLUSTERED LAYER - disabled: pg_tileserv handles clustering via vector tiles */}
-            {/* <MultimodalClusterLayer map={map} mapSide={mapSide} /> */}
-
-            {/* Alert Pulse (icon fade in/out) — disabled, keeping only the red expanding ring */}
-            {/* <AlertPulse map={map} /> */}
-
-            {/* Emergency Cluster Pulse - halo animation for clustered emergency points */}
-            <EmergencyClusterPulse map={map} />
-
             {/* Basin Layer - Auto-loads basin boundary when clicking forecast points */}
             <BasinLayer map={map} />
+            <NileBasinLayer map={map} />
 
             {!mapSide && (
               <>
@@ -326,6 +317,10 @@ class MapComponent extends Component {
   }
 
   componentWillUnmount() {
+    if (this.map) {
+      this.map.off("styledata", this.onStyleLoad);
+      this.map.off("styleimagemissing", this.handleStyleImageMissing);
+    }
     if (this.state.compareMap) {
       this.state.compareMap.remove();
     }
@@ -333,10 +328,22 @@ class MapComponent extends Component {
 
   loadMapImages = async () => {
     const { vectorLayerIcons } = this.props;
+    if (!this.map) return;
+
+    // Load flood SVG icons for all alert levels (point icons + cluster icons)
+    const floodIconNames = new Set(Object.values(ALERT_ICON_NAMES));
+    const promises = [];
+    Object.entries(ALERT_ICON_NAMES).forEach(([level, name]) => {
+      promises.push(loadStormIconToMap(this.map, name, ALERT_COLORS[level], 36));
+      // Cluster-sized variant
+      const clusterId = `${CLUSTER_ICON_PREFIX}${level}`;
+      promises.push(loadStormIconToMap(this.map, clusterId, ALERT_COLORS[level], 56));
+    });
+    await Promise.all(promises);
 
     if (vectorLayerIcons && !!vectorLayerIcons.length && this.map) {
       vectorLayerIcons.forEach((icon) => {
-        // Check if image already exists to avoid duplicate errors
+        if (floodIconNames.has(icon.name)) return;
         if (this.map.hasImage(icon.name)) return;
 
         this.map.loadImage(icon.url, (error, iconImage) => {
@@ -352,9 +359,25 @@ class MapComponent extends Component {
   handleStyleImageMissing = (e) => {
     const { vectorLayerIcons } = this.props;
     const id = e.id;
+    if (!this.map) return;
 
-    if (!vectorLayerIcons || !this.map) return;
+    // Flood point icons (forecast-pin-v2-icon-{level})
+    const matchedLevel = Object.entries(ALERT_ICON_NAMES).find(([, name]) => name === id);
+    if (matchedLevel && !this.map.hasImage(id)) {
+      loadStormIconToMap(this.map, id, ALERT_COLORS[matchedLevel[0]], 36);
+      return;
+    }
 
+    // Cluster icons (forecast-cluster-{level})
+    if (id.startsWith(CLUSTER_ICON_PREFIX) && !this.map.hasImage(id)) {
+      const level = id.replace(CLUSTER_ICON_PREFIX, '');
+      if (ALERT_COLORS[level]) {
+        loadStormIconToMap(this.map, id, ALERT_COLORS[level], 56);
+        return;
+      }
+    }
+
+    if (!vectorLayerIcons) return;
     const icon = vectorLayerIcons.find(i => i.name === id);
     if (icon && !this.map.hasImage(id)) {
       this.map.loadImage(icon.url, (error, iconImage) => {
@@ -444,18 +467,15 @@ class MapComponent extends Component {
     if (this.map) {
       this.fitMapBoundaryBounds();
 
-      // Listeners
-      this.map.once("styledata", this.onStyleLoad);
+      // Listeners — use `on` (not `once`) so applyBaseMap re-runs
+      // whenever the style URL changes (e.g. after ConfigProvider sets mapStyle).
+      this.map.on("styledata", this.onStyleLoad);
 
       // Handle missing images on-demand
       this.map.on("styleimagemissing", this.handleStyleImageMissing);
     }
 
     this.loadMapImages();
-
-    // add images
-
-    // map.addImage("pulsing-dot", pulsingDot, { pixelRatio: 2 });
   };
 
   checkCompareMapsLoad = () => {
@@ -583,8 +603,9 @@ class MapComponent extends Component {
 
         const currentZoom = this.map.getZoom();
         const maxZoom = typeof this.map.getMaxZoom === "function" ? this.map.getMaxZoom() : 19;
-        // Make sure we cross into the "unclustered" tile zoom level.
-        const targetZoom = Math.min(maxZoom, Math.max(currentZoom + 1, clusterZoom + 0.5));
+        // Step deeper than the cluster threshold so one click is more likely
+        // to explode a cluster into individual points.
+        const targetZoom = Math.min(maxZoom, Math.max(currentZoom + 1.5, clusterZoom + 1.5));
 
         this.map.easeTo({
           center: { lng, lat },

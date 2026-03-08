@@ -5,7 +5,7 @@ __pycache__/
 *.so
 *.egg-info/
 .claude/
-
+*CLAUDE.md
 # Virtual environments
 .venv/
 venv/
@@ -57,6 +57,14 @@ backups/
 # Large GeoJSON files
 *.geojson
 
+# Shapefile and QGIS sidecar artifacts (large binary data; keep out of git)
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.qmd
+
 # OS files
 .DS_Store
 Thumbs.db
@@ -84,6 +92,13 @@ htmlcov/
 /data
 eafw_jobs/data/
 eafw_jobs/logs/
+
+# Raster data (COGs and source TIFFs — large binary files)
+raster-data/cogs/**/*.tif
+raster-data/cogs/**/*.tiff
+raster-data/cogs/**/*.json
+raster-data/source/**/*.tif
+raster-data/source/**/*.tiff
 
 # Backup files (large)
 *.dump

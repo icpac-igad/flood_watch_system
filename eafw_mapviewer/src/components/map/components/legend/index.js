@@ -18,6 +18,69 @@ const actions = {
 };
 
 class Legend extends PureComponent {
+  state = {
+    pendingExtendedCoverageChange: null,
+  };
+
+  isGoogleFloodLayer = (layer) => {
+    const layerName = String(layer?.name || "").toLowerCase();
+    const sourceData = String(layer?.layerConfig?.source?.data || "").toLowerCase();
+    const endpoint = String(layer?.data_endpoint || "").toLowerCase();
+
+    return (
+      layerName.includes("google flood") ||
+      sourceData.includes("/api/v1/google-flood/geojson") ||
+      endpoint.includes("/api/v1/google-flood/geojson")
+    );
+  };
+
+  isTruthyFlag = (value) => {
+    if (typeof value === "boolean") return value;
+    const normalized = String(value ?? "").trim().toLowerCase();
+    return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+  };
+
+  applyParamChange = (currentLayer, newParam, paramConfig) => {
+    const { setMapSettings, activeDatasets } = this.props;
+
+    const linkedParams = {};
+    if (paramConfig?.linkedParams) {
+      Object.keys(paramConfig.linkedParams).forEach((key) => {
+        linkedParams[key] = paramConfig.linkedParams[key];
+      });
+    }
+
+    setMapSettings({
+      datasets: activeDatasets.map((l) => {
+        const dataset = { ...l };
+        if (l.layers.includes(currentLayer.id)) {
+          dataset.params = {
+            ...dataset.params,
+            ...newParam,
+            ...linkedParams,
+          };
+        }
+        return dataset;
+      }),
+    });
+  };
+
+  handleConfirmExtendedCoverage = () => {
+    const pendingChange = this.state.pendingExtendedCoverageChange;
+    if (pendingChange) {
+      this.applyParamChange(
+        pendingChange.currentLayer,
+        pendingChange.newParam,
+        pendingChange.paramConfig
+      );
+    }
+    this.setState({ pendingExtendedCoverageChange: null });
+  };
+
+  handleCancelExtendedCoverage = () => {
+    this.setState({ pendingExtendedCoverageChange: null });
+  };
+
   onChangeOpacity = (currentLayer, opacity) => {
     const { setMapSettings, activeDatasets } = this.props;
     setMapSettings({
@@ -159,32 +222,16 @@ class Legend extends PureComponent {
   };
 
   onChangeParam = (currentLayer, newParam, paramConfig) => {
-    const { setMapSettings, activeDatasets } = this.props;
+    const isGoogleExtendedCoverageToggle =
+      currentLayer &&
+      this.isGoogleFloodLayer(currentLayer) &&
+      Object.prototype.hasOwnProperty.call(newParam || {}, "extended_coverage");
 
-    const linkedParams = {};
-
-    // check for linkedParams that should change
-    if (paramConfig) {
-      if (paramConfig.linkedParams) {
-        Object.keys(paramConfig.linkedParams).forEach((key) => {
-          linkedParams[key] = paramConfig.linkedParams[key];
-        });
-      }
+    if (isGoogleExtendedCoverageToggle) {
+      // Apply directly — no confirmation dialog needed for toggle.
     }
 
-    setMapSettings({
-      datasets: activeDatasets.map((l) => {
-        const dataset = { ...l };
-        if (l.layers.includes(currentLayer.id)) {
-          dataset.params = {
-            ...dataset.params,
-            ...newParam,
-            ...linkedParams,
-          };
-        }
-        return dataset;
-      }),
-    });
+    this.applyParamChange(currentLayer, newParam, paramConfig);
   };
 
   onChangeFilterParam = (currentLayer, newParam) => {
@@ -238,6 +285,9 @@ class Legend extends PureComponent {
   render() {
     return createElement(Component, {
       ...this.props,
+      extendedCoverageConfirmOpen: !!this.state.pendingExtendedCoverageChange,
+      onAcceptExtendedCoverage: this.handleConfirmExtendedCoverage,
+      onCancelExtendedCoverage: this.handleCancelExtendedCoverage,
       onChangeOpacity: this.onChangeOpacity,
       onChangeOrder: this.onChangeOrder,
       onToggleLayer: this.onToggleLayer,

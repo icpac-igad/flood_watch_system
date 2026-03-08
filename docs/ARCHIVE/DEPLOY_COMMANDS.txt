@@ -9,18 +9,18 @@ docker push hkoros/floodwatch-backend:v1.1-staging
 docker push hkoros/floodwatch-frontend:v1.1-staging
 
 # Copy files to staging server
-scp docker-compose.staging.yml hkoros@197.254.1.10:/home/hkoros/flood_watch_staging/docker-compose.yml
-scp .env.staging hkoros@197.254.1.10:/home/hkoros/flood_watch_staging/.env
+scp docker-compose.staging.yml hkoros@41.139.151.242:/home/hkoros/eafw/docker-compose.yml
+scp .env.staging hkoros@41.139.151.242:/home/hkoros/eafw/.env
 
 
 STEP 2: ON STAGING SERVER
 ==========================
 
 # SSH to server
-ssh hkoros@197.254.1.10
+ssh hkoros@41.139.151.242
 
 # Go to directory
-cd /home/hkoros/flood_watch_staging
+cd /home/hkoros/eafw
 
 # Stop current containers
 sudo docker-compose down
@@ -44,15 +44,15 @@ sudo docker-compose exec backend python manage.py sync_floodproofs_to_db
 ONE-LINER FOR STAGING SERVER:
 ==============================
 
-cd /home/hkoros/flood_watch_staging && sudo docker-compose down && sudo docker-compose pull && sudo docker-compose up -d && sudo docker-compose exec backend python manage.py migrate && sudo docker-compose exec backend python manage.py sync_floodproofs_to_db
+cd /home/hkoros/eafw && sudo docker-compose down && sudo docker-compose pull && sudo docker-compose up -d && sudo docker-compose exec backend python manage.py migrate && sudo docker-compose exec backend python manage.py sync_floodproofs_to_db
 
 
 ACCESS URLS:
 ============
 
-Frontend: http://197.254.1.10:8094 or http://10.10.1.13:8094
-Backend: http://197.254.1.10:8090 or http://10.10.1.13:8090
-Admin: http://197.254.1.10:8090/admin
+Frontend: http://41.139.151.242:8094 or http://10.10.1.13:8094
+Backend: http://41.139.151.242:8090 or http://10.10.1.13:8090
+Admin: http://41.139.151.242:8090/admin
 
 
 TROUBLESHOOTING:

@@ -1,0 +1,13 @@
+{
+  "name": "flood_extent_rp100_mapserver_style",
+  "source": "data/mapfiles/classifications/flood-extent-rp100.classes.map",
+  "classes": [
+    {"label": "Dry / no flood (0)", "min": 0, "max": 0, "rgba": [0, 0, 0, 0]},
+    {"label": "Low consensus (1/6)", "min": 1, "max": 1, "rgba": [222, 235, 247, 255]},
+    {"label": "Consensus (2/6)", "min": 2, "max": 2, "rgba": [198, 219, 239, 255]},
+    {"label": "Consensus (3/6)", "min": 3, "max": 3, "rgba": [158, 202, 225, 255]},
+    {"label": "Consensus (4/6)", "min": 4, "max": 4, "rgba": [107, 174, 214, 255]},
+    {"label": "High consensus (5/6)", "min": 5, "max": 5, "rgba": [49, 130, 189, 255]},
+    {"label": "Very high consensus (6/6)", "min": 6, "max": 6, "rgba": [8, 81, 156, 255]}
+  ]
+}

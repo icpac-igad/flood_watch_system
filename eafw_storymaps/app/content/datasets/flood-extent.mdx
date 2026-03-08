@@ -1,0 +1,47 @@
+---
+id: flood-extent-return-periods
+name: Flood Extent — Return Periods
+description: "Flood extent maps derived from JRC Global Surface Water data showing inundation areas for 20, 50, 100, and 200-year return periods across the Greater Horn of Africa."
+media:
+  src: /storymaps/images/flood-extent-cover.jpg
+  alt: Satellite view of flooding along a river in East Africa
+taxonomy:
+  - name: Topics
+    values:
+      - Hazard
+      - Flood
+layers:
+  - id: flood-extent-rp
+    stacCol: flood-extent-return-periods
+    name: Flood Extent (Return Periods)
+    type: raster
+    description: "Flood inundation extent for various return periods (20–200 yr)."
+    sourceParams:
+      colormap_name: blues
+      rescale: "0,4"
+    legend:
+      type: categorical
+      stops:
+        - color: "#deebf7"
+          label: "RP 20yr"
+        - color: "#9ecae1"
+          label: "RP 50yr"
+        - color: "#4292c6"
+          label: "RP 100yr"
+        - color: "#08519c"
+          label: "RP 200yr"
+---
+
+<Block>
+  <Prose>
+    ## Flood Extent — Return Periods
+
+    This dataset provides flood extent maps for the Greater Horn of Africa,
+    derived from JRC Global Surface Water observations. The maps show areas
+    likely to be inundated during flood events with return periods of 20, 50,
+    100, and 200 years.
+
+    The data is used by FloodWatch to assess flood hazard levels and identify
+    populations at risk during extreme rainfall events.
+  </Prose>
+</Block>

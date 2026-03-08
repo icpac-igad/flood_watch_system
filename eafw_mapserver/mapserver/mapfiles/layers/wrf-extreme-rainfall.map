@@ -4,7 +4,7 @@
 # Heavy Rainfall
 LAYER
     INCLUDE "config/database.map"
-    DATA "geom from (select g.id, r.f90_mm as rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.extreme_rainfall r on g.id = r.grid_id where r.forecast_date = '%time%'::date and r.f90_mm > 0 and exists (select 1 from gha.admin0 a where a.geom && g.cell and ST_Intersects(g.cell, a.geom))) as subq using unique id using srid=4326"
+    DATA "geom from (select g.id, r.f90_mm as rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.extreme_rainfall r on g.id = r.grid_id where r.forecast_date = '%time%'::date and r.f90_mm > 0 and exists (select 1 from gha.admin0 a where a.geom && g.cell and ST_Within(g.cell, a.geom))) as subq using unique id using srid=4326"
     INCLUDE "shared/common-layer-properties.map"
     CLASS
         NAME "Heavy Rainfall"
@@ -27,7 +27,7 @@ END
 # Very Heavy Rainfall
 LAYER
     INCLUDE "config/database.map"
-    DATA "geom from (select g.id, r.f95_mm as rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.extreme_rainfall r on g.id = r.grid_id where r.forecast_date = '%time%'::date and r.f95_mm > 0 and exists (select 1 from gha.admin0 a where a.geom && g.cell and ST_Intersects(g.cell, a.geom))) as subq using unique id using srid=4326"
+    DATA "geom from (select g.id, r.f95_mm as rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.extreme_rainfall r on g.id = r.grid_id where r.forecast_date = '%time%'::date and r.f95_mm > 0 and exists (select 1 from gha.admin0 a where a.geom && g.cell and ST_Within(g.cell, a.geom))) as subq using unique id using srid=4326"
     INCLUDE "shared/common-layer-properties.map"
     CLASS
         NAME "Very Heavy Rainfall"
@@ -50,7 +50,7 @@ END
 # Extremely Heavy Rainfall
 LAYER
     INCLUDE "config/database.map"
-    DATA "geom from (select g.id, r.f99_mm as rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.extreme_rainfall r on g.id = r.grid_id where r.forecast_date = '%time%'::date and r.f99_mm > 0 and exists (select 1 from gha.admin0 a where a.geom && g.cell and ST_Intersects(g.cell, a.geom))) as subq using unique id using srid=4326"
+    DATA "geom from (select g.id, r.f99_mm as rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.extreme_rainfall r on g.id = r.grid_id where r.forecast_date = '%time%'::date and r.f99_mm > 0 and exists (select 1 from gha.admin0 a where a.geom && g.cell and ST_Within(g.cell, a.geom))) as subq using unique id using srid=4326"
     INCLUDE "shared/common-layer-properties.map"
     CLASS
         NAME "Extremely Heavy Rainfall"

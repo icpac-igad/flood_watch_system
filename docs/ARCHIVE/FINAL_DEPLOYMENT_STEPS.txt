@@ -3,7 +3,7 @@ FloodWatch v1.1-staging - Final Deployment Steps
 
 CURRENT STATUS:
 - Backend and Frontend images pushed to Docker Hub
-- Containers running on staging server (197.254.1.10)
+- Containers running on staging server (41.139.151.242)
 - Flood forecast data loaded (30 days)
 - Admin and lakes data NOT yet loaded
 
@@ -18,18 +18,18 @@ On your LOCAL machine, you need to have these files:
 
 Copy them to staging server:
 
-scp Admin1.geojson hkoros@197.254.1.10:/home/hkoros/flood_watch_staging/data/
-scp Admin2.geojson hkoros@197.254.1.10:/home/hkoros/flood_watch_staging/data/
-scp Lakes.geojson hkoros@197.254.1.10:/home/hkoros/flood_watch_staging/data/
+scp Admin1.geojson hkoros@41.139.151.242:/home/hkoros/eafw/data/
+scp Admin2.geojson hkoros@41.139.151.242:/home/hkoros/eafw/data/
+scp Lakes.geojson hkoros@41.139.151.242:/home/hkoros/eafw/data/
 
 =================================================
 STEP 2: UPDATE BACKEND CONTAINER ON STAGING
 =================================================
 
 SSH to staging server:
-ssh hkoros@197.254.1.10
+ssh hkoros@41.139.151.242
 
-cd /home/hkoros/flood_watch_staging
+cd /home/hkoros/eafw
 
 # Pull updated backend image
 sudo docker-compose pull backend
@@ -77,8 +77,8 @@ STEP 5: TEST THE APPLICATION
 Clear browser cache (Ctrl + Shift + Delete) or use Incognito mode
 
 Access the application:
-- Frontend: http://197.254.1.10:8094/map
-- Admin: http://197.254.1.10:8094/admin
+- Frontend: http://41.139.151.242:8094/map
+- Admin: http://41.139.151.242:8094/admin
 
 Login to admin with:
 - Username: admin
@@ -96,9 +96,9 @@ ACCESS INFORMATION
 =================================================
 
 External URLs:
-- Frontend: http://197.254.1.10:8094
-- Backend API: http://197.254.1.10:8090
-- Admin: http://197.254.1.10:8094/admin
+- Frontend: http://41.139.151.242:8094
+- Backend API: http://41.139.151.242:8090
+- Admin: http://41.139.151.242:8094/admin
 
 Internal URLs:
 - Frontend: http://10.10.1.13:8094
@@ -124,7 +124,7 @@ DOCKER IMAGES DEPLOYED
 DATA FILES LOCATION ON STAGING
 =================================================
 
-Data directory: /home/hkoros/flood_watch_staging/data/
+Data directory: /home/hkoros/eafw/data/
 
 Expected files:
 - Admin1.geojson
@@ -132,7 +132,7 @@ Expected files:
 - Lakes.geojson
 
 Flood forecast data is in:
-- /home/hkoros/flood_watch_staging/data/merged/2025/
+- /home/hkoros/eafw/data/merged/2025/
 
 =================================================
 TROUBLESHOOTING
@@ -147,7 +147,7 @@ If API errors persist:
    curl http://localhost:8090/api/admin1/
 
 If data doesn't load:
-1. Check files exist: ls -la /home/hkoros/flood_watch_staging/data/
+1. Check files exist: ls -la /home/hkoros/eafw/data/
 2. Check file permissions: should be readable
 3. Run load command with verbose output
 4. Check backend logs for errors

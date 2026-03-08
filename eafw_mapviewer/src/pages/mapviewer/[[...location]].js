@@ -13,7 +13,9 @@ import LocationProvider from "@/providers/location-provider";
 import {
   setMapSettings,
   setFilterInteractions,
-  setParamInteractions
+  setParamInteractions,
+  setInitialParamInteractions,
+  setCmsScopes,
 } from "@/components/map/actions";
 import { setMainMapSettings } from "@/layouts/map/actions";
 import { setMenuSettings } from "@/components/map-menu/actions";
@@ -143,6 +145,47 @@ const MapPage = (props) => {
       dispatch(setMapPrompts(mapPrompts));
     }
   }, [fullPathname, isFallback]);
+
+  // Fetch CMS scopes and apply default scope on initial load
+  useEffect(() => {
+    const initCmsScopes = async () => {
+      try {
+        const res = await fetch('/api/v1/cms/scopes');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Store scopes in Redux for filter panel and other components
+        dispatch(setCmsScopes(data));
+
+        const defaultScope = data.default_scope || 'all';
+
+        // Check if URL already provided scope params — don't override
+        const decoded = decodeQueryParams(query) || {};
+        const urlScope = query?.scope || decoded?.mapData?.paramInteractions?.scope;
+
+        if (urlScope && urlScope !== 'all') {
+          // URL provided a scope — use it and set as initial for "clear" behavior
+          const scopeParams = {
+            scope: urlScope,
+            whca_filter: urlScope === 'whca',
+          };
+          dispatch(setParamInteractions(scopeParams));
+          dispatch(setInitialParamInteractions(scopeParams));
+        } else if (defaultScope !== 'all') {
+          // No URL scope — apply CMS default
+          const scopeParams = {
+            scope: defaultScope,
+            whca_filter: defaultScope === 'whca',
+          };
+          dispatch(setParamInteractions(scopeParams));
+          dispatch(setInitialParamInteractions(scopeParams));
+        }
+      } catch (e) {
+        // Silently fall back to 'all' on error
+      }
+    };
+    initCmsScopes();
+  }, []);
 
   // when setting the query params from the URL we need to make sure we don't render the map
   // on the server otherwise the DOM will be out of sync

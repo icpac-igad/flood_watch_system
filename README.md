@@ -83,6 +83,19 @@ docker compose down
 docker compose restart eafw_cms eafw_api eafw_jobs
 ```
 
+### MapServer / MapCache maintenance (automated)
+
+```bash
+# Default: sync mapfiles + restart map stack + smoke tests
+scripts/manage_map_services.sh
+
+# Full reset including mapcache tile cleanup
+scripts/manage_map_services.sh --all-with-cache
+
+# Staging-style run with explicit compose/env
+scripts/manage_map_services.sh --compose-file docker-compose.staging.yml --env-file .env --all-with-cache
+```
+
 ### Django admin and migrations
 
 ```bash

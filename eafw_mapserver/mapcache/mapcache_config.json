@@ -5,16 +5,16 @@
     "defaultlanguage": "eng",
     "fees": "No fees for this service",
     "accessconstraints": "No access restrictions",
-    "providername": "IGAD Climate Prediction and Applications Center - ICPAC",
+    "providername": "ICPAC Climate Prediction and Applications Centre",
     "providerurl": "https://www.icpac.net/",
     "contactorganization": "disaster-risk-management@igad.int",
-    "contactname": "IGAD DRM Programme",
+    "contactname": "ICPAC Disaster Risk Management Programme",
     "contactcountry": "Kenya",
     "contactcity": "Nairobi",
     "url": "${SERVICE_URL}"
   },
   "global_url_definitions": {
-    "eafw_mapserver": "${MAPSERVER_URL}"
+    "eafw_mapserver": "${SOURCE_URL}"
   },
   "global_options": {
     "num_threads": "${NUM_THREADS}",
@@ -94,6 +94,26 @@
       "transparent": "true",
       "connection_timeout": 30,
       "timeout": 300
+    },
+    {
+      "name": "asap_cropland_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "asap_cropland",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    },
+    {
+      "name": "asap_rangeland_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "asap_rangeland",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
     }
   ],
   "tileset_attrs": {
@@ -119,6 +139,36 @@
         "type": "regex",
         "default": "2024-11-28",
         "regex": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      {
+        "name": "scope",
+        "type": "regex",
+        "default": "all",
+        "regex": "^(all|project|whca)?$"
+      },
+      {
+        "name": "project_countries",
+        "type": "regex",
+        "default": "__none__",
+        "regex": "^(__none__|[A-Za-z ,'-]*)$"
+      },
+      {
+        "name": "country_name",
+        "type": "regex",
+        "default": "__none__",
+        "regex": "^(__none__|[A-Za-z .,'-]*)$"
+      },
+      {
+        "name": "region_name",
+        "type": "regex",
+        "default": "__none__",
+        "regex": "^(__none__|[A-Za-z .,'-]*)$"
+      },
+      {
+        "name": "district_name",
+        "type": "regex",
+        "default": "__none__",
+        "regex": "^(__none__|[A-Za-z .,'-]*)$"
       }
     ]
   },
@@ -145,6 +195,22 @@
       "format_ref": "png_fast",
       "metadata": {
         "title": "Flood Extent 100-Year Return Period Tiles"
+      }
+    },
+    {
+      "name": "asap_cropland",
+      "source": "asap_cropland_source",
+      "format_ref": "png_fast",
+      "metadata": {
+        "title": "ASAP Cropland Mask v02"
+      }
+    },
+    {
+      "name": "asap_rangeland",
+      "source": "asap_rangeland_source",
+      "format_ref": "png_fast",
+      "metadata": {
+        "title": "ASAP Rangeland Mask v02"
       }
     }
   ],

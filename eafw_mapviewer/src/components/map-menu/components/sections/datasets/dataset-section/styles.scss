@@ -32,7 +32,7 @@
       display: flex;
       align-items: center;
 
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 500;
       line-height: 1.1;
       color: $greyish-brown;
@@ -55,6 +55,8 @@
 
       .category-icon {
         margin-right: 8px;
+        width: rem(12px);
+        height: rem(12px);
         fill: $primary-color;
       }
     }
@@ -66,20 +68,20 @@
 
       .c-icon {
         fill: $primary-color;
-        height: 14px;
-        width: 14px;
+        height: 12px;
+        width: 12px;
       }
     }
   }
 
   .subtitle {
-    font-size: 12px;
+    font-size: 11px;
     letter-spacing: -0.3px;
     color: $hot-grey;
   }
 
   .text {
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.33;
     letter-spacing: -0.3px;
 

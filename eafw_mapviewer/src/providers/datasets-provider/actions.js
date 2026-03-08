@@ -30,6 +30,15 @@ export const fetchDatasets = createThunkAction(
         const initialVisibleDatasets = apiDatasets.filter(
           (d) => d.initialVisible
         );
+        // Only force Admin Level 0 (country borders) on by default.
+        // Level 1 and 2 are available but users toggle them manually.
+        const admin0Dataset = apiDatasets.find((d) =>
+          /^admin level 0 boundary$/i.test(d?.name || "")
+        );
+        const defaultVisibleDatasets = [...initialVisibleDatasets];
+        if (admin0Dataset && !defaultVisibleDatasets.some((d) => d.id === admin0Dataset.id)) {
+          defaultVisibleDatasets.push(admin0Dataset);
+        }
 
         const datasetsWithAnalysis = apiDatasets.reduce(
           (allDatasets, dataset) => {
@@ -130,22 +139,42 @@ export const fetchDatasets = createThunkAction(
         }
 
         // set default visible datasets when no datasets in map url state
-        if (!hasDatasetsInUrlState && !!initialVisibleDatasets.length) {
-          const newDatasets = [...currentActiveDatasets].concat(
-            initialVisibleDatasets.reduce((all, dataset) => {
-              const config = {
-                dataset: dataset.id,
-                layers: dataset.layers.map((l) => l.id),
-                opacity: 1,
-                visibility: true,
-              };
-              all.push(config);
-              return all;
-            }, [])
-          );
+        if (!hasDatasetsInUrlState && !!defaultVisibleDatasets.length) {
+          const newDatasets = [...currentActiveDatasets];
+          defaultVisibleDatasets.forEach((dataset) => {
+            if (newDatasets.some((d) => d.dataset === dataset.id)) return;
+            newDatasets.push({
+              dataset: dataset.id,
+              layers: dataset.layers.map((l) => l.id),
+              opacity: 1,
+              visibility: true,
+            });
+          });
 
           // set new active Datasets
           dispatch(setMapSettings({ datasets: newDatasets }));
+        }
+
+        // Backward compatibility for shared URLs: ensure admin0 boundary is present.
+        if (admin0Dataset) {
+          const currentMapDatasets = getState().map?.settings?.datasets || [];
+          const hasAdmin0 = currentMapDatasets.some(
+            (active) => active.dataset === admin0Dataset.id
+          );
+
+          if (!hasAdmin0) {
+            dispatch(setMapSettings({
+              datasets: [
+                ...currentMapDatasets,
+                {
+                  dataset: admin0Dataset.id,
+                  layers: admin0Dataset.layers.map((l) => l.id),
+                  opacity: 1,
+                  visibility: true,
+                },
+              ],
+            }));
+          }
         }
 
         dispatch(updateDatasets(datasetsWithAnalysis));

@@ -1,6 +1,6 @@
 from adminboundarymanager.models import AdminBoundarySettings
 from wagtail import hooks
-from wagtail.api.v2.utils import get_full_url
+from geomanager.utils import get_full_url
 from wagtail_modeladmin.options import modeladmin_register
 
 from .admin import GeoManagerAdminGroup, urls as geomanager_urls

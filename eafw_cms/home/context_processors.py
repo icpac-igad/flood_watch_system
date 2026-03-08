@@ -1,3 +1,5 @@
+import os
+
 from django.core.cache import cache
 from django.utils.translation import get_language
 from django.db import connection
@@ -48,4 +50,11 @@ def language_context(request):
     return {
         "cms_languages": enabled_languages,
         "current_language": get_language() or "en",
+    }
+
+
+def analytics_context(request):
+    """Expose Google Analytics property ID to templates."""
+    return {
+        "ANALYTICS_PROPERTY_ID": os.getenv("ANALYTICS_PROPERTY_ID", ""),
     }

@@ -11,7 +11,7 @@ import {
 export const isMultimodalCircleLayer = (layer) => {
   const sourceLayer = layer?.["source-layer"];
   return (
-    layer?.type === "circle" &&
+    (layer?.type === "circle" || layer?.type === "symbol") &&
     typeof sourceLayer === "string" &&
     sourceLayer.includes("multimodal_points")
   );

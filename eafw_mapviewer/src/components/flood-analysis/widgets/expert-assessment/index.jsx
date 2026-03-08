@@ -8,12 +8,13 @@ import { getCookie } from "@/services/user";
 import Loader from "@/components/ui/loader";
 import Button from "@/components/ui/button";
 
+import CapDraftButton from "./cap-draft-button";
 import "./styles.scss";
 
 const RISK_LEVELS = [
-  { value: "emergency", label: "Emergency", color: ALERT_COLORS.emergency },
-  { value: "alarm", label: "Alarm", color: ALERT_COLORS.alarm },
-  { value: "warning", label: "Warning", color: ALERT_COLORS.warning },
+  { value: "emergency", label: "Extreme", color: ALERT_COLORS.emergency },
+  { value: "alarm", label: "Severe", color: ALERT_COLORS.alarm },
+  { value: "warning", label: "Moderate", color: ALERT_COLORS.warning },
   { value: "watch", label: "Watch", color: ALERT_COLORS.watch || "#2196F3" },
   { value: "normal", label: "Normal", color: ALERT_COLORS.normal },
 ];
@@ -35,7 +36,6 @@ const COUNTRY_CODE_TO_NAME = {
   BD: "Burundi",
   BI: "Burundi",
   DJ: "Djibouti",
-  ER: "Eritrea",
   ET: "Ethiopia",
   KE: "Kenya",
   RW: "Rwanda",
@@ -50,7 +50,6 @@ const COUNTRY_CODE_TO_NAME = {
 const COUNTRY_NAME_TO_CODE = {
   burundi: "BI",
   djibouti: "DJ",
-  eritrea: "ER",
   ethiopia: "ET",
   kenya: "KE",
   rwanda: "RW",
@@ -83,11 +82,6 @@ const DEFAULT_MAP_STYLE = {
 };
 
 const GHA_BOUNDS = [[21, -12], [52, 23]];
-
-const REPORT_GROUP_OPTIONS = [
-  { value: "member_state", label: "Member-State Report" },
-  { value: "general", label: "General Report" },
-];
 
 const normalizeCountryCode = (value) => {
   const text = (value || "").toString().trim();
@@ -149,29 +143,21 @@ const getRiskColor = (riskLevel) => {
 };
 
 const ExpertAssessmentWidget = ({
-  params,
-  forecastData,
   forecastDate,
   selectedCountry,
-  loggedIn,
   userData,
 }) => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const districtEditsRef = useRef({});
   const mergedRiskByKeyRef = useRef({});
-  const timeseriesSnapshotRef = useRef(null);
 
   const [expertType, setExpertType] = useState("hydrologist");
-  const [reportGroup, setReportGroup] = useState("member_state");
 
   const [overallRisk, setOverallRisk] = useState("normal");
   const [overallComment, setOverallComment] = useState("");
   const [affectedAreas, setAffectedAreas] = useState("");
   const [recommendations, setRecommendations] = useState("");
-
-  const [contributorName, setContributorName] = useState("");
-  const [contributorCountry, setContributorCountry] = useState("");
 
   const [saveLoading, setSaveLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -188,12 +174,17 @@ const ExpertAssessmentWidget = ({
 
   const selectedCountryCode = useMemo(() => normalizeCountryCode(selectedCountry), [selectedCountry]);
   const selectedCountryName = useMemo(() => resolveCountryName(selectedCountry), [selectedCountry]);
+  const hasCountryFocus = !!(selectedCountryCode && selectedCountryCode !== "REGION");
+  const reportScope = hasCountryFocus ? "member_state" : "general";
+  const reportCountryCode = hasCountryFocus ? selectedCountryCode : "REGION";
+  const reportCountryName = hasCountryFocus
+    ? (selectedCountryName || selectedCountryCode)
+    : "East Africa Region";
 
-  const mapCountryFilter = useMemo(() => {
-    if (reportGroup !== "member_state") return "";
-    if (selectedCountryName) return selectedCountryName;
-    return "";
-  }, [reportGroup, selectedCountryName]);
+  const mapCountryFilter = useMemo(
+    () => (hasCountryFocus ? selectedCountryName : ""),
+    [hasCountryFocus, selectedCountryName]
+  );
 
   const mergedRiskByKey = useMemo(() => {
     const merged = { ...majorityByKey };
@@ -233,6 +224,11 @@ const ExpertAssessmentWidget = ({
     setRecommendations("");
     setDistrictEdits({});
     setStatusMessage("");
+    window.dispatchEvent(
+      new CustomEvent("flood-report-active-selection", {
+        detail: null,
+      })
+    );
   }, []);
 
   const loadMajority = useCallback(async () => {
@@ -240,7 +236,7 @@ const ExpertAssessmentWidget = ({
 
     try {
       const query = new URLSearchParams({ date: forecastDate, admin_level: "2" });
-      if (reportGroup === "member_state" && selectedCountryName) {
+      if (selectedCountryName) {
         query.set("country", selectedCountryName);
       }
       const response = await fetch(`/api/v1/risk/risk-majority?${query.toString()}`);
@@ -257,11 +253,11 @@ const ExpertAssessmentWidget = ({
       console.error("Failed to load majority risk:", error);
       setMajorityByKey({});
     }
-  }, [forecastDate, reportGroup, selectedCountryName]);
+  }, [forecastDate, selectedCountryName]);
 
   const loadSingleReport = useCallback(async (assessmentId) => {
     try {
-      const response = await fetch(`/api/v1/assessments/country-assessments/?id=${assessmentId}&include_districts=true&include_snapshot=true`);
+      const response = await fetch(`/api/v1/assessments/country-assessments/?id=${assessmentId}&include_districts=true`);
       if (!response.ok) return;
       const data = await response.json();
       const report = (data.assessments || [])[0];
@@ -272,13 +268,6 @@ const ExpertAssessmentWidget = ({
       setOverallComment(report.assessment_comment || "");
       setAffectedAreas(report.affected_areas || "");
       setRecommendations(report.recommendations || "");
-
-      if (report.contributor_name) {
-        setContributorName(report.contributor_name);
-      }
-      if (report.contributor_country) {
-        setContributorCountry(report.contributor_country);
-      }
 
       const mappedDistricts = {};
       (report.district_assessments || []).forEach((item) => {
@@ -295,34 +284,35 @@ const ExpertAssessmentWidget = ({
       setDistrictEdits(mappedDistricts);
 
       setStatusMessage(`Loaded ${report.report_key}`);
+      window.dispatchEvent(
+        new CustomEvent("flood-report-active-selection", {
+          detail: {
+            id: report.id,
+            status: report.status,
+            report_key: report.report_key,
+            expert_type: report.expert_type,
+            country_code: report.country_code,
+            country_name: report.country_name,
+            assessment_date: report.assessment_date,
+            completion_state: report.completion_state,
+          },
+        })
+      );
     } catch (error) {
       console.error("Failed to load report details:", error);
     }
   }, []);
 
-  const saveReport = useCallback(async () => {
+  const saveReport = useCallback(async (mode = "draft") => {
+    const saveMode = mode === "submitted" ? "submitted" : "draft";
+
     if (!forecastDate) {
       setStatusMessage("Select a forecast date before saving.");
       return;
     }
 
-    if (reportGroup === "member_state" && !selectedCountryCode) {
-      setStatusMessage("Select a country to save a member-state report.");
-      return;
-    }
-
-    if (reportGroup === "member_state" && !loggedIn) {
-      setStatusMessage("Sign in is required for member-state expert reports.");
-      return;
-    }
-
     if (!overallComment.trim()) {
       setStatusMessage("Overall assessment comment is required before saving.");
-      return;
-    }
-
-    if (reportGroup === "general" && !contributorCountry.trim()) {
-      setStatusMessage("Country of origin is required for general reports.");
       return;
     }
 
@@ -337,71 +327,33 @@ const ExpertAssessmentWidget = ({
       comment: item.comment || "",
     }));
 
-    const creatorFromProfile = (userData && (userData.full_name || userData.email || userData.username)) || "";
-
-    const reportSnapshot = {
-      version: "2026.02",
-      captured_at: new Date().toISOString(),
-      context: {
-        reporting_unit: params?.reporting_unit || "East Africa Region",
-        forecast_date: forecastDate,
-        alert_filter: params?.alert_filter || "all",
-        scope: params?.scope || "all",
-        admin_level: params?.admin_level || null,
-        unit_id: params?.unit_id || null,
-        placename: params?.placename || (reportGroup === "member_state" ? selectedCountryName : "East Africa Region"),
-        admin0_code: params?.admin0_code || null,
-        admin1_code: params?.admin1_code || null,
-        report_group: reportGroup,
-        expert_type: expertType,
-      },
-      sections: {
-        flood_risk_exposure: forecastData?.alert_summary || null,
-        regional_breakdown: Array.isArray(forecastData?.country_breakdown) ? forecastData.country_breakdown : [],
-        timeseries: timeseriesSnapshotRef.current,
-        interactive_report: {
-          overall_risk_level: overallRisk,
-          overall_assessment_comment: overallComment,
-          affected_areas: affectedAreas,
-          recommendations,
-          district_summary: districtSummary,
-          district_assessment_count: districtPayload.length,
-          district_assessments: districtPayload,
-        },
-      },
-    };
+    const creatorFromProfile = (userData && (userData.full_name || userData.email || userData.username))
+      || `${expertType}-open-entry`;
 
     const payload = {
       expert_type: expertType,
       forecast_date: forecastDate,
-      reporting_unit: params?.reporting_unit || "East Africa Region",
-      placename: params?.placename || "",
-      alert_filter: params?.alert_filter || "all",
-      scope: params?.scope || "all",
-      admin_level: params?.admin_level || null,
-      unit_id: params?.unit_id || null,
-      report_group: reportGroup,
-      country_code: reportGroup === "member_state" ? selectedCountryCode : "REGION",
-      country_name: reportGroup === "member_state"
-        ? (selectedCountryName || selectedCountryCode)
-        : "East Africa Region",
+      report_group: reportScope,
+      country_code: reportCountryCode,
+      country_name: reportCountryName,
       risk_level: overallRisk,
       comment: overallComment,
       affected_areas: affectedAreas,
       recommendations,
-      contributor_name: reportGroup === "general" ? contributorName : "",
-      contributor_country: reportGroup === "general" ? contributorCountry : "",
-      created_by: creatorFromProfile || contributorName,
-      save_mode: "draft",
+      created_by: creatorFromProfile,
+      save_mode: saveMode,
       is_published: false,
-      logged_in: !!loggedIn,
+      logged_in: true,
       district_assessments: districtPayload,
       replace_district_assessments: true,
-      report_snapshot: reportSnapshot,
     };
 
     setSaveLoading(true);
-    setStatusMessage("Saving full interactive report...");
+    setStatusMessage(
+      saveMode === "submitted"
+        ? "Submitting draft report for admin review..."
+        : "Saving draft report as unapproved..."
+    );
 
     try {
       const response = await fetch(`/api/v1/assessments/country-assessments/`, {
@@ -421,7 +373,15 @@ const ExpertAssessmentWidget = ({
         setActiveReportId(body.id);
       }
 
-      setStatusMessage(`Saved draft report with ${body.district_saved_count || 0} district edits. Pending approval/publishing in CMS.`);
+      if (saveMode === "submitted") {
+        setStatusMessage(
+          `Draft submitted for review with ${body.district_saved_count || 0} district edits.`
+        );
+      } else {
+        setStatusMessage(
+          `Draft saved as unapproved with ${body.district_saved_count || 0} district edits.`
+        );
+      }
 
       window.dispatchEvent(new CustomEvent("flood-report-refresh"));
       if (body.id) {
@@ -435,37 +395,23 @@ const ExpertAssessmentWidget = ({
     }
   }, [
     forecastDate,
-    reportGroup,
-    selectedCountryCode,
-    selectedCountryName,
-    loggedIn,
+    reportScope,
+    reportCountryCode,
+    reportCountryName,
     overallComment,
-    contributorCountry,
     districtEdits,
     userData,
-    params?.admin0_code,
-    params?.admin1_code,
-    params?.admin_level,
-    params?.alert_filter,
-    params?.placename,
-    params?.reporting_unit,
-    params?.scope,
-    params?.unit_id,
-    forecastData?.alert_summary,
-    forecastData?.country_breakdown,
-    contributorName,
     expertType,
     overallRisk,
     affectedAreas,
     recommendations,
-    districtSummary,
     loadSingleReport,
   ]);
 
   useEffect(() => {
     if (!forecastDate) return;
     loadMajority();
-  }, [forecastDate, expertType, reportGroup, selectedCountryCode, loadMajority]);
+  }, [forecastDate, expertType, selectedCountryCode, loadMajority]);
 
   useEffect(() => {
     const handleLoadRequest = (event) => {
@@ -477,15 +423,6 @@ const ExpertAssessmentWidget = ({
     window.addEventListener("flood-report-load-request", handleLoadRequest);
     return () => window.removeEventListener("flood-report-load-request", handleLoadRequest);
   }, [loadSingleReport]);
-
-  useEffect(() => {
-    const handleTimeseriesSnapshot = (event) => {
-      timeseriesSnapshotRef.current = event?.detail || null;
-    };
-
-    window.addEventListener("flood-report-timeseries-snapshot", handleTimeseriesSnapshot);
-    return () => window.removeEventListener("flood-report-timeseries-snapshot", handleTimeseriesSnapshot);
-  }, []);
 
   useEffect(() => {
     if (!mapRef.current) {
@@ -683,9 +620,9 @@ const ExpertAssessmentWidget = ({
   return (
     <div className="c-expert-assessment">
       <div className="widget-header">
-        <h3 className="widget-title">Flood Analysis Report Workspace</h3>
+        <h3 className="widget-title">Flood Assessment Workspace</h3>
         <p className="widget-subtitle">
-          Interactive assessment editor. Drafts and published reports are listed in the main page side panels.
+          Hydrologists and meteorologists update flood narratives and district edits here. Every update is saved as draft and published after admin review.
         </p>
       </div>
 
@@ -707,65 +644,21 @@ const ExpertAssessmentWidget = ({
             </button>
           ))}
         </div>
-
-        <div className="group-switch">
-          {REPORT_GROUP_OPTIONS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={`group-btn ${reportGroup === option.value ? "active" : ""}`}
-              onClick={() => {
-                setReportGroup(option.value);
-                clearEditor();
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="interactive-column">
         <div className="editor-header">
           <div>
-            <h4>Current Interactive Report</h4>
+            <h4>Current Expert Report</h4>
             <p>
-              {reportGroup === "member_state"
-                ? `Country: ${selectedCountryName || "Select a country"}`
-                : "Scope: East Africa Region (General Report)"}
+              Scope: {reportCountryName}
             </p>
           </div>
-          {activeReportId && <span className="active-id">Report ID: {activeReportId}</span>}
+          <div className="header-meta">
+            <span className="workflow-pill">Draft → Admin Review → Published</span>
+            {activeReportId && <span className="active-id">Report ID: {activeReportId}</span>}
+          </div>
         </div>
-
-        {reportGroup === "member_state" && !loggedIn && (
-          <div className="warning-box">
-            Member-state report publishing/saving requires sign-in for key-point-person workflow.
-          </div>
-        )}
-
-        {reportGroup === "general" && (
-          <div className="general-user-row">
-            <div className="form-group">
-              <label>Your Name</label>
-              <input
-                type="text"
-                value={contributorName}
-                onChange={(event) => setContributorName(event.target.value)}
-                placeholder="Name for this general comment"
-              />
-            </div>
-            <div className="form-group">
-              <label>Country of Origin</label>
-              <input
-                type="text"
-                value={contributorCountry}
-                onChange={(event) => setContributorCountry(event.target.value)}
-                placeholder="e.g. KE or Kenya"
-              />
-            </div>
-          </div>
-        )}
 
         <div className="overall-editor">
           <div className="form-group">
@@ -836,27 +729,36 @@ const ExpertAssessmentWidget = ({
           )}
           <div ref={mapContainerRef} className="map-container" />
           <div className="map-note">
-            Baseline map shading comes from forecast majority risk by admin unit.
-            District edits here override baseline and are saved as part of the full interactive report.
+            Baseline map shading comes from forecast majority risk by admin unit. District edits override baseline and are saved with the draft for admin review.
           </div>
         </div>
 
         <div className="editor-actions">
-          <Button theme="theme-button-light" onClick={() => clearEditor()}>
-            New Report
+          <Button
+            theme="theme-button-light"
+            onClick={() => saveReport("draft")}
+            disabled={saveLoading}
+          >
+            {saveLoading ? "Saving..." : "Save Draft (Unapproved)"}
           </Button>
           <Button
             theme="theme-button-green"
-            onClick={saveReport}
-            disabled={saveLoading || (reportGroup === "member_state" && !loggedIn)}
+            onClick={() => saveReport("submitted")}
+            disabled={saveLoading}
           >
-            {saveLoading ? "Saving..." : "Save Draft (Full Report)"}
+            {saveLoading ? "Saving..." : "Submit for Review"}
           </Button>
         </div>
 
         <div className="approval-note">
-          Publishing and approval are handled in CMS backend workflows.
+          Save Draft keeps the report as unapproved. Submit for Review sends it to the draft review queue; admin approval publishes it to the right panel.
         </div>
+
+        {activeReportId && (
+          <div className="cap-draft-section" style={{ marginTop: 12 }}>
+            <CapDraftButton assessmentId={activeReportId} disabled={saveLoading} />
+          </div>
+        )}
 
         {statusMessage && <div className="status-message">{statusMessage}</div>}
       </div>
@@ -912,16 +814,12 @@ const ExpertAssessmentWidget = ({
 };
 
 ExpertAssessmentWidget.propTypes = {
-  params: PropTypes.object,
-  forecastData: PropTypes.object,
   forecastDate: PropTypes.string,
   selectedCountry: PropTypes.string,
-  loggedIn: PropTypes.bool,
   userData: PropTypes.object,
 };
 
 const mapStateToProps = (state) => ({
-  loggedIn: !!(state?.auth?.data?.loggedIn),
   userData: state?.auth?.data || {},
 });
 

@@ -211,44 +211,6 @@ const TimeseriesChartWidget = ({
     };
   }, [currentForecastData, selectedModelConfigs]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    window.dispatchEvent(
-      new CustomEvent("flood-report-timeseries-snapshot", {
-        detail: {
-          reference_date: forecastDate || null,
-          selected_country: selectedCountry || null,
-          selected_point: selectedPoint || null,
-          controls: {
-            history_window: historyWindow,
-            lead_time_days: leadTime,
-            forecast_horizon_days: forecastHorizon,
-            selected_models: selectedModels,
-            show_thresholds: showThresholds,
-            show_trend: showTrend,
-          },
-          thresholds,
-          historical_behavior: historicalData,
-          current_forecast: currentForecastData,
-        },
-      })
-    );
-  }, [
-    forecastDate,
-    selectedCountry,
-    selectedPoint,
-    historyWindow,
-    leadTime,
-    forecastHorizon,
-    selectedModels,
-    showThresholds,
-    showTrend,
-    thresholds,
-    historicalData,
-    currentForecastData,
-  ]);
-
   const renderChart = (data, emptyMessage) => {
     if (loading) {
       return <div className="chart-loader"><Loader /></div>;
@@ -273,9 +235,9 @@ const TimeseriesChartWidget = ({
 
           {showThresholds && (
             <>
-              <ReferenceLine y={thresholds.warning} stroke="#FFC107" strokeDasharray="5 5" label="Warning" />
-              <ReferenceLine y={thresholds.alarm} stroke="#FF9800" strokeDasharray="5 5" label="Alarm" />
-              <ReferenceLine y={thresholds.emergency} stroke="#F44336" strokeDasharray="5 5" label="Emergency" />
+              <ReferenceLine y={thresholds.warning} stroke="#FFC107" strokeDasharray="5 5" label="Moderate" />
+              <ReferenceLine y={thresholds.alarm} stroke="#FF9800" strokeDasharray="5 5" label="Severe" />
+              <ReferenceLine y={thresholds.emergency} stroke="#F44336" strokeDasharray="5 5" label="Extreme" />
             </>
           )}
 
@@ -437,9 +399,9 @@ const TimeseriesChartWidget = ({
       <div className="chart-legend">
         {showThresholds && (
           <>
-            <div className="legend-item threshold warning">Warning: {thresholds.warning} m³/s</div>
-            <div className="legend-item threshold alarm">Alarm: {thresholds.alarm} m³/s</div>
-            <div className="legend-item threshold emergency">Emergency: {thresholds.emergency} m³/s</div>
+            <div className="legend-item threshold warning">Moderate: {thresholds.warning} m³/s</div>
+            <div className="legend-item threshold alarm">Severe: {thresholds.alarm} m³/s</div>
+            <div className="legend-item threshold emergency">Extreme: {thresholds.emergency} m³/s</div>
           </>
         )}
       </div>

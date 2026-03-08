@@ -11,6 +11,7 @@ import AlertSummaryWidget from "./alert-summary-widget.jsx";
 import RegionalMapsWidget from "./regional-maps";
 import TimeseriesChartWidget from "./timeseries-chart";
 import ExpertAssessmentWidget from "./expert-assessment";
+import CapAlertsWidget from "./cap-alerts";
 
 import "./widgets.scss";
 
@@ -77,10 +78,15 @@ const FloodWidgets = ({ params, settings, forecastData, loading, updateParams })
           forecastDate={params?.forecast_date}
         />
 
+        {/* Active CAP Alerts */}
+        <CapAlertsWidget
+          forecastDate={params?.forecast_date}
+          selectedCountry={selectedCountry?.code || params?.admin0_code}
+        />
+
         {/* Expert Assessment - Hydrologists & Meteorologists with comments */}
         <ExpertAssessmentWidget
           params={params}
-          forecastData={forecastData}
           forecastDate={params?.forecast_date}
           selectedCountry={selectedCountry?.code || params?.admin0_code}
         />

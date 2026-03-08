@@ -28,6 +28,7 @@ import LayerStatement from "./components/layer-statement";
 import LayerAnalysisStatement from "./components/layer-analysis-statement";
 import LayerMoreInfo from "./components/layer-more-info";
 import LayerCapabilities from "@/components/layer-capabilities/component";
+import Modal from "@/components/modal";
 
 import SubNavMenu from "@/components/subnav-menu";
 
@@ -135,13 +136,10 @@ const MapLegendContent = ({
 
         let latestDateText = null;
         if (initializedDate && latestDate) {
-          const initializedLabel = dFormatter(initializedDate, "dd MMM yyyy");
-          const latestLabel = dFormatter(latestDate, "dd MMM yyyy");
-          if (initializedDate === latestDate) {
-            latestDateText = `Latest: ${latestLabel} (Initialized ${initializedLabel})`;
-          } else {
-            latestDateText = `Latest: ${initializedLabel} To ${latestLabel} (Initialized ${initializedLabel})`;
-          }
+          // availableDates are sorted ASC (oldest first), so last = latest run
+          const newestDate = availableDates[availableDates.length - 1];
+          const newestLabel = dFormatter(newestDate, "dd MMM yyyy");
+          latestDateText = `Latest: ${newestLabel}`;
         }
 
         const selectedDateText = selectedDate
@@ -446,7 +444,16 @@ class MapLegendCompare extends Component {
   }
 }
 
-const MapLegend = ({ layerGroups, loading, className, comparing, ...rest }) => {
+const MapLegend = ({
+  layerGroups,
+  loading,
+  className,
+  comparing,
+  extendedCoverageConfirmOpen,
+  onAcceptExtendedCoverage,
+  onCancelExtendedCoverage,
+  ...rest
+}) => {
   return (
     <div className={cx("c-legend", className)}>
       {loading && <Loader className="datasets-loader" />}
@@ -456,6 +463,33 @@ const MapLegend = ({ layerGroups, loading, className, comparing, ...rest }) => {
       {!comparing &&
         !loading &&
         <MapLegendContent layerGroups={layerGroups} {...rest} />}
+
+      <Modal
+        open={!!extendedCoverageConfirmOpen}
+        contentLabel="Extended coverage disclaimer"
+        onRequestClose={onCancelExtendedCoverage}
+        className="c-google-extended-coverage-modal"
+      >
+        <div className="google-extended-coverage-modal-content">
+          <h3>This information may be less accurate and is intended for expert and research use only</h3>
+          <p>
+            Enabling extended coverage includes lower-confidence Google Flood gauges.
+            These forecasts may be less accurate than default coverage.
+          </p>
+          <p>
+            If you continue, points will be loaded using Google Flood severity and
+            threshold levels (Warning, Danger, Extreme).
+          </p>
+          <div className="google-extended-coverage-modal-actions">
+            <button type="button" className="btn-cancel" onClick={onCancelExtendedCoverage}>
+              Cancel
+            </button>
+            <button type="button" className="btn-accept" onClick={onAcceptExtendedCoverage}>
+              I accept
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -479,6 +513,9 @@ MapLegend.propTypes = {
   onChangeParam: PropTypes.func,
   onChangeLayer: PropTypes.func,
   onChangeInfo: PropTypes.func,
+  onAcceptExtendedCoverage: PropTypes.func,
+  onCancelExtendedCoverage: PropTypes.func,
+  extendedCoverageConfirmOpen: PropTypes.bool,
   layers: PropTypes.array,
   location: PropTypes.object
 };

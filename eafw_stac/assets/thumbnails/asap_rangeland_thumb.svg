@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="ASAP rangeland thumbnail">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6d8f2e"/><stop offset="100%" stop-color="#9fcf63"/></linearGradient></defs>
+  <rect width="320" height="180" rx="12" fill="url(#g)"/>
+  <path d="M0 138 C42 121, 85 145, 132 122 S222 103, 320 130 L320 180 L0 180 Z" fill="#d7ecab" opacity="0.8"/>
+  <text x="16" y="30" fill="#f5ffea" font-size="17" font-family="Segoe UI, Arial" font-weight="700">ASAP Rangeland</text>
+  <text x="16" y="50" fill="#ebf8d6" font-size="11" font-family="Segoe UI, Arial">1km raster mask</text>
+</svg>

@@ -18,7 +18,7 @@ router = APIRouter()
 async def get_google_flood_geojson(
     date: Optional[str] = Query(None, description="Date YYYY-MM-DD (defaults to latest)"),
     filter: str = Query("all", description="Filter: all, active, alarm, emergency"),
-    scope: str = Query("all", description="Scope: all, whca"),
+    scope: str = Query("all", description="Scope: all, whca, project"),
     confidence: str = Query("high", description="Confidence: all, high, low"),
     extended_coverage: str = Query("false", description="Include lower-confidence gauges"),
     country_name: str = Query(""),
@@ -34,8 +34,8 @@ async def get_google_flood_geojson(
     if extended_coverage.strip().lower() in ("1", "true", "yes", "on"):
         confidence_mode = "all"
 
-    if scope not in ("all", "whca"):
-        raise HTTPException(status_code=400, detail="Invalid scope. Use all or whca")
+    if scope not in ("all", "whca", "project"):
+        raise HTTPException(status_code=400, detail="Invalid scope. Use all, whca, or project")
 
     filter_sql = ""
     if filter == "active":
@@ -104,9 +104,19 @@ async def get_google_flood_geojson(
                     g.quality_verified, g.model_quality_verified, g.status_quality_verified,
                     COALESCE(g.forecasts_json, '[]'::jsonb) AS forecasts,
                     CASE
-                        WHEN g.latest_severity = 'MAJOR_FLOODING' THEN 'emergency'
-                        WHEN g.latest_severity = 'MODERATE_FLOODING' THEN 'alarm'
-                        WHEN g.latest_severity = 'MINOR_FLOODING' THEN 'warning'
+                        -- Prefer explicit Google severity classes when provided.
+                        WHEN UPPER(COALESCE(g.latest_severity, '')) IN ('EXTREME', 'EXTREME_FLOODING', 'MAJOR_FLOODING') THEN 'emergency'
+                        WHEN UPPER(COALESCE(g.latest_severity, '')) IN ('SEVERE', 'DANGER', 'MODERATE_FLOODING') THEN 'alarm'
+                        WHEN UPPER(COALESCE(g.latest_severity, '')) IN ('WARNING', 'WATCH', 'MINOR_FLOODING', 'ALERT') THEN 'warning'
+
+                        -- Fallback to threshold-based classification using forecast discharge.
+                        WHEN g.daily_max IS NOT NULL AND g.threshold_emergency IS NOT NULL AND g.daily_max >= g.threshold_emergency THEN 'emergency'
+                        WHEN g.daily_max IS NOT NULL AND g.threshold_alarm IS NOT NULL AND g.daily_max >= g.threshold_alarm THEN 'alarm'
+                        WHEN g.daily_max IS NOT NULL AND g.threshold_alert IS NOT NULL AND g.daily_max >= g.threshold_alert THEN 'warning'
+
+                        WHEN g.daily_avg IS NOT NULL AND g.threshold_emergency IS NOT NULL AND g.daily_avg >= g.threshold_emergency THEN 'emergency'
+                        WHEN g.daily_avg IS NOT NULL AND g.threshold_alarm IS NOT NULL AND g.daily_avg >= g.threshold_alarm THEN 'alarm'
+                        WHEN g.daily_avg IS NOT NULL AND g.threshold_alert IS NOT NULL AND g.daily_avg >= g.threshold_alert THEN 'warning'
                         ELSE 'normal'
                     END AS alert_level,
                     g.geom

@@ -1,4 +1,4 @@
-{% load wagtailimages_tags cms_tags %}
+{% load wagtailimages_tags cms_tags i18n %}
 
 {% if footer %}
 {% if footer.partners or footer.member_countries %}
@@ -7,40 +7,75 @@
         <div class="partners-container">
             {% if footer and footer.member_countries %}
             <div class="members-group">
-                <span class="partners-label">Member Countries</span>
-                <div class="member-flags">
-                    {% for block in footer.member_countries|sort_member_countries %}
-                    {% with block.value as item %}
-                    <div class="member-flag" data-country-code="{{ item.country|upper }}" title="{{ item.country }}">
-                        <img src="https://flagcdn.com/w40/{{ item.country|lower }}.png" alt="{{ item.country }}">
+                <h3 class="partners-label" data-default-label="{{ footer.partners_member_countries_title|default:"Member Countries"|escape }}">{{ footer.partners_member_countries_title|default:"Member Countries" }}</h3>
+                <div class="member-flags-shell">
+                    <div class="member-flags" data-slider-threshold="6">
+                        {% for block in footer.member_countries|sort_member_countries|unique_member_countries %}
+                        {% with block.value as item %}
+                        {% if item.url %}
+                        <a
+                            href="{{ item.url }}"
+                            target="_blank"
+                            rel="noopener"
+                            class="member-flag"
+                            data-country-code="{{ item.country|upper }}"
+                            data-country-name="{{ item.country|country_name|escape }}"
+                            title="{{ item.country|country_name }}"
+                        >
+                            <img src="https://flagcdn.com/w160/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
+                        </a>
+                        {% else %}
+                        <div
+                            class="member-flag"
+                            data-country-code="{{ item.country|upper }}"
+                            data-country-name="{{ item.country|country_name|escape }}"
+                            title="{{ item.country|country_name }}"
+                        >
+                            <img src="https://flagcdn.com/w160/{{ item.country|lower }}.png" alt="{{ item.country|country_name }}">
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+                        {% endfor %}
                     </div>
-                    {% endwith %}
-                    {% endfor %}
                 </div>
             </div>
             {% endif %}
 
             {% if footer and footer.partners %}
+            {% with partner_blocks=footer.partners|unique_partners|homepage_partners %}
+            {% if partner_blocks %}
             <div class="partners-group">
-                <span class="partners-label">Partners</span>
-                <div class="partners-logos">
-                    {% for block in footer.partners %}
-                    {% with block.value as partner %}
-                    {% if partner.image %}
-                    <a
-                        href="{{ partner.url|default:'#' }}"
-                        class="partner-item"
-                        data-partner-name="{{ partner.name|default:''|escape }}"
-                        {% if partner.url %}target="_blank" rel="noopener"{% endif %}
-                    >
-                        {% image partner.image height-45 as partner_logo %}
-                        <img src="{{ partner_logo.url }}" alt="{{ partner.name }}" class="partner-logo" title="{{ partner.name }}">
-                    </a>
-                    {% endif %}
-                    {% endwith %}
-                    {% endfor %}
+                <div class="partners-group-header">
+                    <h3 class="partners-label" data-default-label="{{ footer.partners_organizations_title|default:"Our Partners"|escape }}">{{ footer.partners_organizations_title|default:"Our Partners" }}</h3>
                 </div>
+                <div class="partners-logos-shell">
+                    <div class="partners-logos" data-slider-threshold="5">
+                        {% for block in partner_blocks %}
+                        {% with block.value as partner %}
+                        {% if partner.image %}
+                        <a
+                            href="{{ partner.url|default:'#' }}"
+                            class="partner-item"
+                            data-partner-name="{{ partner.name|default:''|escape }}"
+                            {% if partner.url %}target="_blank" rel="noopener"{% endif %}
+                        >
+                            {% image partner.image height-120 as partner_logo %}
+                            <img src="{{ partner_logo.url }}" alt="{{ partner.name }}" class="partner-logo" title="{{ partner.name }}">
+                        </a>
+                        {% endif %}
+                        {% endwith %}
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if partner_blocks|length >= 5 %}
+                <div class="partners-more-wrap">
+                    <a href="{% url 'partners' %}" class="partners-more-link">{% trans "More Partners" %}</a>
+                </div>
+                {% endif %}
             </div>
+            {% endif %}
+            {% endwith %}
             {% endif %}
         </div>
     </div>

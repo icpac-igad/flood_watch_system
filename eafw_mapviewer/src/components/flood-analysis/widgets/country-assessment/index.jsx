@@ -17,7 +17,6 @@ import "./styles.scss";
 const GHA_COUNTRIES = [
   { code: "BDI", name: "Burundi", flag: "🇧🇮" },
   { code: "DJI", name: "Djibouti", flag: "🇩🇯" },
-  { code: "ERI", name: "Eritrea", flag: "🇪🇷" },
   { code: "ETH", name: "Ethiopia", flag: "🇪🇹" },
   { code: "KEN", name: "Kenya", flag: "🇰🇪" },
   { code: "RWA", name: "Rwanda", flag: "🇷🇼" },
@@ -32,9 +31,9 @@ const GHA_COUNTRIES = [
 const RISK_LEVELS = [
   { value: "normal", label: "Normal", color: "#b0b0b0" },
   { value: "watch", label: "Watch", color: "#2196F3" },
-  { value: "warning", label: "Warning", color: "#FFC107" },
-  { value: "alarm", label: "Alarm", color: "#FF9800" },
-  { value: "emergency", label: "Emergency", color: "#F44336" },
+  { value: "warning", label: "Moderate", color: "#FFC107" },
+  { value: "alarm", label: "Severe", color: "#FF9800" },
+  { value: "emergency", label: "Extreme", color: "#F44336" },
 ];
 
 // Single Country Assessment Card

@@ -30,8 +30,8 @@ docker-compose --version
 ### 3. Create Deployment Directory
 ```bash
 # Create project directory
-mkdir -p ~/flood_watch_staging
-cd ~/flood_watch_staging
+mkdir -p ~/eafw
+cd ~/eafw
 
 # Create required subdirectories
 mkdir -p backend/static_data
@@ -59,20 +59,20 @@ From your **LOCAL machine**:
 cd "/home/koros/Downloads/MusoknotetabMaranet (3)/MusoknotetabMaranet"
 
 # Copy docker-compose configuration
-scp docker-compose.staging.yml hkoros@197.254.1.10:~/flood_watch_staging/docker-compose.yml
+scp docker-compose.staging.yml hkoros@41.139.151.242:~/eafw/docker-compose.yml
 
 # Copy environment configuration
-scp .env.staging hkoros@197.254.1.10:~/flood_watch_staging/.env
+scp .env.staging hkoros@41.139.151.242:~/eafw/.env
 
 # Copy static data files (if not already present)
-scp backend/static_data/*.geojson hkoros@197.254.1.10:~/flood_watch_staging/backend/static_data/
-scp backend/static_data/fp_sections_igad.* hkoros@197.254.1.10:~/flood_watch_staging/backend/static_data/
+scp backend/static_data/*.geojson hkoros@41.139.151.242:~/eafw/backend/static_data/
+scp backend/static_data/fp_sections_igad.* hkoros@41.139.151.242:~/eafw/backend/static_data/
 ```
 
 ### Step 2: On Staging Server - Initial Setup
 
 ```bash
-cd ~/flood_watch_staging
+cd ~/eafw
 
 # Verify files are present
 ls -la
@@ -86,7 +86,7 @@ chmod 755 backend/static_data/
 ### Step 3: Pull Docker Images
 
 ```bash
-cd ~/flood_watch_staging
+cd ~/eafw
 
 # Login to Docker Hub (if using private images)
 docker login
@@ -299,7 +299,7 @@ docker-compose logs postgis
 ### Pull Latest Images
 
 ```bash
-cd ~/flood_watch_staging
+cd ~/eafw
 
 # Pull latest images
 docker-compose pull
@@ -315,11 +315,11 @@ docker-compose exec backend python manage.py migrate
 
 ```bash
 # From local machine, copy updated files
-scp docker-compose.staging.yml user@staging:~/flood_watch_staging/docker-compose.yml
-scp .env.staging user@staging:~/flood_watch_staging/.env
+scp docker-compose.staging.yml user@staging:~/eafw/docker-compose.yml
+scp .env.staging user@staging:~/eafw/.env
 
 # On staging, restart services
-cd ~/flood_watch_staging
+cd ~/eafw
 docker-compose down
 docker-compose up -d
 ```

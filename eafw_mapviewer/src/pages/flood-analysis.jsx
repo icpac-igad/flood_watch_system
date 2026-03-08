@@ -40,22 +40,6 @@ const DEFAULT_SETTINGS = {
   pdf: { loading: false, url: null },
 };
 
-const toIsoDate = (value) => {
-  if (!value) return null;
-  const text = value.toString();
-  return text.includes("T") ? text.split("T")[0] : text;
-};
-
-const resolveReportingUnit = (value, fallback = DEFAULT_PARAMS.reporting_unit) => {
-  const text = (value || "").toString().trim().toLowerCase();
-  if (!text) return fallback;
-  if (text === "east africa region") return "East Africa Region";
-  if (text === "administrative boundary") return "Administrative Boundary";
-  if (text === "river basin") return "River Basin";
-  if (text === "projects") return "Projects";
-  return fallback;
-};
-
 const FloodAnalysisPage = () => {
   const [params, setParams] = useState({});
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -83,6 +67,25 @@ const FloodAnalysisPage = () => {
       setLoading(false);
     }
   }, [params]);
+
+  // Keep report content offset in sync with fixed CMS navbar height.
+  useEffect(() => {
+    const applyNavbarOffset = () => {
+      const navbar = document.getElementById("navbar");
+      const navbarHeight = navbar ? Math.ceil(navbar.getBoundingClientRect().height) : 64;
+      document.documentElement.style.setProperty(
+        "--flood-analysis-nav-offset",
+        `${Math.max(navbarHeight, 56)}px`
+      );
+    };
+
+    applyNavbarOffset();
+    window.addEventListener("resize", applyNavbarOffset);
+
+    return () => {
+      window.removeEventListener("resize", applyNavbarOffset);
+    };
+  }, []);
 
   // Encode params to URL when they change
   useEffect(() => {
@@ -171,74 +174,6 @@ const FloodAnalysisPage = () => {
     setSettings((prev) => ({ ...prev, ...newSettings }));
   }, []);
 
-  // Load full saved report context into the main page (date/scope/filters/unit),
-  // not just the interactive editor subsection.
-  useEffect(() => {
-    const handleLoadRequest = async (event) => {
-      const reportId = Number(event?.detail?.id);
-      if (!Number.isFinite(reportId)) return;
-
-      try {
-        const response = await fetch(
-          `/api/v1/assessments/country-assessments/?id=${reportId}&include_snapshot=true`
-        );
-        if (!response.ok) return;
-
-        const data = await response.json();
-        const report = Array.isArray(data?.assessments) ? data.assessments[0] : null;
-        if (!report) return;
-
-        const context = report?.full_report_snapshot?.context || {};
-        const fallbackReportingUnit = report?.country_code === "REGION"
-          ? "East Africa Region"
-          : "Administrative Boundary";
-        const reportingUnit = resolveReportingUnit(context.reporting_unit, fallbackReportingUnit);
-        const fallbackDate = toIsoDate(report?.assessment_date) || DEFAULT_PARAMS.forecast_date;
-        const selectedCountry = context.admin0_code || report?.country_name || null;
-        const nextScope = context.scope || (context?.unit_id?.toLowerCase?.() === "whca" ? "whca" : "all");
-
-        const nextParams = {
-          reporting_unit: reportingUnit,
-          forecast_date: toIsoDate(context.forecast_date) || fallbackDate,
-          alert_filter: context.alert_filter || DEFAULT_PARAMS.alert_filter,
-          admin_level: context.admin_level ?? null,
-          unit_id: context.unit_id || null,
-          placename: context.placename || report?.country_name || DEFAULT_PARAMS.placename,
-          scope: nextScope,
-          admin0_code: context.admin0_code || null,
-          admin1_code: context.admin1_code || null,
-        };
-
-        if (reportingUnit === "Administrative Boundary" && selectedCountry) {
-          nextParams.admin0_code = selectedCountry;
-          nextParams.admin_level = nextParams.admin_level ?? "0";
-          nextParams.unit_id = nextParams.unit_id || selectedCountry;
-          nextParams.placename = nextParams.placename || selectedCountry;
-        }
-
-        if (reportingUnit === "Projects" && nextScope === "whca" && !nextParams.unit_id) {
-          nextParams.unit_id = "whca";
-        }
-
-        if (reportingUnit === "East Africa Region") {
-          nextParams.admin_level = null;
-          nextParams.unit_id = null;
-          nextParams.admin0_code = null;
-          nextParams.admin1_code = null;
-          nextParams.scope = nextScope || "all";
-          nextParams.placename = context.placename || "East Africa Region";
-        }
-
-        setParams((prev) => ({ ...prev, ...nextParams }));
-      } catch (loadError) {
-        console.error("Failed to load full report context:", loadError);
-      }
-    };
-
-    window.addEventListener("flood-report-load-request", handleLoadRequest);
-    return () => window.removeEventListener("flood-report-load-request", handleLoadRequest);
-  }, []);
-
   // Generate analysis (refresh data)
   const handleGenerateAnalysis = useCallback(() => {
     fetchForecastData();
@@ -273,7 +208,7 @@ const FloodAnalysisPage = () => {
           <div className="logo-container">
             <img
               src="/favicon/logo.png"
-              alt="IGAD ICPAC"
+              alt="ICPAC"
               className="icpac-logo"
               onError={(e) => { e.target.style.display = 'none'; }}
             />

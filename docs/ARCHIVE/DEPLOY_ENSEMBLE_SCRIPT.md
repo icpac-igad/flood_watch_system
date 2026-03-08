@@ -6,15 +6,15 @@
 
 ```bash
 # From your local machine
-scp download_ensemble_data.py root@197.254.1.10:/root/
-scp .env root@197.254.1.10:/root/
-scp ENSEMBLE_DATA_GUIDE.md root@197.254.1.10:/root/
+scp download_ensemble_data.py root@41.139.151.242:/root/
+scp .env root@41.139.151.242:/root/
+scp ENSEMBLE_DATA_GUIDE.md root@41.139.151.242:/root/
 ```
 
 ### 2. SSH into production server
 
 ```bash
-ssh root@197.254.1.10
+ssh root@41.139.151.242
 ```
 
 ### 3. Test network connectivity first

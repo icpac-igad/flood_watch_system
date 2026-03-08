@@ -12,7 +12,17 @@ export const PARAMS_CONFIG = {
     country_name: '',
     region_name: '',
     district_name: '',
-    admin_filter: false
+    admin_filter: false,
+    // FloodWatch: Scope/project filtering
+    scope: 'all',
+    whca_filter: false,
+    project_filter: false,
+    project_countries: '',
+    basin_filter: false,
+    basin_id: '',
+    // Google Flood defaults: keep extended coverage off unless user opts in.
+    confidence: 'high',
+    extended_coverage: false,
   }
 };
 

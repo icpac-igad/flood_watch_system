@@ -1,0 +1,73 @@
+{
+  "type": "Feature",
+  "stac_version": "1.0.0",
+  "id": "flood-extent-25y-2026",
+  "collection": "flood-extent-return-periods",
+  "bbox": [
+    21,
+    -12,
+    52,
+    23
+  ],
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [
+          21,
+          -12
+        ],
+        [
+          52,
+          -12
+        ],
+        [
+          52,
+          23
+        ],
+        [
+          21,
+          23
+        ],
+        [
+          21,
+          -12
+        ]
+      ]
+    ]
+  },
+  "properties": {
+    "datetime": "2026-02-16T00:00:00Z",
+    "proj:epsg": 4326,
+    "gsd": 1000,
+    "return_period": 25,
+    "description": "Flood extent raster for 25-year return period."
+  },
+  "links": [
+    {
+      "rel": "preview",
+      "href": "/cog-tiles/collections/flood-extent-return-periods/items/flood-extent-25y-2026/preview.png?assets=data&colormap=%7B%220%22%3A%5B0%2C0%2C0%2C0%5D%2C%221%22%3A%5B222%2C235%2C247%2C255%5D%2C%222%22%3A%5B198%2C219%2C239%2C255%5D%2C%223%22%3A%5B158%2C202%2C225%2C255%5D%2C%224%22%3A%5B107%2C174%2C214%2C255%5D%2C%225%22%3A%5B49%2C130%2C189%2C255%5D%2C%226%22%3A%5B8%2C81%2C156%2C255%5D%7D&resampling=nearest",
+      "type": "image/png",
+      "title": "Flood Extent Preview"
+    }
+  ],
+  "assets": {
+    "data": {
+      "href": "/stac-cogs/flood-extent/M6_25y.tif",
+      "title": "25-year Return Period Flood Extent COG",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "roles": [
+        "data"
+      ]
+    },
+    "thumbnail": {
+      "href": "/cog-tiles/collections/flood-extent-return-periods/items/flood-extent-25y-2026/preview.png?assets=data&colormap=%7B%220%22%3A%5B0%2C0%2C0%2C0%5D%2C%221%22%3A%5B222%2C235%2C247%2C255%5D%2C%222%22%3A%5B198%2C219%2C239%2C255%5D%2C%223%22%3A%5B158%2C202%2C225%2C255%5D%2C%224%22%3A%5B107%2C174%2C214%2C255%5D%2C%225%22%3A%5B49%2C130%2C189%2C255%5D%2C%226%22%3A%5B8%2C81%2C156%2C255%5D%7D&resampling=nearest",
+      "title": "Flood Extent Thumbnail",
+      "type": "image/png",
+      "roles": [
+        "thumbnail",
+        "overview"
+      ]
+    }
+  }
+}

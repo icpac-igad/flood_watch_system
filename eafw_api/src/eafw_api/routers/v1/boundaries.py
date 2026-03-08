@@ -11,6 +11,15 @@ from eafw_api.db import get_connection
 
 router = APIRouter()
 
+# Ensure boundary output is always polygonal and topology-safe for map rendering.
+TOPOLOGY_SAFE_POLYGON_GEOM_SQL = """
+CASE
+    WHEN ST_IsEmpty(ST_CollectionExtract(ST_MakeValid(geom), 3))
+        THEN ST_Multi(ST_CollectionExtract(geom, 3))
+    ELSE ST_Multi(ST_CollectionExtract(ST_MakeValid(geom), 3))
+END
+"""
+
 
 @router.get("/countries")
 async def list_countries():
@@ -114,8 +123,8 @@ async def get_admin0_geojson(
     Get admin0 boundaries as GeoJSON.
     """
     async with get_connection() as conn:
-        query = """
-            SELECT gid_0, country, ST_AsGeoJSON(geom)::json as geometry
+        query = f"""
+            SELECT gid_0, country, ST_AsGeoJSON({TOPOLOGY_SAFE_POLYGON_GEOM_SQL})::json as geometry
             FROM gha.admin0
         """
         params = []
@@ -152,8 +161,8 @@ async def get_admin1_geojson(
     Get admin1 boundaries as GeoJSON.
     """
     async with get_connection() as conn:
-        query = """
-            SELECT gid_0, country, gid_1, name_1, ST_AsGeoJSON(geom)::json as geometry
+        query = f"""
+            SELECT gid_0, country, gid_1, name_1, ST_AsGeoJSON({TOPOLOGY_SAFE_POLYGON_GEOM_SQL})::json as geometry
             FROM gha.admin1
         """
         params = []
@@ -196,9 +205,9 @@ async def get_admin2_geojson(
     Get admin2 boundaries as GeoJSON.
     """
     async with get_connection() as conn:
-        query = """
+        query = f"""
             SELECT gid_0, country, gid_1, name_1, gid_2, name_2,
-                   ST_AsGeoJSON(geom)::json as geometry
+                   ST_AsGeoJSON({TOPOLOGY_SAFE_POLYGON_GEOM_SQL})::json as geometry
             FROM gha.admin2
             WHERE 1=1
         """
@@ -240,6 +249,114 @@ async def get_admin2_geojson(
             "features": features,
             "count": len(features),
         }
+
+
+@router.get("/reverse-geocode")
+async def reverse_geocode_boundary(
+    lon: float = Query(..., description="Longitude in WGS84"),
+    lat: float = Query(..., description="Latitude in WGS84"),
+    country: Optional[str] = Query(
+        None, description="Optional admin0 filter (gid_0 / ISO3)"
+    ),
+):
+    """
+    Resolve a coordinate to the smallest matching admin boundary.
+    Priority: admin2 -> admin1 -> admin0
+    """
+    point_sql = "ST_SetSRID(ST_Point($1, $2), 4326)"
+    params = [lon, lat]
+    country_clause = ""
+
+    if country:
+        params.append(country.strip().upper())
+        country_clause = " AND gid_0 = $3"
+
+    async with get_connection() as conn:
+        admin2_row = await conn.fetchrow(
+            f"""
+            SELECT
+                'admin2' AS level,
+                gid_0, country, gid_1, name_1, gid_2, name_2
+            FROM gha.admin2
+            WHERE ST_Intersects({TOPOLOGY_SAFE_POLYGON_GEOM_SQL}, {point_sql})
+              {country_clause}
+            ORDER BY ST_Area(geom) ASC
+            LIMIT 1
+            """,
+            *params,
+        )
+
+        if admin2_row:
+            display_name = ", ".join(
+                [admin2_row["name_2"], admin2_row["name_1"], admin2_row["country"]]
+            )
+            return {
+                "match": {
+                    "level": admin2_row["level"],
+                    "gid_0": admin2_row["gid_0"],
+                    "country": admin2_row["country"],
+                    "gid_1": admin2_row["gid_1"],
+                    "name_1": admin2_row["name_1"],
+                    "gid_2": admin2_row["gid_2"],
+                    "name_2": admin2_row["name_2"],
+                    "display_name": display_name,
+                    "coordinates": {"lon": lon, "lat": lat},
+                }
+            }
+
+        admin1_row = await conn.fetchrow(
+            f"""
+            SELECT
+                'admin1' AS level,
+                gid_0, country, gid_1, name_1
+            FROM gha.admin1
+            WHERE ST_Intersects({TOPOLOGY_SAFE_POLYGON_GEOM_SQL}, {point_sql})
+              {country_clause}
+            ORDER BY ST_Area(geom) ASC
+            LIMIT 1
+            """,
+            *params,
+        )
+
+        if admin1_row:
+            display_name = ", ".join([admin1_row["name_1"], admin1_row["country"]])
+            return {
+                "match": {
+                    "level": admin1_row["level"],
+                    "gid_0": admin1_row["gid_0"],
+                    "country": admin1_row["country"],
+                    "gid_1": admin1_row["gid_1"],
+                    "name_1": admin1_row["name_1"],
+                    "display_name": display_name,
+                    "coordinates": {"lon": lon, "lat": lat},
+                }
+            }
+
+        admin0_row = await conn.fetchrow(
+            f"""
+            SELECT
+                'admin0' AS level,
+                gid_0, country
+            FROM gha.admin0
+            WHERE ST_Intersects({TOPOLOGY_SAFE_POLYGON_GEOM_SQL}, {point_sql})
+              {country_clause}
+            LIMIT 1
+            """,
+            *params,
+        )
+
+        if admin0_row:
+            return {
+                "match": {
+                    "level": admin0_row["level"],
+                    "gid_0": admin0_row["gid_0"],
+                    "country": admin0_row["country"],
+                    "display_name": admin0_row["country"],
+                    "coordinates": {"lon": lon, "lat": lat},
+                }
+            }
+
+        return {"match": None}
 
 
 @router.get("/admin-boundaries/")

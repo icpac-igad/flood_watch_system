@@ -295,6 +295,97 @@
   .stat-card.alarm .stat-value { color: #FF9800; }
   .stat-card.warning .stat-value { color: #b8860b; }
   .stat-card.normal .stat-value { color: #b0b0b0; }
+
+  /* Interactive assessment block */
+  .interactive-card {
+    border: 1px solid #d9e2ec;
+    border-radius: 6px;
+    background: #f8fafc;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+
+  .interactive-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin-bottom: 8px;
+    font-size: 8.5pt;
+    color: #475569;
+  }
+
+  .interactive-meta strong {
+    color: #111827;
+  }
+
+  .status-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .status-pill.draft {
+    background: #fff7ed;
+    color: #9a3412;
+    border: 1px solid #fed7aa;
+  }
+
+  .status-pill.published {
+    background: #ecfdf5;
+    color: #166534;
+    border: 1px solid #86efac;
+  }
+
+  .interactive-text-block {
+    margin-bottom: 8px;
+  }
+
+  .interactive-text-block .label {
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 2px;
+  }
+
+  .interactive-text-block .value {
+    font-size: 9pt;
+    color: #1f2937;
+    white-space: pre-wrap;
+  }
+
+  .district-summary-row {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0 10px;
+  }
+
+  .district-pill {
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    background: #fff;
+    padding: 4px 6px;
+    font-size: 8pt;
+    min-width: 62px;
+    text-align: center;
+  }
+
+  .district-pill .count {
+    display: block;
+    font-size: 10pt;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-top: 2px;
+  }
+
+  .district-pill.emergency .count { color: #F44336; }
+  .district-pill.alarm .count { color: #FF9800; }
+  .district-pill.warning .count { color: #b8860b; }
+  .district-pill.watch .count { color: #2196F3; }
+  .district-pill.normal .count { color: #64748b; }
 </style>
 </head>
 <body>
@@ -440,6 +531,79 @@
 <div class="chart-container">
   <img src="data:image/png;base64,{{ chart_image }}" alt="Multi-model discharge forecast">
   <div class="image-caption">Multi-model ensemble discharge forecast</div>
+</div>
+{% endif %}
+
+{% if interactive_report %}
+<h2 class="section-header">Interactive Expert Assessment</h2>
+<div class="interactive-card">
+  <div class="interactive-meta">
+    <span><strong>Report Key:</strong> {{ interactive_report.report_key }}</span>
+    <span><strong>Expert:</strong> {{ interactive_report.expert_type|title }}</span>
+    <span><strong>Scope:</strong> {{ interactive_report.country_name }}</span>
+    <span>
+      <strong>Status:</strong>
+      <span class="status-pill {{ interactive_report.status }}">{{ interactive_report.status_label }}</span>
+    </span>
+  </div>
+
+  <div class="interactive-text-block">
+    <div class="label">Overall Risk Level</div>
+    <div class="value">{{ interactive_report.risk_level|upper }}</div>
+  </div>
+
+  <div class="interactive-text-block">
+    <div class="label">Overall Assessment Comment</div>
+    <div class="value">{{ interactive_report.assessment_comment or "No comment provided." }}</div>
+  </div>
+
+  <div class="interactive-text-block">
+    <div class="label">Affected Areas</div>
+    <div class="value">{{ interactive_report.affected_areas or "No affected areas listed." }}</div>
+  </div>
+
+  <div class="interactive-text-block">
+    <div class="label">Recommendations</div>
+    <div class="value">{{ interactive_report.recommendations or "No recommendations listed." }}</div>
+  </div>
+
+  <div class="district-summary-row">
+    <div class="district-pill emergency">Emergency<span class="count">{{ interactive_report.district_summary.emergency or 0 }}</span></div>
+    <div class="district-pill alarm">Alarm<span class="count">{{ interactive_report.district_summary.alarm or 0 }}</span></div>
+    <div class="district-pill warning">Warning<span class="count">{{ interactive_report.district_summary.warning or 0 }}</span></div>
+    <div class="district-pill watch">Watch<span class="count">{{ interactive_report.district_summary.watch or 0 }}</span></div>
+    <div class="district-pill normal">Normal<span class="count">{{ interactive_report.district_summary.normal or 0 }}</span></div>
+  </div>
+
+  {% if interactive_report.district_assessments %}
+  <table class="country-table">
+    <thead>
+      <tr>
+        <th>Country</th>
+        <th>Admin 1</th>
+        <th>Admin 2</th>
+        <th>Risk</th>
+        <th>Comment</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for district in interactive_report.district_assessments[:40] %}
+      <tr>
+        <td>{{ district.country }}</td>
+        <td>{{ district.admin1 }}</td>
+        <td>{{ district.admin2 }}</td>
+        <td>{{ district.risk_level|upper }}</td>
+        <td>{{ district.comment or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if interactive_report.district_count > 40 %}
+  <div class="image-caption">Showing first 40 district edits out of {{ interactive_report.district_count }}.</div>
+  {% endif %}
+  {% else %}
+  <div class="image-caption">No district-level overrides were saved for this assessment.</div>
+  {% endif %}
 </div>
 {% endif %}
 

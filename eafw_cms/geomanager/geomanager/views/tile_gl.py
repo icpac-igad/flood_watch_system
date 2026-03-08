@@ -1,9 +1,10 @@
+import json
 import os
 from copy import deepcopy
 
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse
-from wagtail.api.v2.utils import get_full_url
+from geomanager.utils import get_full_url
 from wagtailcache.cache import cache_page
 
 from geomanager.errors import MissingTileError
@@ -15,6 +16,34 @@ DEFAULT_MINZOOM = 7
 DEFAULT_MAXZOOM = 15
 WORLD_BOUNDS = [-180, -85.05112877980659, 180, 85.0511287798066]
 FALLBACK_OPENMAPTILES_TILEJSON_URL = "https://eahazardswatch.icpac.net/tileserver-gl/data/v3.json"
+
+# fonts.openmaptiles.org is unreliable (returns HTML/403 instead of PBF).
+# Protomaps CDN hosts standard Noto Sans / Noto Sans CJK fonts in PBF format.
+GLYPHS_URL = "https://cdn.protomaps.com/fonts/pbf/{fontstack}/{range}.pbf"
+
+# Map legacy OpenMapTiles font names to Protomaps-compatible equivalents.
+_FONT_REMAP = {
+    "Klokantech Noto Sans Regular": "Noto Sans Regular",
+    "Klokantech Noto Sans Bold": "Noto Sans Bold",
+    "Klokantech Noto Sans Italic": "Noto Sans Regular",
+    "Metropolis Regular": "Noto Sans Regular",
+    "Metropolis Bold": "Noto Sans Bold",
+    "Metropolis Light": "Noto Sans Regular",
+    "Open Sans Regular": "Noto Sans Regular",
+    "Open Sans Bold": "Noto Sans Bold",
+    "Open Sans Italic": "Noto Sans Regular",
+    "Open Sans Semibold": "Noto Sans Medium",
+    "Arial Unicode MS Regular": "Noto Sans Regular",
+    "Arial Unicode MS Bold": "Noto Sans Bold",
+}
+
+
+def _remap_fonts_in_style(style_config):
+    """Replace font names that don't exist on the configured glyph CDN."""
+    raw = json.dumps(style_config)
+    for old_name, new_name in _FONT_REMAP.items():
+        raw = raw.replace(old_name, new_name)
+    return json.loads(raw)
 
 
 @cache_page
@@ -97,7 +126,7 @@ def style_json_gl(request, source_slug):
 
     style_config["id"] = source.pk
     style_config["name"] = source.name
-    style_config["glyphs"] = "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf"
+    style_config["glyphs"] = GLYPHS_URL
 
     # Preserve custom raster/vector sources (e.g. external basemaps) and only
     # enforce the openmaptiles source URL for this MBTiles source.
@@ -127,5 +156,29 @@ def style_json_gl(request, source_slug):
 
     existing_sources["openmaptiles"] = openmaptiles_source
     style_config["sources"] = existing_sources
+
+    # Enforce correct default visibility for basemap layers.
+    # The default basemap is "basemap-light"; all other basemap groups
+    # (e.g. satellite, OSM, Google, ESRI) must start hidden so the map
+    # doesn't flash multiple basemaps before the frontend applies its selection.
+    DEFAULT_BASEMAP_GROUP_KEY = "basemap_light"
+    mapbox_groups = (style_config.get("metadata") or {}).get("mapbox:groups") or {}
+    basemap_group_keys = {
+        k for k, v in mapbox_groups.items()
+        if isinstance(v, dict) and "basemap" in (v.get("name") or "").lower()
+    }
+
+    if basemap_group_keys:
+        for layer in style_config.get("layers") or []:
+            layer_group = (layer.get("metadata") or {}).get("mapbox:group")
+            if layer_group in basemap_group_keys:
+                layout = layer.setdefault("layout", {})
+                if layer_group == DEFAULT_BASEMAP_GROUP_KEY:
+                    layout["visibility"] = "visible"
+                else:
+                    layout["visibility"] = "none"
+
+    # Remap legacy font names so all glyph requests resolve on the CDN.
+    style_config = _remap_fonts_in_style(style_config)
 
     return JsonResponse(style_config)

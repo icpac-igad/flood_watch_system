@@ -25,8 +25,12 @@ Independent, high-performance API service for East Africa Flood Watch system.
 
 ### Datasets (`/api/v1/datasets/`)
 - `GET /` - List all datasets
+- `GET /mapviewer` - Legacy mapviewer-compatible dataset payload
 - `GET /{id}` - Get dataset by ID
 - `GET /slug/{slug}` - Get dataset by slug
+
+### Mapviewer Compatibility (`/api/v1/`)
+- `GET /mapviewer-config` - Legacy mapviewer configuration payload
 
 ### Boundaries (`/api/v1/boundaries/`)
 - `GET /countries` - List countries
@@ -70,6 +74,7 @@ EAFW_DATABASE_NAME=geomanager_web
 EAFW_DATABASE_USER=geomanager
 EAFW_DATABASE_PASSWORD=your_password
 EAFW_DEBUG=false
+EAFW_CMS_API_BASE_URL=http://eafw_cms:8000/api
 ```
 
 ## Running

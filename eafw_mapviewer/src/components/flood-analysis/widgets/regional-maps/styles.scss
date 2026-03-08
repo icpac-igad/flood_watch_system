@@ -161,7 +161,7 @@ $alert-normal: #b0b0b0;
       border-radius: 8px;
       overflow: hidden;
       border: 1px solid #ddd;
-      min-height: 520px;
+      min-height: clamp(320px, 58vh, 520px);
 
       .map-loader {
         position: absolute;
@@ -176,7 +176,47 @@ $alert-normal: #b0b0b0;
       .overview-map {
         width: 100%;
         height: 100%;
-        min-height: 520px;
+        min-height: clamp(320px, 58vh, 520px);
+      }
+
+      .map-legend {
+        position: absolute;
+        bottom: 12px;
+        left: 12px;
+        background: white;
+        padding: 10px 14px;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        z-index: 3;
+        max-width: min(240px, calc(100% - 24px));
+
+        .legend-title {
+          font-size: 11px;
+          font-weight: 600;
+          color: #333;
+          margin-bottom: 8px;
+          text-transform: uppercase;
+        }
+
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 4px;
+          font-size: 12px;
+          color: #555;
+
+          &:last-child {
+            margin-bottom: 0;
+          }
+
+          .legend-pin {
+            width: 10px;
+            height: 14px;
+            object-fit: contain;
+            display: block;
+          }
+        }
       }
     }
 
@@ -231,6 +271,7 @@ $alert-normal: #b0b0b0;
         font-weight: 600;
         margin: 0;
         color: #333;
+        overflow-wrap: anywhere;
       }
 
       .alert-badge {
@@ -304,7 +345,7 @@ $alert-normal: #b0b0b0;
 
     .detail-content {
       display: grid;
-      grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
+      grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
       gap: 24px;
 
       @media (max-width: 1000px) {
@@ -314,7 +355,7 @@ $alert-normal: #b0b0b0;
 
     .detail-map-container {
       position: relative;
-      height: 520px;
+      height: clamp(320px, 58vh, 520px);
       border-radius: 8px;
       overflow: hidden;
       border: 1px solid #ddd;
@@ -346,6 +387,7 @@ $alert-normal: #b0b0b0;
         border-radius: 6px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         z-index: 3;
+        max-width: min(240px, calc(100% - 24px));
 
         .legend-title {
           font-size: 11px;
@@ -367,10 +409,11 @@ $alert-normal: #b0b0b0;
             margin-bottom: 0;
           }
 
-          .legend-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
+          .legend-pin {
+            width: 10px;
+            height: 14px;
+            object-fit: contain;
+            display: block;
           }
         }
       }
@@ -396,15 +439,11 @@ $alert-normal: #b0b0b0;
 
       .inundation-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
 
-        @media (max-width: 1000px) {
-          grid-template-columns: repeat(4, 1fr);
-        }
-
-        @media (max-width: 600px) {
-          grid-template-columns: 1fr 1fr;
+        @media (max-width: 640px) {
+          grid-template-columns: 1fr;
         }
       }
 
@@ -529,16 +568,11 @@ $alert-normal: #b0b0b0;
         margin-bottom: 0;
       }
 
-      .legend-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        border: 1px solid rgba(0, 0, 0, 0.1);
-
-        &.emergency { background: $alert-emergency; }
-        &.alarm { background: $alert-alarm; }
-        &.warning { background: $alert-warning; }
-        &.normal { background: $alert-normal; }
+      .legend-pin {
+        width: 10px;
+        height: 14px;
+        object-fit: contain;
+        display: block;
       }
     }
   }
@@ -551,14 +585,14 @@ $alert-normal: #b0b0b0;
 
     .regional-overview {
       .overview-content {
-        min-height: 420px;
+        min-height: 340px;
       }
 
       .overview-map-container {
-        min-height: 420px;
+        min-height: 340px;
 
         .overview-map {
-          min-height: 420px;
+          min-height: 340px;
         }
       }
 
@@ -568,8 +602,20 @@ $alert-normal: #b0b0b0;
     }
 
     .country-detail-view {
+      .detail-header {
+        padding-left: 12px;
+
+        h3 {
+          font-size: 18px;
+        }
+      }
+
       .detail-map-container {
-        height: 420px;
+        height: 340px;
+      }
+
+      .inundation-widget {
+        padding: 14px;
       }
     }
 
@@ -581,6 +627,54 @@ $alert-normal: #b0b0b0;
     .country-map-widget {
       .map-container-small {
         height: 100px;
+      }
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .c-regional-maps {
+    padding: 12px;
+
+    .widget-header {
+      h3 {
+        font-size: 16px;
+      }
+
+      p {
+        font-size: 12px;
+      }
+    }
+
+    .country-detail-view {
+      .detail-header {
+        .back-btn {
+          width: 100%;
+          margin-bottom: 10px;
+        }
+      }
+
+      .detail-map-container {
+        height: 300px;
+
+        .map-legend {
+          left: 8px;
+          right: 8px;
+          bottom: 8px;
+          width: auto;
+          max-width: none;
+          padding: 8px 10px;
+        }
+      }
+
+      .inundation-widget {
+        .inundation-card {
+          padding: 12px 10px;
+
+          .inundation-label {
+            font-size: 10px;
+          }
+        }
       }
     }
   }

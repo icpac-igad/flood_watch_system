@@ -23,6 +23,7 @@ const datasets = [
               "http://20.56.94.119/pg4w/tileserv/pgadapter.africa_gadm36_political_boundaries/{z}/{x}/{y}.pbf?properties=gid_0,gid_1,gid_2,name_0,name_1,name_2,level,area,gid,size",
             ],
             type: "vector",
+            maxzoom: 12,
           },
           render: {
             layers: [
@@ -304,6 +305,16 @@ const datasets = [
                 paint: {
                   "line-color": "#7f7f7f",
                   "line-width": 1.5,
+                },
+                "source-layer": "pgadapter.africa_gadm36_political_boundaries",
+                type: "line",
+              },
+              {
+                filter: ["==", "level", 0],
+                minzoom: 4,
+                paint: {
+                  "line-color": "#555555",
+                  "line-width": 1.2,
                 },
                 "source-layer": "pgadapter.africa_gadm36_political_boundaries",
                 type: "line",

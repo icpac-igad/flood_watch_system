@@ -1,6 +1,7 @@
 LAYER
     INCLUDE "config/database.map"
     DATA "geom from (select id, alert_level, geom from alerts.get_daily_hmc_alerts('%time%')) as subq using unique id using srid=4326"
+    MASK "gha_admin_extent_mask"
     INCLUDE "shared/common-layer-properties.map"
     INCLUDE "classifications/hmc-alert-levels.classes.map"
     METADATA

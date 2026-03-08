@@ -1,0 +1,15 @@
+{
+  "name": "landscan_population_mapserver_style",
+  "source": "data/mapfiles/classifications/landscan-population.classes.map",
+  "classes": [
+    {"label": "Unpopulated (0)", "min": 0, "max": 0, "rgba": [0, 0, 0, 0]},
+    {"label": "1 - 5", "min": 1, "max": 5, "rgba": [255, 255, 190, 255]},
+    {"label": "6 - 25", "min": 6, "max": 25, "rgba": [255, 255, 115, 255]},
+    {"label": "26 - 50", "min": 26, "max": 50, "rgba": [255, 255, 0, 255]},
+    {"label": "51 - 100", "min": 51, "max": 100, "rgba": [255, 170, 0, 255]},
+    {"label": "101 - 500", "min": 101, "max": 500, "rgba": [255, 102, 0, 255]},
+    {"label": "501 - 2500", "min": 501, "max": 2500, "rgba": [255, 0, 0, 255]},
+    {"label": "2501 - 5000", "min": 2501, "max": 5000, "rgba": [204, 0, 0, 255]},
+    {"label": "5001+", "min": 5001, "max": 65535, "rgba": [115, 0, 0, 255]}
+  ]
+}

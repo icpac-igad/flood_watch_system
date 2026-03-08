@@ -55,6 +55,9 @@ tmp/
 # Documentation (not needed in build)
 *.md
 !README.md
+!eafw_mapviewer/src/content/stories/*.mdx
+!eafw_mapviewer/src/content/stories/*.md
+!eafw_mapviewer/public/storylines/geojson/*.geojson
 
 # Media files (mounted at runtime)
 **/media/
