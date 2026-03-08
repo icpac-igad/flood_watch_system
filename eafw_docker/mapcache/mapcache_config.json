@@ -162,6 +162,16 @@
       "transparent": "true",
       "connection_timeout": 30,
       "timeout": 300
+    },
+    {
+      "name": "landscan_population_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "landscan_population",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
     }
   ],
   "tileset_attrs": {
@@ -171,7 +181,7 @@
         "minzoom": "4",
         "maxzoom": "14"
       },
-      "g": {
+      "GoogleMapsCompatible": {
         "restricted_extent": "${WEB_GRID_EXTENTS}",
         "minzoom": "4",
         "maxzoom": "14"
@@ -423,6 +433,47 @@
       "format_ref": "png_rgba",
       "metadata": {
         "title": "WRF Extremely Heavy Rainfall"
+      }
+    },
+    {
+      "name": "landscan_population",
+      "source": "landscan_population_source",
+      "format_ref": "png_rgba",
+      "own_dimensions_only": true,
+      "dimensions": [
+        {
+          "name": "scope",
+          "type": "regex",
+          "default": "all",
+          "regex": "^(all|project|whca)?$"
+        },
+        {
+          "name": "project_countries",
+          "type": "regex",
+          "default": "__none__",
+          "regex": "^(__none__|[A-Za-z ,'-]*)$"
+        },
+        {
+          "name": "country_name",
+          "type": "regex",
+          "default": "__none__",
+          "regex": "^(__none__|[A-Za-z .,'-]*)$"
+        },
+        {
+          "name": "region_name",
+          "type": "regex",
+          "default": "__none__",
+          "regex": "^(__none__|[A-Za-z .,'-]*)$"
+        },
+        {
+          "name": "district_name",
+          "type": "regex",
+          "default": "__none__",
+          "regex": "^(__none__|[A-Za-z .,'-]*)$"
+        }
+      ],
+      "metadata": {
+        "title": "LandScan Population Density"
       }
     }
   ],

@@ -131,6 +131,17 @@ class Map extends Component {
     }
   }
 
+  onError = (evt) => {
+    const err = evt?.error || evt;
+    console.error('[MapGL onError]', {
+      message: err?.message || String(err),
+      sourceId: evt?.sourceId,
+      source: evt?.source,
+      type: evt?.type,
+      error: err,
+    });
+  };
+
   onLoad = () => {
     const { onLoad, bounds } = this.props;
     // Convert map reference to mapbox map instance before parsing map options
@@ -314,6 +325,7 @@ class Map extends Component {
           onViewportChange={this.onViewportChange}
           onResize={this.onResize}
           onLoad={this.onLoad}
+          onError={this.onError}
           getCursor={getCursor}
           transitionInterpolator={new FlyToInterpolator()}
           transitionEasing={easeCubic}

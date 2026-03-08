@@ -537,7 +537,7 @@ def export_extreme_rainfall_cog(
     _write_cog(arr, transform, crs, cog_path)
     _clip_cog_to_gha(cog_path)
     _write_stac_item(
-        cog_path, forecast_date, percentile=percentile, collection="wrf-extreme-rainfall"
+        cog_path, forecast_date, percentile=percentile, collection=f"wrf-extreme-rainfall-{percentile}"
     )
     return cog_path
 
@@ -726,11 +726,15 @@ def _register_stac_items(stac_api_url: str, cog_paths: List[Path]):
                 if not href.startswith(("http://", "https://", "/stac-cogs/")):
                     data_asset["href"] = public_cog_href(cog_path)
 
-            url = f"{stac_api_url.rstrip('/')}/collections/{collection_id}/items"
-            resp = requests.post(url, json=item_dict, timeout=30)
+            base = f"{stac_api_url.rstrip('/')}/collections/{collection_id}/items"
+            item_id = item_dict.get("id", "")
+            # Try POST first; if item exists (409), upsert with PUT
+            resp = requests.post(base, json=item_dict, timeout=30)
+            if resp.status_code == 409 and item_id:
+                resp = requests.put(f"{base}/{item_id}", json=item_dict, timeout=30)
             resp.raise_for_status()
             registered += 1
-            logger.info(f"Registered STAC item: {item_dict['id']}")
+            logger.info(f"Registered STAC item: {item_id}")
         except Exception as exc:
             logger.warning(f"Failed to register {json_path.name}: {exc}")
 

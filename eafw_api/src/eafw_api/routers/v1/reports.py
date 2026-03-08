@@ -17,16 +17,16 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from eafw_api.db import get_connection
-from eafw_api.routers.v1._helpers import format_report_key
+from eafw_api.routers.v1._helpers import (
+    format_report_key,
+    DEFAULT_WARNING_THRESHOLD,
+    DEFAULT_ALARM_THRESHOLD,
+    DEFAULT_EMERGENCY_THRESHOLD,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Alert thresholds (consistent with multimodal-config)
-DEFAULT_WARNING_THRESHOLD = 300.0
-DEFAULT_ALARM_THRESHOLD = 500.0
-DEFAULT_EMERGENCY_THRESHOLD = 750.0
 
 # Country name mapping
 COUNTRY_NAMES = {

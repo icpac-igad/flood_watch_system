@@ -1,5 +1,9 @@
 @import "@/styles/settings.scss";
 
+html {
+  font-size: 87.5%;
+}
+
 body {
   position: unset !important;
   padding: 0;
@@ -7,7 +11,7 @@ body {
   font-family: $font-family-1;
   font-weight: normal;
   line-height: 1.5;
-  font-size: rem(18px);
+  font-size: rem(16px);
   color: $slate;
   background: transparent;
   -webkit-font-smoothing: antialiased;
@@ -67,4 +71,12 @@ select {
 
 .mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
   border-bottom-color: rgb(0 0 0 / 30%) !important;
+}
+
+/* Hard-disable any residual marker blink classes from external/CMS styles */
+.blinking,
+.animate-blink-warning,
+.animate-blink-alarm,
+.animate-blink-emergency {
+  animation: none !important;
 }

@@ -196,20 +196,16 @@ def _iter_collection_items(client: httpx.Client, collection_id: str, limit: int 
 
 
 def _cleanup_wrf_misrouted_items(client: httpx.Client) -> int:
-    """Delete extreme-rainfall items accidentally inserted in daily collection."""
-    collection_id = "wrf-daily-rainfall"
+    """Delete extreme-rainfall items misrouted to daily or the old combined collection."""
     deleted = 0
 
-    for item in list(_iter_collection_items(client, collection_id)):
+    # Clean misrouted extreme items from daily collection
+    for item in list(_iter_collection_items(client, "wrf-daily-rainfall")):
         item_id = item.get("id", "")
         props = item.get("properties") or {}
-
-        is_misrouted_extreme = item_id.startswith("wrf-extreme-") or ("wrf:percentile" in props)
-        if not is_misrouted_extreme:
-            continue
-
-        if _delete_item_if_exists(client, collection_id, item_id):
-            deleted += 1
+        if item_id.startswith("wrf-extreme-") or ("wrf:percentile" in props):
+            if _delete_item_if_exists(client, "wrf-daily-rainfall", item_id):
+                deleted += 1
 
     return deleted
 

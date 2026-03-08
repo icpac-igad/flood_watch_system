@@ -4,6 +4,7 @@ import { translateText } from "@/utils/lang";
 
 import Dropdown from "@/components/ui/dropdown";
 import RadioGroup from "@/components/ui/radio-group";
+import Toggle from "@/components/ui/toggle";
 
 import "./styles.scss";
 
@@ -48,7 +49,21 @@ class SentenceSelector extends PureComponent {
 
     let selectorRepl;
 
-    if (type && type === "radio") {
+    if (type && type === "toggle") {
+      const isOn = value === "true" || value === true;
+      selectorRepl = this.reduceSentence(
+        nameRepl,
+        "{selector}",
+        <Toggle
+          key={name || `${value}-${sentence}`}
+          value={isOn}
+          onToggle={(checked) => {
+            onChange(String(checked));
+          }}
+        />,
+        selectorDescription
+      );
+    } else if (type && type === "radio") {
       selectorRepl = this.reduceSentence(
         nameRepl,
         "{selector}",

@@ -4,6 +4,7 @@ Helpers for proxying compatibility endpoints to the Django CMS API.
 from __future__ import annotations
 
 from typing import Any, Iterable
+import re
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -17,6 +18,7 @@ DEFAULT_TIMEOUT = httpx.Timeout(connect=10.0, read=45.0, write=45.0, pool=45.0)
 URL_PREFIXES_TO_ABSOLUTIZE = (
     "/api/",
     "/pg/",
+    "/tileserv/",
     "/mapserver/",
     "/mapcache/",
     "/cog-tiles/",
@@ -29,6 +31,30 @@ URL_PREFIXES_TO_ABSOLUTIZE = (
     "/static/",
     "/mapviewer/",
 )
+
+LEGACY_TILE_SOURCE_REPLACEMENTS = {
+    "boundary.ea_watersheds_level_03_v1": "gha.nile_basin_mask",
+    "boundary.get_pre_defined_boundary": "cms.capeditor_predefinedalertarea",
+    "rivers.osm_waterways_default": "gha.hydro_rivers",
+    "rivers.osm_waterways": "gha.hydro_rivers",
+}
+
+TILE_TEMPLATE_TOKEN_ALLOWLIST = {
+    "z",
+    "x",
+    "y",
+    "-y",
+    "tms-y",
+    "quadkey",
+    "bbox",
+    "bbox-epsg-3857",
+    "bbox-epsg-4326",
+    "ratio",
+    "s",
+}
+
+_SINGLE_TEMPLATE_TOKEN_RE = re.compile(r"%7b([a-z0-9_.:-]+)%7d", re.IGNORECASE)
+_DOUBLE_TEMPLATE_TOKEN_RE = re.compile(r"%7b%7b([a-z0-9_.:-]+)%7d%7d", re.IGNORECASE)
 
 
 def _normalize_api_base(url: str) -> str:
@@ -108,16 +134,40 @@ def _request_base_url(source_request: Request | None = None) -> str:
     return f"{scheme}://{host}"
 
 
+def _restore_tile_template_tokens(value: str) -> str:
+    if not value or "%7b" not in value.lower():
+        return value
+
+    def _single_replacer(match: re.Match[str]) -> str:
+        token = match.group(1)
+        if token.lower() in TILE_TEMPLATE_TOKEN_ALLOWLIST:
+            return f"{{{token}}}"
+        return match.group(0)
+
+    def _double_replacer(match: re.Match[str]) -> str:
+        token = match.group(1)
+        if token.lower() in TILE_TEMPLATE_TOKEN_ALLOWLIST:
+            return f"{{{{{token}}}}}"
+        return match.group(0)
+
+    normalized = _DOUBLE_TEMPLATE_TOKEN_RE.sub(_double_replacer, value)
+    normalized = _SINGLE_TEMPLATE_TOKEN_RE.sub(_single_replacer, normalized)
+    return normalized
+
+
 def _normalize_string_url(value: str, request_base_url: str) -> str:
     if not value or not request_base_url:
         return value
 
+    normalized_value = value
+
     if value.startswith(("http://", "https://")):
         parsed = urlsplit(value)
         hostname = (parsed.hostname or "").lower()
-        if hostname in {"127.0.0.1", "localhost", "0.0.0.0", "::1"}:
+        is_internal_path = parsed.path.startswith(URL_PREFIXES_TO_ABSOLUTIZE)
+        if is_internal_path:
             replacement = urlsplit(request_base_url)
-            return urlunsplit(
+            normalized_value = urlunsplit(
                 (
                     replacement.scheme,
                     replacement.netloc,
@@ -126,12 +176,33 @@ def _normalize_string_url(value: str, request_base_url: str) -> str:
                     parsed.fragment,
                 )
             )
-        return value
+        elif hostname in {"127.0.0.1", "localhost", "0.0.0.0", "::1"}:
+            replacement = urlsplit(request_base_url)
+            normalized_value = urlunsplit(
+                (
+                    replacement.scheme,
+                    replacement.netloc,
+                    parsed.path,
+                    parsed.query,
+                    parsed.fragment,
+                )
+            )
+        else:
+            normalized_value = value
 
-    if value.startswith(URL_PREFIXES_TO_ABSOLUTIZE):
-        return f"{request_base_url.rstrip('/')}{value}"
+    elif value.startswith(URL_PREFIXES_TO_ABSOLUTIZE):
+        normalized_value = f"{request_base_url.rstrip('/')}{value}"
 
-    return value
+    for legacy, replacement in LEGACY_TILE_SOURCE_REPLACEMENTS.items():
+        if legacy in normalized_value:
+            normalized_value = normalized_value.replace(legacy, replacement)
+
+    # Local fallback: some WRF extreme-rainfall layers are no longer published
+    # through mapcache; route them to mapserver where they are available.
+    if "/mapcache/?" in normalized_value and "LAYERS=wrf_extreme_" in normalized_value:
+        normalized_value = normalized_value.replace("/mapcache/?", "/mapserver/?")
+
+    return _restore_tile_template_tokens(normalized_value)
 
 
 def _normalize_payload_urls(payload: Any, request_base_url: str) -> Any:

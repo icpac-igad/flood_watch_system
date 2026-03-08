@@ -120,22 +120,22 @@ STYLE_PRESETS: dict[str, dict[str, Any]] = {
     "wrf-extreme-rainfall": {
         **WRF_EXTREME_STYLE,
     },
+    "wrf-extreme-rainfall-f90": {
+        **WRF_EXTREME_STYLE,
+    },
+    "wrf-extreme-rainfall-f95": {
+        **WRF_EXTREME_STYLE,
+    },
+    "wrf-extreme-rainfall-f99": {
+        **WRF_EXTREME_STYLE,
+    },
 }
 
 
 def style_for_item(collection_id: str, item_id: str, item: dict[str, Any]) -> dict[str, Any]:
-    if collection_id == "wrf-extreme-rainfall":
+    if collection_id.startswith("wrf-extreme-rainfall"):
         return WRF_EXTREME_STYLE
-
-    if collection_id != "wrf-daily-rainfall":
-        return STYLE_PRESETS.get(collection_id, {})
-
-    item_id_l = str(item_id).lower()
-    props = item.get("properties", {}) if isinstance(item, dict) else {}
-    has_percentile = props.get("wrf:percentile") is not None
-    if "extreme" in item_id_l or has_percentile:
-        return WRF_EXTREME_STYLE
-    return WRF_DAILY_STYLE
+    return STYLE_PRESETS.get(collection_id, {})
 
 
 def preview_href(

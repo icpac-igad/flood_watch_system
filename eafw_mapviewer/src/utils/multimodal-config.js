@@ -20,10 +20,10 @@ export const DEFAULT_THRESHOLDS = {
 // =============================================================================
 
 export const ALERT_COLORS = {
-  normal: "#b0b0b0",
-  warning: "#ffc107",
-  alarm: "#ff9800",
-  emergency: "#d32f2f",
+  normal: "#b0bec5",
+  warning: "#b8f0f0",    // Moderate — light cyan
+  alarm: "#2f83d2",      // Severe — blue
+  emergency: "#1e1a97",  // Extreme — deep blue
 };
 
 export const ALERT_LEVEL_ORDER = ["emergency", "alarm", "warning", "normal"];
@@ -52,20 +52,21 @@ export const ALERT_PRIORITY = {
 // =============================================================================
 
 export const ALERT_ICON_NAMES = {
-  normal: "normal",
-  warning: "warning",
-  alarm: "alarm",
-  emergency: "emergency",
+  // Use dedicated IDs to avoid collisions with sprite/default CMS icon names.
+  normal: "forecast-pin-v2-icon-normal",
+  warning: "forecast-pin-v2-icon-warning",
+  alarm: "forecast-pin-v2-icon-alarm",
+  emergency: "forecast-pin-v2-icon-emergency",
 };
 
 // Cluster icon names (generated at runtime on canvas)
-export const CLUSTER_ICON_PREFIX = "cluster-";
+export const CLUSTER_ICON_PREFIX = "forecast-cluster-";
 
 // Symbol layer layout defaults
 export const SYMBOL_LAYOUT = {
-  pointIconSize: 0.45,
-  clusterIconSize: 0.55,
-  clusterTextSize: 11,
+  pointIconSize: 0.6,
+  clusterIconSize: 0.7,
+  clusterTextSize: 12,
   clusterTextColor: "#ffffff",
   clusterTextHaloColor: "rgba(0,0,0,0.7)",
   clusterTextHaloWidth: 1.2,
@@ -77,9 +78,9 @@ export const SYMBOL_LAYOUT = {
 
 export const WATER_COLORS = {
   normal: { stroke: "#87CEEB", fill: "rgba(135, 206, 235, 0.3)" },
-  warning: { stroke: "#4A90D9", fill: "rgba(74, 144, 217, 0.4)" },
-  alarm: { stroke: "#1E5AA8", fill: "rgba(30, 90, 168, 0.5)" },
-  emergency: { stroke: "#0D3B6B", fill: "rgba(13, 59, 107, 0.6)" },
+  warning: { stroke: "#b8f0f0", fill: "rgba(184, 240, 240, 0.4)" },
+  alarm: { stroke: "#2f83d2", fill: "rgba(47, 131, 210, 0.5)" },
+  emergency: { stroke: "#1e1a97", fill: "rgba(30, 26, 151, 0.6)" },
 };
 
 // =============================================================================
@@ -151,8 +152,8 @@ export const getAlertLabel = (level) => {
   return ALERT_LEVEL_LABELS[level?.toLowerCase()] || ALERT_LEVEL_LABELS.normal;
 };
 
-// Storm SVG path (cloud with lightning bolt — from Wagtail "storm" icon)
-const STORM_SVG_PATH_D = "M38.98 9.01a8.732 8.732 0 0 0-3.16.58l-.01.005a11.49 11.49 0 0 0-22.823 1.757 5.977 5.977 0 0 0-7.91 6.69l-.007-.002a3.81 3.81 0 0 0-.59-.04 4.5 4.5 0 0 0 0 9h34.5a9.003 9.003 0 0 0 8.83-7.24 9.297 9.297 0 0 0 .17-1.76 8.992 8.992 0 0 0-9-8.99zM28.48 37h-6.293l3.565-5.705a1.5 1.5 0 1 0-2.544-1.59l-5 8A1.5 1.5 0 0 0 19.48 40h6.293l-3.565 5.705a1.5 1.5 0 1 0 2.544 1.59l5-8A1.5 1.5 0 0 0 28.48 37z";
+// Flood SVG path (flag with water waves — from humanitarian "flood" icon)
+const STORM_SVG_PATH_D = "M47.82 12L33.16.06a.243.243 0 0 0-.32 0L18.18 12a.528.528 0 0 0-.18.38v17.71a8.734 8.734 0 0 1 3.29 1.15A4.637 4.637 0 0 0 24 32a4.626 4.626 0 0 0 2.7-.76A8.644 8.644 0 0 1 31.33 30a8.603 8.603 0 0 1 4.62 1.24 5.23 5.23 0 0 0 5.43 0A8.603 8.603 0 0 1 46 30a9.43 9.43 0 0 1 2 .2V12.38a.528.528 0 0 0-.18-.38zM46 42a8.603 8.603 0 0 0-4.62 1.24 5.23 5.23 0 0 1-5.43 0A8.603 8.603 0 0 0 31.33 42a8.644 8.644 0 0 0-4.63 1.24A4.626 4.626 0 0 1 24 44a4.637 4.637 0 0 1-2.71-.76A8.673 8.673 0 0 0 16.66 42a8.603 8.603 0 0 0-4.62 1.24 4.684 4.684 0 0 1-2.71.76 4.684 4.684 0 0 1-2.71-.76A8.603 8.603 0 0 0 2 42a2 2 0 0 0 0 4 4.683 4.683 0 0 1 2.71.76A8.604 8.604 0 0 0 9.33 48a8.603 8.603 0 0 0 4.62-1.24 4.684 4.684 0 0 1 2.71-.76 4.66 4.66 0 0 1 2.71.76A8.644 8.644 0 0 0 24 48a8.632 8.632 0 0 0 4.62-1.24 5.212 5.212 0 0 1 5.42 0 9.245 9.245 0 0 0 9.25 0A4.66 4.66 0 0 1 46 46a2 2 0 0 0 0-4zM46 34a8.59 8.59 0 0 0-4.625 1.244 5.241 5.241 0 0 1-5.423 0A8.59 8.59 0 0 0 31.326 34a8.581 8.581 0 0 0-4.623 1.244 4.692 4.692 0 0 1-2.708.756 4.696 4.696 0 0 1-2.709-.756A8.59 8.59 0 0 0 16.661 34a8.588 8.588 0 0 0-4.624 1.244A4.692 4.692 0 0 1 9.33 36a4.69 4.69 0 0 1-2.706-.755A8.577 8.577 0 0 0 2 34a2 2 0 0 0 0 4 4.691 4.691 0 0 1 2.707.756A8.58 8.58 0 0 0 9.329 40a8.588 8.588 0 0 0 4.624-1.244A4.692 4.692 0 0 1 16.661 38a4.696 4.696 0 0 1 2.71.756A8.59 8.59 0 0 0 23.994 40a8.583 8.583 0 0 0 4.624-1.245 5.236 5.236 0 0 1 5.42 0 9.22 9.22 0 0 0 9.25 0A4.702 4.702 0 0 1 46 38a2 2 0 0 0 0-4z";
 
 const buildStormSvg = (color = ALERT_COLORS.normal, size = 28) => `
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 48 48">

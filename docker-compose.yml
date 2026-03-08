@@ -425,6 +425,7 @@ services:
     environment:
       - APP_HOST=0.0.0.0
       - APP_PORT=80
+      - UVICORN_ROOT_PATH=/cog-tiles
       - POSTGRES_USER=${CMS_DB_USER}
       - POSTGRES_PASS=${CMS_DB_PASSWORD}
       - POSTGRES_DBNAME=${CMS_DB_NAME}

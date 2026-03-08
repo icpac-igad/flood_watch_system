@@ -228,20 +228,7 @@ class Legend extends PureComponent {
       Object.prototype.hasOwnProperty.call(newParam || {}, "extended_coverage");
 
     if (isGoogleExtendedCoverageToggle) {
-      const nextEnabled = this.isTruthyFlag(newParam.extended_coverage);
-      const currentEnabled = this.isTruthyFlag(currentLayer?.params?.extended_coverage);
-
-      // Require explicit acceptance whenever extended coverage is enabled.
-      if (nextEnabled && !currentEnabled) {
-        this.setState({
-          pendingExtendedCoverageChange: {
-            currentLayer,
-            newParam,
-            paramConfig,
-          },
-        });
-        return;
-      }
+      // Apply directly — no confirmation dialog needed for toggle.
     }
 
     this.applyParamChange(currentLayer, newParam, paramConfig);

@@ -45,6 +45,10 @@ export const fetchConfig = createThunkAction(
             })),
         }));
 
+      // Cache-bust mapStyle URLs so the browser always fetches a fresh
+      // style JSON (glyphs URL, sources, etc.) on each page load.
+      const styleCacheBust = Date.now();
+
       const appConfig = {
         logo,
         countries,
@@ -59,6 +63,10 @@ export const fetchConfig = createThunkAction(
         sections: sections,
         basemaps: basemaps.reduce((all, item) => {
           item.value = item.label;
+          if (item.mapStyle) {
+            const sep = item.mapStyle.includes("?") ? "&" : "?";
+            item.mapStyle = `${item.mapStyle}${sep}_ts=${styleCacheBust}`;
+          }
           all[item.label] = item;
           return all;
         }, {}),

@@ -127,7 +127,7 @@
       width: 14px;
       fill: $warm-grey;
       margin-right: 8px;
-      animation: ckw 2s ease infinite;
+      animation: none;
     }
 
     .loader-text {
@@ -141,7 +141,7 @@
     }
 
     .loader-dot {
-      animation: 1s blink infinite;
+      animation: none;
     }
     .loader-dot:nth-child(2) {
       animation-delay: 250ms;

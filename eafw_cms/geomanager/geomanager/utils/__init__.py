@@ -1,6 +1,6 @@
 import json
 import math
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from uuid import UUID
 
 from django.conf import settings
@@ -8,16 +8,41 @@ from django.utils.translation import gettext_lazy as _
 
 
 def get_full_url(request, path):
-    """Compat shim — wagtail.api.v2.utils.get_full_url removed in Wagtail 7."""
+    """Compat shim — wagtail.api.v2.utils.get_full_url removed in Wagtail 7.
+
+    Prefers the request's host so URLs match the caller's origin (avoids
+    CORS issues when CMS_BASE_URL points to a different IP/host).
+    Falls back to CMS_BASE_URL only when there is no request context.
+    """
     if not path:
         path = ""
+
+    if isinstance(path, str) and request and path.startswith(("http://", "https://")):
+        # If an internal app URL was stored as an absolute URL with another host,
+        # normalize it to the active request host to avoid cross-origin tile/API calls.
+        parsed = urlsplit(path)
+        if parsed.path.startswith(
+            (
+                "/api/",
+                "/pg/",
+                "/tileserv/",
+                "/mapcache/",
+                "/mapserver/",
+                "/cog-tiles/",
+                "/media/",
+                "/static/",
+                "/stac-browser/api/",
+            )
+        ):
+            path = f"{parsed.path}{f'?{parsed.query}' if parsed.query else ''}{f'#{parsed.fragment}' if parsed.fragment else ''}"
+
+    if request:
+        return request.build_absolute_uri(path)
     cms_base_url = getattr(settings, "CMS_BASE_URL", None)
     if cms_base_url:
         if path and not path.startswith("/"):
             path = "/" + path
         return urljoin(cms_base_url, path)
-    if request:
-        return request.build_absolute_uri(path)
     return path
 
 

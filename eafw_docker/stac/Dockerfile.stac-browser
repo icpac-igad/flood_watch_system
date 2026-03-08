@@ -38,7 +38,7 @@ RUN sed -i 's|</head>|  <link rel="stylesheet" href="/stac-browser/floodwatch-th
 
 # Write default runtime config (can be overridden by entrypoint)
 ARG STAC_API_URL=/stac-browser/api/
-RUN printf 'window.STAC_BROWSER_CONFIG = {\n  catalogUrl: "%s",\n  catalogTitle: "FloodWatch STAC API",\n  catalogImage: "/stac-browser/icpac-logo.png",\n  pathPrefix: "/stac-browser/",\n  allowExternalAccess: false,\n  allowedDomains: ["*"]\n};\n' "${STAC_API_URL}" \
+RUN printf 'window.STAC_BROWSER_CONFIG = {\n  catalogUrl: "%s",\n  catalogTitle: "FloodWatch STAC API",\n  catalogImage: "/stac-browser/icpac-logo.png",\n  pathPrefix: "/stac-browser/",\n  allowExternalAccess: true,\n  allowedDomains: ["*"]\n};\n' "${STAC_API_URL}" \
     > /usr/share/nginx/html/runtime-config.js
 
 # Security: run as non-root

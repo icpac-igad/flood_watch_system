@@ -205,8 +205,15 @@ def _infer_collection_id(item_path: Path, item: dict) -> Optional[str]:
         return "multimodal-points-whca"
     if "multimodal" in text:
         return "multimodal-points-gha"
-    if "wrf-extreme-rainfall" in text:
-        return "wrf-extreme-rainfall"
+    if "wrf-extreme-rainfall" in text or "wrf_extreme" in text:
+        # Route to per-percentile sub-collection
+        if "f90" in text:
+            return "wrf-extreme-rainfall-f90"
+        if "f95" in text:
+            return "wrf-extreme-rainfall-f95"
+        if "f99" in text:
+            return "wrf-extreme-rainfall-f99"
+        return "wrf-extreme-rainfall-f95"  # fallback
     if "wrf" in text or "rainfall" in text:
         return "wrf-daily-rainfall"
     return None

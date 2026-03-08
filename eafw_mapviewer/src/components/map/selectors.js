@@ -10,6 +10,24 @@ import { defined } from "@/utils/core";
 import { selectActiveLang, getMapboxLang } from "@/utils/lang";
 import { getActiveArea } from "@/providers/aoi-provider/selectors";
 import { getDefaultParamInteractions } from "@/utils/params";
+import { isMultimodalRenderLayer } from "@/utils/layer-utils";
+
+// Determine the effective rendered type for a render layer.
+// normalizeMultimodalPointStyling converts multimodal 'circle' layers to 'symbol'
+// at render time, so interactive/hoverable IDs must use 'symbol' to match.
+const getEffectiveRenderType = (renderLayer, layer) => {
+  if (renderLayer.type === 'circle') {
+    const tileUrl = layer?.layerConfig?.source?.tiles?.[0] || '';
+    const isMultimodal = isMultimodalRenderLayer(
+      renderLayer,
+      layer?.layerConfig || {},
+      tileUrl,
+      { name: layer?.name || '', datasetName: layer?.datasetName || '', datasetId: layer?.dataset || '' }
+    );
+    if (isMultimodal) return 'symbol';
+  }
+  return renderLayer.type;
+};
 
 // map state
 const selectMapLoading = (state) => state.map && state.map.loading;
@@ -710,7 +728,7 @@ export const getInteractiveLayerIds = createSelector(
 
         return [
           ...arr,
-          clickableLayers.map((l, i) => `${layer.id}-${l.type}-${i}`),
+          clickableLayers.map((l, i) => `${layer.id}-${getEffectiveRenderType(l, layer)}-${i}`),
         ];
       }, [])
     );
@@ -740,7 +758,7 @@ export const getHoverableLayerIds = createSelector(
 
         return [
           ...arr,
-          hoverLayers.map((l, i) => `${layer.id}-${l.type}-${l.pIndex}`),
+          hoverLayers.map((l, i) => `${layer.id}-${getEffectiveRenderType(l, layer)}-${l.pIndex}`),
         ];
       }, [])
     );

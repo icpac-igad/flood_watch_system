@@ -6,8 +6,7 @@ import debounce from "lodash/debounce";
 import cx from "classnames";
 
 import { trackMapLatLon, trackEvent } from "@/utils/analytics";
-import { ALERT_COLORS, CLUSTER_ICON_PREFIX, SYMBOL_LAYOUT, DEFAULT_THRESHOLDS, loadStormIconToMap } from "@/utils/multimodal-config";
-import { buildMultimodalClusterIconImageExpression } from "@/utils/layer-utils";
+import { ALERT_COLORS, ALERT_ICON_NAMES, CLUSTER_ICON_PREFIX, loadStormIconToMap } from "@/utils/multimodal-config";
 
 import Loader from "@/components/ui/loader";
 import Icon from "@/components/ui/icon";
@@ -24,9 +23,6 @@ import Attributions from "./components/attributions";
 
 // Components
 import LayerManagerWrapper from "./components/layer-manager";
-import MultimodalClusterLayer from "./components/multimodal-cluster";
-import AlertPulse from "./components/emergency-pulse";
-import EmergencyClusterPulse from "./components/emergency-cluster-pulse";
 import BasinLayer from "./components/basin-layer";
 import NileBasinLayer from "./components/nile-basin-layer";
 // import { pulsingDot } from "./mapImages";
@@ -38,31 +34,6 @@ import "./styles.scss";
 
 const EXTERNAL_BASEMAP_SOURCE_ID = "__external-basemap-source";
 const EXTERNAL_BASEMAP_LAYER_ID = "__external-basemap-layer";
-const MULTIMODAL_GAUGE_ICON_PREFIX = "multimodal-pin-v2-";
-const MULTIMODAL_GAUGE_ICON_IDS = Object.freeze({
-  emergency: `${MULTIMODAL_GAUGE_ICON_PREFIX}emergency`,
-  alarm: `${MULTIMODAL_GAUGE_ICON_PREFIX}alarm`,
-  warning: `${MULTIMODAL_GAUGE_ICON_PREFIX}warning`,
-  normal: `${MULTIMODAL_GAUGE_ICON_PREFIX}normal`,
-});
-
-const MULTIMODAL_ALERT_LEVEL_EXPR = [
-  "downcase",
-  ["to-string", ["coalesce", ["get", "alert_level"], ""]],
-];
-const MULTIMODAL_DAILY_AVG_EXPR = ["to-number", ["coalesce", ["get", "daily_avg"], 0]];
-
-const buildMultimodalGaugeIconExpression = () => ([
-  "case",
-  ["==", MULTIMODAL_ALERT_LEVEL_EXPR, "emergency"], MULTIMODAL_GAUGE_ICON_IDS.emergency,
-  ["==", MULTIMODAL_ALERT_LEVEL_EXPR, "alarm"], MULTIMODAL_GAUGE_ICON_IDS.alarm,
-  ["==", MULTIMODAL_ALERT_LEVEL_EXPR, "warning"], MULTIMODAL_GAUGE_ICON_IDS.warning,
-  ["==", MULTIMODAL_ALERT_LEVEL_EXPR, "normal"], MULTIMODAL_GAUGE_ICON_IDS.normal,
-  [">=", MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.emergency], MULTIMODAL_GAUGE_ICON_IDS.emergency,
-  [">=", MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.alarm], MULTIMODAL_GAUGE_ICON_IDS.alarm,
-  [">=", MULTIMODAL_DAILY_AVG_EXPR, DEFAULT_THRESHOLDS.warning], MULTIMODAL_GAUGE_ICON_IDS.warning,
-  MULTIMODAL_GAUGE_ICON_IDS.normal,
-]);
 
 class RenderMap extends PureComponent {
   render() {
@@ -111,15 +82,6 @@ class RenderMap extends PureComponent {
           <>
             {/* LAYER MANAGER */}
             <LayerManagerWrapper map={map} mapSide={mapSide} />
-
-            {/* MULTIMODAL CLUSTERED LAYER - disabled: pg_tileserv handles clustering via vector tiles */}
-            {/* <MultimodalClusterLayer map={map} mapSide={mapSide} /> */}
-
-            {/* Alert Pulse (icon fade in/out) — disabled, keeping only the red expanding ring */}
-            {/* <AlertPulse map={map} /> */}
-
-            {/* Emergency Cluster Pulse - halo animation for clustered emergency points */}
-            <EmergencyClusterPulse map={map} />
 
             {/* Basin Layer - Auto-loads basin boundary when clicking forecast points */}
             <BasinLayer map={map} />
@@ -358,62 +320,30 @@ class MapComponent extends Component {
     if (this.map) {
       this.map.off("styledata", this.onStyleLoad);
       this.map.off("styleimagemissing", this.handleStyleImageMissing);
-      this.map.off("idle", this.syncMultimodalIconOverlays);
     }
     if (this.state.compareMap) {
       this.state.compareMap.remove();
     }
   }
 
-  // Generate a cluster bubble icon as ImageData for a given alert color
-  createClusterIcon = (color, size = 40) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-    const cx = size / 2;
-    const cy = size / 2;
-    const r = size / 2 - 3;
-
-    // Filled circle with white border
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-
-    return ctx.getImageData(0, 0, size, size);
-  };
-
-  // Register cluster bubble icons for all alert levels
-  loadClusterIcons = () => {
-    if (!this.map) return;
-    Object.entries(ALERT_COLORS).forEach(([level, color]) => {
-      const name = `${CLUSTER_ICON_PREFIX}${level}`;
-      if (this.map.hasImage(name)) return;
-      const imageData = this.createClusterIcon(color);
-      this.map.addImage(name, { width: imageData.width, height: imageData.height, data: imageData.data });
-    });
-  };
-
-  // Register multimodal gauge icons as storm SVG icons for all alert levels
-  loadGaugeIcons = async () => {
-    if (!this.map) return;
-    const promises = Object.entries(ALERT_COLORS).map(([level, color]) => {
-      const name = MULTIMODAL_GAUGE_ICON_IDS[level];
-      if (!name) return Promise.resolve();
-      return loadStormIconToMap(this.map, name, color, 48);
-    });
-    await Promise.all(promises);
-  };
-
   loadMapImages = async () => {
     const { vectorLayerIcons } = this.props;
+    if (!this.map) return;
+
+    // Load flood SVG icons for all alert levels (point icons + cluster icons)
+    const floodIconNames = new Set(Object.values(ALERT_ICON_NAMES));
+    const promises = [];
+    Object.entries(ALERT_ICON_NAMES).forEach(([level, name]) => {
+      promises.push(loadStormIconToMap(this.map, name, ALERT_COLORS[level], 36));
+      // Cluster-sized variant
+      const clusterId = `${CLUSTER_ICON_PREFIX}${level}`;
+      promises.push(loadStormIconToMap(this.map, clusterId, ALERT_COLORS[level], 56));
+    });
+    await Promise.all(promises);
 
     if (vectorLayerIcons && !!vectorLayerIcons.length && this.map) {
       vectorLayerIcons.forEach((icon) => {
+        if (floodIconNames.has(icon.name)) return;
         if (this.map.hasImage(icon.name)) return;
 
         this.map.loadImage(icon.url, (error, iconImage) => {
@@ -423,42 +353,31 @@ class MapComponent extends Component {
         });
       });
     }
-
-    // Also generate cluster bubble icons
-    this.loadClusterIcons();
-    this.loadGaugeIcons();
   };
 
   // Handle missing images by loading them on-demand
   handleStyleImageMissing = (e) => {
     const { vectorLayerIcons } = this.props;
     const id = e.id;
-
     if (!this.map) return;
 
-    // Check if it's a cluster icon request
-    if (id.startsWith(CLUSTER_ICON_PREFIX)) {
-      const level = id.replace(CLUSTER_ICON_PREFIX, '');
-      const color = ALERT_COLORS[level];
-      if (color && !this.map.hasImage(id)) {
-        const imageData = this.createClusterIcon(color);
-        this.map.addImage(id, { width: imageData.width, height: imageData.height, data: imageData.data });
-      }
+    // Flood point icons (forecast-pin-v2-icon-{level})
+    const matchedLevel = Object.entries(ALERT_ICON_NAMES).find(([, name]) => name === id);
+    if (matchedLevel && !this.map.hasImage(id)) {
+      loadStormIconToMap(this.map, id, ALERT_COLORS[matchedLevel[0]], 36);
       return;
     }
 
-    // Check if it's a multimodal gauge icon request
-    if (id.startsWith(MULTIMODAL_GAUGE_ICON_PREFIX)) {
-      const level = id.replace(MULTIMODAL_GAUGE_ICON_PREFIX, "");
-      const color = ALERT_COLORS[level];
-      if (color && !this.map.hasImage(id)) {
-        loadStormIconToMap(this.map, id, color, 48);
+    // Cluster icons (forecast-cluster-{level})
+    if (id.startsWith(CLUSTER_ICON_PREFIX) && !this.map.hasImage(id)) {
+      const level = id.replace(CLUSTER_ICON_PREFIX, '');
+      if (ALERT_COLORS[level]) {
+        loadStormIconToMap(this.map, id, ALERT_COLORS[level], 56);
+        return;
       }
-      return;
     }
 
     if (!vectorLayerIcons) return;
-
     const icon = vectorLayerIcons.find(i => i.name === id);
     if (icon && !this.map.hasImage(id)) {
       this.map.loadImage(icon.url, (error, iconImage) => {
@@ -466,123 +385,6 @@ class MapComponent extends Component {
           this.map.addImage(id, iconImage);
         }
       });
-    }
-  };
-
-  // Overlay symbol icon layers on top of multimodal circle layers.
-  // Runs on idle so the circle layers from layer-manager are already added.
-  syncMultimodalIconOverlays = () => {
-    if (!this.map) return;
-    try {
-      const style = this.map.getStyle();
-      if (!style?.layers) return;
-
-      // Always render multimodal points as pin icons (no low-zoom circle fallback).
-      const CLUSTER_ZOOM = 0;
-      const ICON_SUFFIX = '__icon-overlay';
-      const CLUSTER_ICON_SUFFIX = '__cluster-icon-overlay';
-
-      // Find multimodal circle layers
-      const circleLayers = style.layers.filter(
-        (l) =>
-          l.type === 'circle' &&
-          typeof l['source-layer'] === 'string' &&
-          l['source-layer'].includes('multimodal_points')
-      );
-
-      circleLayers.forEach((circleLayer) => {
-        const pointIconId = circleLayer.id + ICON_SUFFIX;
-        const clusterIconId = circleLayer.id + CLUSTER_ICON_SUFFIX;
-
-        // Add individual point icon overlay (z >= cluster_zoom)
-        if (!this.map.getLayer(pointIconId)) {
-          try {
-            this.map.addLayer({
-              id: pointIconId,
-              type: 'symbol',
-              source: circleLayer.source,
-                'source-layer': circleLayer['source-layer'],
-                minzoom: CLUSTER_ZOOM,
-                layout: {
-                'icon-image': buildMultimodalGaugeIconExpression(),
-                'icon-size': [
-                  'interpolate', ['linear'], ['zoom'],
-                  0, 0.30,
-                  4, 0.40,
-                  7, 0.50,
-                  10, 0.60,
-                  14, 0.70
-                ],
-                'icon-allow-overlap': true,
-                'icon-ignore-placement': true,
-                'icon-anchor': 'bottom',
-              },
-              paint: {
-                'icon-opacity': 0.95,
-              },
-            });
-          } catch (e) { /* layer may already exist or style settling */ }
-        }
-
-        // Add cluster icon overlay (z < cluster_zoom)
-        if (!this.map.getLayer(clusterIconId)) {
-          try {
-            this.map.addLayer({
-              id: clusterIconId,
-              type: 'symbol',
-              source: circleLayer.source,
-              'source-layer': circleLayer['source-layer'],
-              maxzoom: CLUSTER_ZOOM,
-              layout: {
-                'icon-image': buildMultimodalClusterIconImageExpression(),
-                'icon-size': SYMBOL_LAYOUT.clusterIconSize,
-                'icon-allow-overlap': true,
-                'icon-anchor': 'center',
-                'text-field': ['to-string', ['get', 'point_count']],
-                'text-size': SYMBOL_LAYOUT.clusterTextSize,
-                'text-anchor': 'center',
-                'text-offset': [0, 0],
-                'text-allow-overlap': true,
-              },
-              paint: {
-                'text-color': SYMBOL_LAYOUT.clusterTextColor,
-                'text-halo-color': SYMBOL_LAYOUT.clusterTextHaloColor,
-                'text-halo-width': SYMBOL_LAYOUT.clusterTextHaloWidth,
-              },
-            });
-          } catch (e) { /* layer may already exist or style settling */ }
-        }
-      });
-
-      // Hide underlying circles at z >= cluster_zoom where icons show
-      circleLayers.forEach((circleLayer) => {
-        try {
-          // Make circles tiny at high zoom where pin icons display
-          this.map.setPaintProperty(circleLayer.id, 'circle-opacity', [
-            'interpolate', ['linear'], ['zoom'],
-            CLUSTER_ZOOM - 0.5, 0.9,
-            CLUSTER_ZOOM, 0,
-          ]);
-          this.map.setPaintProperty(circleLayer.id, 'circle-stroke-opacity', [
-            'interpolate', ['linear'], ['zoom'],
-            CLUSTER_ZOOM - 0.5, 1,
-            CLUSTER_ZOOM, 0,
-          ]);
-        } catch (e) { /* ignore */ }
-      });
-
-      // Clean up orphan icon overlays (circle layer was removed)
-      const activeCircleIds = new Set(circleLayers.map((l) => l.id));
-      style.layers.forEach((l) => {
-        if (l.id.endsWith(ICON_SUFFIX) || l.id.endsWith(CLUSTER_ICON_SUFFIX)) {
-          const baseId = l.id.replace(ICON_SUFFIX, '').replace(CLUSTER_ICON_SUFFIX, '');
-          if (!activeCircleIds.has(baseId)) {
-            try { this.map.removeLayer(l.id); } catch (e) { /* ignore */ }
-          }
-        }
-      });
-    } catch (e) {
-      // Style may not be ready yet
     }
   };
 
@@ -671,9 +473,6 @@ class MapComponent extends Component {
 
       // Handle missing images on-demand
       this.map.on("styleimagemissing", this.handleStyleImageMissing);
-
-      // Sync icon overlays when map becomes idle (layers are ready)
-      this.map.on("idle", this.syncMultimodalIconOverlays);
     }
 
     this.loadMapImages();
@@ -804,8 +603,9 @@ class MapComponent extends Component {
 
         const currentZoom = this.map.getZoom();
         const maxZoom = typeof this.map.getMaxZoom === "function" ? this.map.getMaxZoom() : 19;
-        // Make sure we cross into the "unclustered" tile zoom level.
-        const targetZoom = Math.min(maxZoom, Math.max(currentZoom + 1, clusterZoom + 0.5));
+        // Step deeper than the cluster threshold so one click is more likely
+        // to explode a cluster into individual points.
+        const targetZoom = Math.min(maxZoom, Math.max(currentZoom + 1.5, clusterZoom + 1.5));
 
         this.map.easeTo({
           center: { lng, lat },

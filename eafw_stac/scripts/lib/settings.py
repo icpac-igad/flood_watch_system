@@ -36,4 +36,5 @@ DEFAULT_PRUNE_COLLECTIONS = (
     "flood-impact",
     "indicator-points",
     "nile-basin-points",
+    "wrf-extreme-rainfall",  # replaced by per-percentile: -f90, -f95, -f99
 )

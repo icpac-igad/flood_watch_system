@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view, renderer_classes
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from wagtail.api.v2.utils import get_full_url as wagtail_get_full_url
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlsplit
 
 from geomanager.models import Category, VectorLayerIcon, VectorTileLayerIcon, GeomanagerSettings, Dataset
 from geomanager.serializers import CategorySerializer, DatasetSerializer
@@ -14,9 +14,9 @@ from home.models import MultimodalClusterSettings
 
 def _build_shared_multimodal_legend_config(request=None, multimodal_settings=None):
     normal_color = getattr(multimodal_settings, "normal_color", "#b0b0b0")
-    warning_color = getattr(multimodal_settings, "warning_color", "#ffc107")
-    alarm_color = getattr(multimodal_settings, "alarm_color", "#ff9800")
-    emergency_color = getattr(multimodal_settings, "emergency_color", "#d32f2f")
+    moderate_color = getattr(multimodal_settings, "warning_color", "#ffc107")
+    severe_color = getattr(multimodal_settings, "alarm_color", "#ff9800")
+    extreme_color = getattr(multimodal_settings, "emergency_color", "#d32f2f")
 
     def _build_pin_icon_data_uri(color):
         svg = (
@@ -38,9 +38,9 @@ def _build_shared_multimodal_legend_config(request=None, multimodal_settings=Non
     return {
         "type": "basic",
         "items": [
-            _item("Emergency", emergency_color),
-            _item("Alarm", alarm_color),
-            _item("Warning", warning_color),
+            _item("Extreme", extreme_color),
+            _item("Severe", severe_color),
+            _item("Moderate", moderate_color),
             _item("Normal", normal_color),
         ],
     }
@@ -100,7 +100,25 @@ def get_full_url(request, path):
         return path
 
     if str(path).startswith(("http://", "https://")):
-        return path
+        parsed = urlsplit(str(path))
+        if parsed.path.startswith(
+            (
+                "/api/",
+                "/pg/",
+                "/tileserv/",
+                "/mapcache/",
+                "/mapserver/",
+                "/cog-tiles/",
+                "/media/",
+                "/static/",
+                "/stac-browser/api/",
+            )
+        ):
+            # Rebase internal URLs to the active request host to avoid cross-origin
+            # requests when CMS stores absolute URLs from another environment.
+            path = f"{parsed.path}{f'?{parsed.query}' if parsed.query else ''}{f'#{parsed.fragment}' if parsed.fragment else ''}"
+        else:
+            return path
 
     request_base_url = _build_request_base_url(request)
     if request_base_url:
@@ -120,66 +138,165 @@ def get_full_url(request, path):
     return wagtail_get_full_url(request, path)
 
 
-def _build_alert_icon_image_expression(multimodal_settings=None):
-    warning_threshold = float(getattr(multimodal_settings, "warning_threshold", 300) or 300)
-    alarm_threshold = float(getattr(multimodal_settings, "alarm_threshold", 500) or 500)
-    emergency_threshold = float(getattr(multimodal_settings, "emergency_threshold", 750) or 750)
+def _build_multimodal_alert_icon_case_expression(
+    multimodal_settings=None,
+    *,
+    extreme_icon,
+    severe_icon,
+    moderate_icon,
+    normal_icon,
+):
+    moderate_threshold = float(getattr(multimodal_settings, "warning_threshold", 300) or 300)
+    severe_threshold = float(getattr(multimodal_settings, "alarm_threshold", 500) or 500)
+    extreme_threshold = float(getattr(multimodal_settings, "emergency_threshold", 750) or 750)
 
     alert_level_expr = [
         "downcase",
-        ["to-string", ["coalesce", ["get", "alert_level"], ""]],
+        [
+            "to-string",
+            [
+                "coalesce",
+                ["get", "alert_level"],
+                ["get", "risk_level"],
+                ["get", "latest_severity"],
+                "",
+            ],
+        ],
     ]
     daily_avg_expr = ["to-number", ["coalesce", ["get", "daily_avg"], 0]]
-
-    pin_ids = {
-        "emergency": "multimodal-pin-v2-emergency",
-        "alarm": "multimodal-pin-v2-alarm",
-        "warning": "multimodal-pin-v2-warning",
-        "normal": "multimodal-pin-v2-normal",
-    }
+    is_extreme_expr = [
+        "any",
+        ["==", alert_level_expr, "extreme"],
+        ["==", alert_level_expr, "emergency"],
+    ]
+    is_severe_expr = [
+        "any",
+        ["==", alert_level_expr, "severe"],
+        ["==", alert_level_expr, "alarm"],
+    ]
+    is_moderate_expr = [
+        "any",
+        ["==", alert_level_expr, "moderate"],
+        ["==", alert_level_expr, "warning"],
+    ]
+    is_normal_expr = [
+        "any",
+        ["==", alert_level_expr, "normal"],
+        ["==", alert_level_expr, "none"],
+        ["==", alert_level_expr, "minor"],
+    ]
 
     return [
         "case",
-        ["==", alert_level_expr, "emergency"], pin_ids["emergency"],
-        ["==", alert_level_expr, "alarm"], pin_ids["alarm"],
-        ["==", alert_level_expr, "warning"], pin_ids["warning"],
-        ["==", alert_level_expr, "normal"], pin_ids["normal"],
-        [">=", daily_avg_expr, emergency_threshold], pin_ids["emergency"],
-        [">=", daily_avg_expr, alarm_threshold], pin_ids["alarm"],
-        [">=", daily_avg_expr, warning_threshold], pin_ids["warning"],
-        pin_ids["normal"],
+        is_extreme_expr, extreme_icon,
+        is_severe_expr, severe_icon,
+        is_moderate_expr, moderate_icon,
+        is_normal_expr, normal_icon,
+        [">=", daily_avg_expr, extreme_threshold], extreme_icon,
+        [">=", daily_avg_expr, severe_threshold], severe_icon,
+        [">=", daily_avg_expr, moderate_threshold], moderate_icon,
+        normal_icon,
+    ]
+
+
+def _build_alert_icon_image_expression(multimodal_settings=None):
+    return _build_multimodal_alert_icon_case_expression(
+        multimodal_settings,
+        extreme_icon="forecast-pin-v2-icon-emergency",
+        severe_icon="forecast-pin-v2-icon-alarm",
+        moderate_icon="forecast-pin-v2-icon-warning",
+        normal_icon="forecast-pin-v2-icon-normal",
+    )
+
+
+def _build_alert_cluster_icon_image_expression(multimodal_settings=None):
+    return _build_multimodal_alert_icon_case_expression(
+        multimodal_settings,
+        extreme_icon="forecast-cluster-emergency",
+        severe_icon="forecast-cluster-alarm",
+        moderate_icon="forecast-cluster-warning",
+        normal_icon="forecast-cluster-normal",
+    )
+
+
+def _build_multimodal_circle_color_expression(
+    normal_color,
+    moderate_color,
+    severe_color,
+    extreme_color,
+):
+    alert_level_expr = [
+        "downcase",
+        [
+            "to-string",
+            [
+                "coalesce",
+                ["get", "alert_level"],
+                ["get", "risk_level"],
+                ["get", "latest_severity"],
+                "normal",
+            ],
+        ],
+    ]
+
+    return [
+        "case",
+        [
+            "any",
+            ["==", alert_level_expr, "extreme"],
+            ["==", alert_level_expr, "emergency"],
+        ], extreme_color,
+        [
+            "any",
+            ["==", alert_level_expr, "severe"],
+            ["==", alert_level_expr, "alarm"],
+        ], severe_color,
+        [
+            "any",
+            ["==", alert_level_expr, "moderate"],
+            ["==", alert_level_expr, "warning"],
+        ], moderate_color,
+        [
+            "any",
+            ["==", alert_level_expr, "normal"],
+            ["==", alert_level_expr, "none"],
+            ["==", alert_level_expr, "minor"],
+        ], normal_color,
+        normal_color,
     ]
 
 
 def _build_pin_symbol_render(source_layer=None, multimodal_settings=None):
+    point_count_expr = ["to-number", ["coalesce", ["get", "point_count"], 1]]
     symbol_layer = {
         "type": "symbol",
         "layout": {
-            "icon-image": _build_alert_icon_image_expression(multimodal_settings),
-            "icon-size": [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                3, 0.45,
-                6, 0.55,
-                10, 0.70,
-                14, 0.85,
+            "icon-image": [
+                "case",
+                [">", point_count_expr, 1], _build_alert_cluster_icon_image_expression(multimodal_settings),
+                _build_alert_icon_image_expression(multimodal_settings),
             ],
-            "icon-anchor": "bottom",
-            "icon-allow-overlap": True,
-            "icon-ignore-placement": True,
+            "icon-size": [
+                "case",
+                [">", point_count_expr, 50], 0.62,
+                [">", point_count_expr, 10], 0.52,
+                [">", point_count_expr, 1], 0.44,
+                0.34,
+            ],
+            "icon-allow-overlap": False,
+            "icon-ignore-placement": False,
+            "icon-optional": False,
+            "icon-padding": 8,
         },
         "paint": {
             "icon-opacity": 0.95,
         },
-        "metadata": {"position": "top"},
+        "metadata": {"position": "top", "interactive": True},
     }
     if source_layer:
         symbol_layer["source-layer"] = source_layer
 
-    return {
-        "layers": [symbol_layer],
-    }
+    return {"layers": [symbol_layer]}
 
 
 def _build_modular_model_layer_config(request, endpoint_path, multimodal_settings=None):
@@ -196,8 +313,38 @@ def _build_modular_model_layer_config(request, endpoint_path, multimodal_setting
 def _patch_modular_model_datasets(request, datasets_data, multimodal_settings=None):
     """Patch placeholder model layers to true GeoJSON sources with popup fields."""
     shared_multimodal_legend = _build_shared_multimodal_legend_config(request, multimodal_settings)
+    multimodal_forecast_interaction_output = [
+        {"column": "admin_name", "property": "Location", "type": "string"},
+        {"column": "point_id", "property": "Point ID", "type": "string", "hidden": True},
+        {"column": "hybas_id", "property": "Basin ID", "type": "string", "hidden": True},
+        {"column": "alert_level", "property": "Alert Level", "type": "string"},
+        {"column": "daily_avg", "property": "Forecast Flow (m³/s)", "type": "number"},
+        {"column": "geosfm", "property": "GeoSFM (m³/s)", "type": "number"},
+        {"column": "floodproof", "property": "Floodproof (m³/s)", "type": "number"},
+        {"column": "mike_hydro_rfe", "property": "Mike Hydro RFE (m³/s)", "type": "number"},
+        {"column": "mike_hydro_chirp", "property": "Mike Hydro CHIRP (m³/s)", "type": "number"},
+        {"column": "mike_hydro_imerg", "property": "Mike Hydro IMERG (m³/s)", "type": "number"},
+        {"column": "threshold_alert", "property": "Warning Threshold", "type": "number"},
+        {"column": "threshold_alarm", "property": "Alarm Threshold", "type": "number"},
+        {"column": "threshold_emergency", "property": "Emergency Threshold", "type": "number"},
+        {"column": "data_date", "property": "Data Date", "type": "string"},
+        {"column": "forecasts", "property": "Forecasts", "type": "string", "hidden": True},
+        {"column": "data_endpoint", "property": "Data Endpoint", "type": "string", "hidden": True},
+    ]
 
     overrides = {
+        "Multi Model": {
+            "endpoint": "/api/v1/multimodal/geojson/",
+            "interaction_output": multimodal_forecast_interaction_output,
+        },
+        "Multi-Model": {
+            "endpoint": "/api/v1/multimodal/geojson/",
+            "interaction_output": multimodal_forecast_interaction_output,
+        },
+        "Multimodal Forecast": {
+            "endpoint": "/api/v1/multimodal/geojson/",
+            "interaction_output": multimodal_forecast_interaction_output,
+        },
         "GeoSFM Flood Forecast": {
             "endpoint": "/api/v1/models/geosfm/geojson/",
             "interaction_output": [
@@ -234,7 +381,7 @@ def _patch_modular_model_datasets(request, datasets_data, multimodal_settings=No
             ],
         },
         "Google Flood Forecast": {
-            "endpoint": "/api/v1/google-flood/geojson/",
+            "endpoint": "/api/v1/google-flood/geojson",
             "interaction_output": [
                 {"column": "admin_name", "property": "Location", "type": "string"},
                 {"column": "gauge_id", "property": "Gauge ID", "type": "string"},
@@ -261,7 +408,7 @@ def _patch_modular_model_datasets(request, datasets_data, multimodal_settings=No
                     "key": "extended_coverage",
                     "url_param": "extended_coverage",
                     "required": False,
-                    "type": "radio",
+                    "type": "toggle",
                     "sentence": "{selector}",
                     "selectorDescription": "Extended coverage",
                     "default": "false",
@@ -303,8 +450,13 @@ def _patch_modular_model_datasets(request, datasets_data, multimodal_settings=No
 
     for dataset in datasets_data:
         dataset_name = dataset.get("name") or dataset.get("title")
+        normalized_dataset_name = " ".join(
+            str(dataset_name or "").replace("-", " ").strip().lower().split()
+        )
         applies_shared_legend = _is_multimodal_provider_dataset(dataset_name)
         override = overrides.get(dataset_name)
+        if not override and normalized_dataset_name in {"multi model", "multimodal forecast"}:
+            override = overrides.get("Multi Model")
 
         for layer in dataset.get("layers", []):
             if applies_shared_legend:
@@ -339,8 +491,11 @@ def _patch_modular_model_datasets(request, datasets_data, multimodal_settings=No
                 "type": "intersection",
                 "output": override["interaction_output"],
             }
-            layer["params"] = override.get("params", {})
-            layer["paramsSelectorConfig"] = override.get("params_selector_config", [])
+            layer["params"] = override.get("params", layer.get("params", {}))
+            layer["paramsSelectorConfig"] = override.get(
+                "params_selector_config",
+                layer.get("paramsSelectorConfig", []),
+            )
 
 
 @api_view(['GET'])

@@ -1,8 +1,8 @@
 import logging
 import threading
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
-from geomanager.models import Dataset, WatcherConfig
+from geomanager.models import Dataset, WatcherConfig, LayerRasterFile
 
 logger = logging.getLogger("geomanager.signals")
 
@@ -58,3 +58,17 @@ def watcher_config_saved_trigger_updates(sender, instance, created, **kwargs):
     for dataset in datasets:
         if dataset.dataset_slug:
             trigger_dataset_watcher_async(dataset.dataset_slug)
+
+
+@receiver(post_save, sender=LayerRasterFile)
+def raster_file_saved_sync_stac(sender, instance, **kwargs):
+    """Sync CMS raster upload to pgSTAC so TiTiler can serve tiles."""
+    from geomanager.utils.stac_sync import sync_to_stac_async
+    sync_to_stac_async(instance.pk)
+
+
+@receiver(pre_delete, sender=LayerRasterFile)
+def raster_file_deleted_remove_stac(sender, instance, **kwargs):
+    """Remove STAC item when CMS raster file is deleted."""
+    from geomanager.utils.stac_sync import remove_from_stac_async
+    remove_from_stac_async(instance)

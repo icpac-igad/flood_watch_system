@@ -34,6 +34,29 @@ class CapDraftResponse(BaseModel):
     message: str
 
 
+def _cms_headers() -> dict[str, str]:
+    host = (settings.cms_proxy_host_header or "localhost").strip()
+    headers = {"accept": "application/json"}
+    if host:
+        headers["host"] = host
+        headers["x-forwarded-host"] = host
+    headers["x-forwarded-proto"] = "http"
+    return headers
+
+
+def _safe_json_or_error(resp: httpx.Response, endpoint_name: str):
+    if resp.status_code >= 400:
+        detail = resp.text[:500].strip() or f"{endpoint_name} request failed"
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"{endpoint_name} returned non-JSON payload",
+        ) from exc
+
+
 @router.post("/draft", response_model=CapDraftResponse)
 async def create_cap_draft(request: CapDraftRequest):
     """Create a draft CAP alert from a published expert assessment."""
@@ -42,12 +65,10 @@ async def create_cap_draft(request: CapDraftRequest):
             resp = await client.post(
                 f"{CMS_BASE}/cms-api/cap/create-draft/",
                 json=request.model_dump(),
+                headers=_cms_headers(),
                 timeout=30.0,
             )
-            data = resp.json()
-            if resp.status_code >= 400:
-                raise HTTPException(status_code=resp.status_code, detail=data.get("message", "Error"))
-            return data
+            return _safe_json_or_error(resp, "CAP draft creation")
         except httpx.RequestError as e:
             raise HTTPException(status_code=502, detail=f"CMS unreachable: {str(e)}")
 
@@ -65,12 +86,10 @@ async def create_cap_forecast_draft(request: CapForecastDraftRequest):
             resp = await client.post(
                 f"{CMS_BASE}/cms-api/cap/create-forecast-draft/",
                 json=request.model_dump(),
+                headers=_cms_headers(),
                 timeout=60.0,
             )
-            data = resp.json()
-            if resp.status_code >= 400:
-                raise HTTPException(status_code=resp.status_code, detail=data.get("message", "Error"))
-            return data
+            return _safe_json_or_error(resp, "CAP forecast draft creation")
         except httpx.RequestError as e:
             raise HTTPException(status_code=502, detail=f"CMS unreachable: {str(e)}")
 
@@ -82,9 +101,10 @@ async def get_cap_alerts():
         try:
             resp = await client.get(
                 f"{CMS_BASE}/api/cap/alerts.geojson",
+                headers=_cms_headers(),
                 timeout=10.0,
             )
-            return resp.json()
+            return _safe_json_or_error(resp, "CAP alerts feed")
         except httpx.RequestError as e:
             raise HTTPException(status_code=502, detail=f"CMS unreachable: {str(e)}")
 
@@ -97,8 +117,12 @@ async def get_cap_rss():
         try:
             resp = await client.get(
                 f"{CMS_BASE}/api/cap/rss.xml",
+                headers=_cms_headers(),
                 timeout=10.0,
             )
+            if resp.status_code >= 400:
+                detail = resp.text[:500].strip() or "CAP RSS request failed"
+                raise HTTPException(status_code=resp.status_code, detail=detail)
             return Response(content=resp.content, media_type="application/rss+xml")
         except httpx.RequestError as e:
             raise HTTPException(status_code=502, detail=f"CMS unreachable: {str(e)}")

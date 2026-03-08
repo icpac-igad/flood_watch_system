@@ -38,6 +38,9 @@
     const EXTREME_RAINFALL_LAYER_ID = 'extreme-rainfall-raster-layer';
     const TOTAL_RAINFALL_SOURCE_ID = 'total-rainfall-raster-source';
     const TOTAL_RAINFALL_LAYER_ID = 'total-rainfall-raster-layer';
+    const FORECAST_POINTS_SOURCE_ID = 'forecast-points';
+    const FORECAST_CLUSTERS_LAYER_ID = 'forecast-clusters-layer';
+    const FORECAST_POINTS_LAYER_ID = 'forecast-points-layer';
     // Per-percentile source/layer IDs for the three extreme rainfall sub-layers
     const EXTREME_RAINFALL_PERCENTILES = ['f90', 'f95', 'f99'];
     const extremeRainfallSourceId = (pct) => `extreme-rainfall-${pct}-source`;
@@ -91,15 +94,21 @@
     function applyScopeParams(params) {
         if (selectedMapScope && selectedMapScope !== 'all') {
             const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
-            const admin0Codes = scopeConfig?.admin0Codes || [];
+            const projectCountries = getScopeProjectCountries(scopeConfig);
             if (selectedMapScope === 'whca') {
                 params.scope = 'whca';
-            } else if (admin0Codes.length > 0) {
-                params.scope = 'project';
-                params.project_countries = admin0Codes.join(',');
+                delete params.project_countries;
+            } else if (projectCountries.length > 0) {
+                // GeoJSON APIs accept project_countries clipping but reject non-whca scope values.
+                delete params.scope;
+                params.project_countries = projectCountries.join(',');
             } else {
-                params.scope = selectedMapScope;
+                delete params.scope;
+                delete params.project_countries;
             }
+        } else {
+            delete params.scope;
+            delete params.project_countries;
         }
     }
 
@@ -115,6 +124,41 @@
         BDI: 'Burundi', DJI: 'Djibouti', ETH: 'Ethiopia', KEN: 'Kenya',
         RWA: 'Rwanda', SDN: 'Sudan', SOM: 'Somalia', SSD: 'South Sudan', TZA: 'Tanzania', UGA: 'Uganda'
     });
+    const ISO2_TO_COUNTRY_NAME = Object.freeze(
+        Object.keys(ISO2_TO_ISO3).reduce((acc, iso2) => {
+            const iso3 = ISO2_TO_ISO3[iso2];
+            const countryName = ISO3_TO_COUNTRY_NAME[iso3];
+            if (countryName) {
+                acc[iso2] = countryName;
+            }
+            return acc;
+        }, {})
+    );
+
+    function getScopeProjectCountries(scopeConfig) {
+        if (!scopeConfig) return [];
+
+        const names = [];
+        const seen = new Set();
+        const addName = (value) => {
+            const name = String(value || '').trim();
+            if (!name) return;
+            const key = name.toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            names.push(name);
+        };
+
+        (scopeConfig.countryCodes || []).forEach((iso2) => {
+            addName(ISO2_TO_COUNTRY_NAME[String(iso2 || '').toUpperCase()]);
+        });
+
+        (scopeConfig.admin0Codes || []).forEach((iso3) => {
+            addName(ISO3_TO_COUNTRY_NAME[String(iso3 || '').toUpperCase()]);
+        });
+
+        return names;
+    }
     const BASE_SITE_TITLE = (window.EAFW_CONFIG || {}).siteTitles?.banner || 'East Africa Flood Watch';
     const BASE_COUNTRY_SECTION_TITLE = (window.EAFW_CONFIG || {}).siteTitles?.countrySection || 'Regional Flood Situation';
     const BASE_DASHBOARD_TITLE = (window.EAFW_CONFIG || {}).siteTitles?.dashboard || 'Latest Situation of Flood Conditions';
@@ -146,10 +190,10 @@
 
     // Alert colors
     const alertColors = {
-        emergency: ((window.EAFW_CONFIG || {}).alertColors || {}).emergency || '#d32f2f',
-        alarm: ((window.EAFW_CONFIG || {}).alertColors || {}).alarm || '#ff9800',
-        warning: ((window.EAFW_CONFIG || {}).alertColors || {}).warning || '#ffc107',
-        normal: ((window.EAFW_CONFIG || {}).alertColors || {}).normal || '#b0b0b0'
+        emergency: ((window.EAFW_CONFIG || {}).alertColors || {}).emergency || '#1e1a97',
+        alarm: ((window.EAFW_CONFIG || {}).alertColors || {}).alarm || '#2f83d2',
+        warning: ((window.EAFW_CONFIG || {}).alertColors || {}).warning || '#b8f0f0',
+        normal: ((window.EAFW_CONFIG || {}).alertColors || {}).normal || '#b0bec5'
     };
     const FORECAST_GAUGE_ICON_IDS = Object.freeze({
         emergency: 'forecast-pin-v2-icon-emergency',
@@ -164,8 +208,8 @@
         normal: 'forecast-cluster-normal'
     });
 
-    // Storm SVG path (from CMS wagtailiconchooser "storm" icon)
-    const STORM_SVG_PATH = 'M38.98 9.01a8.732 8.732 0 0 0-3.16.58l-.01.005a11.49 11.49 0 0 0-22.823 1.757 5.977 5.977 0 0 0-7.91 6.69l-.007-.002a3.81 3.81 0 0 0-.59-.04 4.5 4.5 0 0 0 0 9h34.5a9.003 9.003 0 0 0 8.83-7.24 9.297 9.297 0 0 0 .17-1.76 8.992 8.992 0 0 0-9-8.99zM28.48 37h-6.293l3.565-5.705a1.5 1.5 0 1 0-2.544-1.59l-5 8A1.5 1.5 0 0 0 19.48 40h6.293l-3.565 5.705a1.5 1.5 0 1 0 2.544 1.59l5-8A1.5 1.5 0 0 0 28.48 37z';
+    // Flood SVG path (flag with water waves — from humanitarian "flood" icon)
+    const STORM_SVG_PATH = 'M47.82 12L33.16.06a.243.243 0 0 0-.32 0L18.18 12a.528.528 0 0 0-.18.38v17.71a8.734 8.734 0 0 1 3.29 1.15A4.637 4.637 0 0 0 24 32a4.626 4.626 0 0 0 2.7-.76A8.644 8.644 0 0 1 31.33 30a8.603 8.603 0 0 1 4.62 1.24 5.23 5.23 0 0 0 5.43 0A8.603 8.603 0 0 1 46 30a9.43 9.43 0 0 1 2 .2V12.38a.528.528 0 0 0-.18-.38zM46 42a8.603 8.603 0 0 0-4.62 1.24 5.23 5.23 0 0 1-5.43 0A8.603 8.603 0 0 0 31.33 42a8.644 8.644 0 0 0-4.63 1.24A4.626 4.626 0 0 1 24 44a4.637 4.637 0 0 1-2.71-.76A8.673 8.673 0 0 0 16.66 42a8.603 8.603 0 0 0-4.62 1.24 4.684 4.684 0 0 1-2.71.76 4.684 4.684 0 0 1-2.71-.76A8.603 8.603 0 0 0 2 42a2 2 0 0 0 0 4 4.683 4.683 0 0 1 2.71.76A8.604 8.604 0 0 0 9.33 48a8.603 8.603 0 0 0 4.62-1.24 4.684 4.684 0 0 1 2.71-.76 4.66 4.66 0 0 1 2.71.76A8.644 8.644 0 0 0 24 48a8.632 8.632 0 0 0 4.62-1.24 5.212 5.212 0 0 1 5.42 0 9.245 9.245 0 0 0 9.25 0A4.66 4.66 0 0 1 46 46a2 2 0 0 0 0-4zM46 34a8.59 8.59 0 0 0-4.625 1.244 5.241 5.241 0 0 1-5.423 0A8.59 8.59 0 0 0 31.326 34a8.581 8.581 0 0 0-4.623 1.244 4.692 4.692 0 0 1-2.708.756 4.696 4.696 0 0 1-2.709-.756A8.59 8.59 0 0 0 16.661 34a8.588 8.588 0 0 0-4.624 1.244A4.692 4.692 0 0 1 9.33 36a4.69 4.69 0 0 1-2.706-.755A8.577 8.577 0 0 0 2 34a2 2 0 0 0 0 4 4.691 4.691 0 0 1 2.707.756A8.58 8.58 0 0 0 9.329 40a8.588 8.588 0 0 0 4.624-1.244A4.692 4.692 0 0 1 16.661 38a4.696 4.696 0 0 1 2.71.756A8.59 8.59 0 0 0 23.994 40a8.583 8.583 0 0 0 4.624-1.245 5.236 5.236 0 0 1 5.42 0 9.22 9.22 0 0 0 9.25 0A4.702 4.702 0 0 1 46 38a2 2 0 0 0 0-4z';
 
     function buildStormSvgDataUri(color, size) {
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 48 48"><path d="${STORM_SVG_PATH}" fill="${color}"/></svg>`;
@@ -229,7 +273,7 @@
         const iconColor = color || alertColors.normal;
         const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48">
-  <path d="M38.98 9.01a8.732 8.732 0 0 0-3.16.58l-.01.005a11.49 11.49 0 0 0-22.823 1.757 5.977 5.977 0 0 0-7.91 6.69l-.007-.002a3.81 3.81 0 0 0-.59-.04 4.5 4.5 0 0 0 0 9h34.5a9.003 9.003 0 0 0 8.83-7.24 9.297 9.297 0 0 0 .17-1.76 8.992 8.992 0 0 0-9-8.99zM28.48 37h-6.293l3.565-5.705a1.5 1.5 0 1 0-2.544-1.59l-5 8A1.5 1.5 0 0 0 19.48 40h6.293l-3.565 5.705a1.5 1.5 0 1 0 2.544 1.59l5-8A1.5 1.5 0 0 0 28.48 37z" fill="${iconColor}"/>
+  <path d="${STORM_SVG_PATH}" fill="${iconColor}"/>
 </svg>`;
         return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg.trim())}`;
     }
@@ -967,10 +1011,10 @@
 
     function clearMapPointsLayer() {
         if (!miniMap || !miniMap.isStyleLoaded()) return;
-        ['forecast-points-layer', 'forecast-clusters-layer'].forEach(lid => {
+        [FORECAST_POINTS_LAYER_ID, FORECAST_CLUSTERS_LAYER_ID].forEach(lid => {
             if (miniMap.getLayer(lid)) miniMap.removeLayer(lid);
         });
-        if (miniMap.getSource('forecast-points')) miniMap.removeSource('forecast-points');
+        if (miniMap.getSource(FORECAST_POINTS_SOURCE_ID)) miniMap.removeSource(FORECAST_POINTS_SOURCE_ID);
     }
 
     function clearExtremeRainfallLayer() {
@@ -1294,24 +1338,31 @@
         updateScopeHeadings();
         updateMapviewerLinks();
 
-        if (miniMap && miniMap.isStyleLoaded()) {
-            const scopeBounds = await loadAdmin0Boundaries();
-            const scopeLayerResult = await loadMapPoints(null, { silent: true });
-            if (scopeLayerResult?.reason === 'no_data') {
-                showMapStatusToast(
-                    scopeLayerResult?.message || 'No data available for the selected layer in this scope.',
-                    { withSpinner: false, autoHideMs: 2200 }
-                );
-            } else if (!scopeLayerResult?.ok) {
-                showMapStatusToast(scopeLayerResult?.message || LAYER_VALIDATION_MESSAGE);
-            } else {
-                hideMapStatusToast();
-            }
-            fitMapToScopeBounds(scopeBounds, nextScope, false);
-        }
+        // Run boundaries first, then points — sequential to avoid race conditions
+        // where admin layer rebuild interferes with forecast source updates.
+        const mapPromise = (miniMap && miniMap.isStyleLoaded())
+            ? (async () => {
+                const scopeBounds = await loadAdmin0Boundaries();
+                const scopeLayerResult = await loadMapPoints(null, { silent: true });
+                if (scopeLayerResult?.reason === 'no_data') {
+                    showMapStatusToast(
+                        scopeLayerResult?.message || 'No data available for the selected layer in this scope.',
+                        { withSpinner: false, autoHideMs: 2200 }
+                    );
+                } else if (!scopeLayerResult?.ok) {
+                    showMapStatusToast(scopeLayerResult?.message || LAYER_VALIDATION_MESSAGE);
+                } else {
+                    hideMapStatusToast();
+                }
+                fitMapToScopeBounds(scopeBounds, nextScope, false);
+            })()
+            : Promise.resolve();
 
-        await loadCountryData();
-        await loadSituationSummary();
+        await Promise.all([
+            mapPromise,
+            loadCountryData(),
+            loadSituationSummary()
+        ]);
     }
 
     function updateMemberCountriesByScope() {
@@ -2140,12 +2191,11 @@
         const parts = [];
         if (selectedMapScope && selectedMapScope !== 'all') {
             const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
-            const admin0Codes = scopeConfig?.admin0Codes || [];
+            const projectCountries = getScopeProjectCountries(scopeConfig);
             if (selectedMapScope === 'whca') {
                 parts.push('scope=whca');
-            } else if (admin0Codes.length > 0) {
-                parts.push('scope=project');
-                parts.push('project_countries=' + encodeURIComponent(admin0Codes.join(',')));
+            } else if (projectCountries.length > 0) {
+                parts.push('project_countries=' + encodeURIComponent(projectCountries.join(',')));
             }
         }
         if (selectedCountry) {
@@ -2456,64 +2506,106 @@
      * - Individual points show small storm icons colored by alert level.
      */
     async function addClusteredForecastLayers(geojson) {
-        clearMapPointsLayer();
+        if (!miniMap) return;
+
+        // Wait for style to be ready (can be temporarily false after layer rebuild)
+        if (!miniMap.isStyleLoaded()) {
+            await new Promise((resolve) => {
+                miniMap.once('idle', resolve);
+            });
+        }
         await ensureForecastGaugeIcons(miniMap);
 
-        miniMap.addSource('forecast-points', {
-            type: 'geojson',
-            data: geojson,
-            cluster: true,
-            clusterRadius: 40,
-            clusterMaxZoom: 10,
-            clusterProperties: {
-                // Aggregate worst alert level: count features per level
-                has_emergency: ['+', ['case', ['==', ['get', 'alert_level'], 'emergency'], 1, 0]],
-                has_alarm: ['+', ['case', ['==', ['get', 'alert_level'], 'alarm'], 1, 0]],
-                has_warning: ['+', ['case', ['==', ['get', 'alert_level'], 'warning'], 1, 0]]
+        const updateForecastSourceData = () => {
+            const source = miniMap.getSource(FORECAST_POINTS_SOURCE_ID);
+            if (source && typeof source.setData === 'function') {
+                source.setData(geojson);
+                return true;
             }
-        });
+            return false;
+        };
+
+        if (!updateForecastSourceData()) {
+            // Defensive cleanup in case a previous partial render left stale layers.
+            [FORECAST_POINTS_LAYER_ID, FORECAST_CLUSTERS_LAYER_ID].forEach((layerId) => {
+                if (miniMap.getLayer(layerId)) miniMap.removeLayer(layerId);
+            });
+            if (miniMap.getSource(FORECAST_POINTS_SOURCE_ID)) {
+                miniMap.removeSource(FORECAST_POINTS_SOURCE_ID);
+            }
+
+            try {
+                miniMap.addSource(FORECAST_POINTS_SOURCE_ID, {
+                    type: 'geojson',
+                    data: geojson,
+                    cluster: true,
+                    clusterRadius: 15,
+                    clusterMaxZoom: 5,
+                    clusterProperties: {
+                        // Aggregate worst alert level: count features per level
+                        has_emergency: ['+', ['case', ['==', ['get', 'alert_level'], 'emergency'], 1, 0]],
+                        has_alarm: ['+', ['case', ['==', ['get', 'alert_level'], 'alarm'], 1, 0]],
+                        has_warning: ['+', ['case', ['==', ['get', 'alert_level'], 'warning'], 1, 0]]
+                    }
+                });
+            } catch (error) {
+                // Handle concurrent async calls racing to create the same source.
+                const message = String(error?.message || '');
+                if (!message.includes('already exists') || !updateForecastSourceData()) {
+                    throw error;
+                }
+            }
+        }
 
         // Cluster layer: big storm icon colored by worst alert in cluster
-        miniMap.addLayer({
-            id: 'forecast-clusters-layer',
-            type: 'symbol',
-            source: 'forecast-points',
-            filter: ['has', 'point_count'],
-            layout: {
-                'icon-image': buildClusterIconExpression(),
-                'icon-size': ['interpolate', ['linear'], ['get', 'point_count'], 2, 0.9, 20, 1.2, 100, 1.5],
-                'icon-allow-overlap': true,
-                'icon-anchor': 'center'
-            }
-        });
+        if (!miniMap.getLayer(FORECAST_CLUSTERS_LAYER_ID)) {
+            miniMap.addLayer({
+                id: FORECAST_CLUSTERS_LAYER_ID,
+                type: 'symbol',
+                source: FORECAST_POINTS_SOURCE_ID,
+                filter: ['has', 'point_count'],
+                layout: {
+                    'icon-image': buildClusterIconExpression(),
+                    'icon-size': ['interpolate', ['linear'], ['get', 'point_count'], 2, 0.55, 20, 0.7, 100, 0.85],
+                    'icon-allow-overlap': true,
+                    'icon-anchor': 'center'
+                }
+            });
+        }
 
         // Individual points: small storm icons colored by alert level
-        miniMap.addLayer({
-            id: 'forecast-points-layer',
-            type: 'symbol',
-            source: 'forecast-points',
-            filter: ['!', ['has', 'point_count']],
-            layout: {
-                'icon-image': buildForecastGaugeIconExpression(),
-                'icon-size': ['interpolate', ['linear'], ['zoom'], 3, 0.7, 8, 0.9, 12, 1.0],
-                'icon-allow-overlap': true,
-                'icon-anchor': 'center'
-            }
-        });
+        if (!miniMap.getLayer(FORECAST_POINTS_LAYER_ID)) {
+            miniMap.addLayer({
+                id: FORECAST_POINTS_LAYER_ID,
+                type: 'symbol',
+                source: FORECAST_POINTS_SOURCE_ID,
+                filter: ['!', ['has', 'point_count']],
+                layout: {
+                    'icon-image': buildForecastGaugeIconExpression(),
+                    'icon-size': ['interpolate', ['linear'], ['zoom'], 3, 0.45, 8, 0.6, 12, 0.75],
+                    'icon-allow-overlap': true,
+                    'icon-anchor': 'center'
+                }
+            });
+        }
 
         // Keep admin boundaries on top
         if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) {
-            miniMap.moveLayer('forecast-clusters-layer');
-            miniMap.moveLayer('forecast-points-layer');
+            if (miniMap.getLayer(FORECAST_CLUSTERS_LAYER_ID)) {
+                miniMap.moveLayer(FORECAST_CLUSTERS_LAYER_ID);
+            }
+            if (miniMap.getLayer(FORECAST_POINTS_LAYER_ID)) {
+                miniMap.moveLayer(FORECAST_POINTS_LAYER_ID);
+            }
         }
 
         // Click cluster → zoom to expand (stays zoomed in)
         if (!miniMap._clusterClickBound) {
-            miniMap.on('click', 'forecast-clusters-layer', function(e) {
-                const features = miniMap.queryRenderedFeatures(e.point, { layers: ['forecast-clusters-layer'] });
+            miniMap.on('click', FORECAST_CLUSTERS_LAYER_ID, function(e) {
+                const features = miniMap.queryRenderedFeatures(e.point, { layers: [FORECAST_CLUSTERS_LAYER_ID] });
                 if (!features.length) return;
                 const clusterId = features[0].properties.cluster_id;
-                miniMap.getSource('forecast-points').getClusterExpansionZoom(clusterId, (err, zoom) => {
+                miniMap.getSource(FORECAST_POINTS_SOURCE_ID).getClusterExpansionZoom(clusterId, (err, zoom) => {
                     if (err) return;
                     miniMap.flyTo({
                         center: features[0].geometry.coordinates,
@@ -2522,11 +2614,11 @@
                     });
                 });
             });
-            miniMap.on('mouseenter', 'forecast-clusters-layer', () => miniMap.getCanvas().style.cursor = 'pointer');
-            miniMap.on('mouseleave', 'forecast-clusters-layer', () => miniMap.getCanvas().style.cursor = '');
+            miniMap.on('mouseenter', FORECAST_CLUSTERS_LAYER_ID, () => miniMap.getCanvas().style.cursor = 'pointer');
+            miniMap.on('mouseleave', FORECAST_CLUSTERS_LAYER_ID, () => miniMap.getCanvas().style.cursor = '');
 
             // Click individual point → popup only (no zoom, stable view)
-            miniMap.on('click', 'forecast-points-layer', function(e) {
+            miniMap.on('click', FORECAST_POINTS_LAYER_ID, function(e) {
                 const props = e.features[0].properties;
                 const coords = e.features[0].geometry.coordinates.slice();
                 const popupLayerConfig = getMiniMapLayerConfig();
@@ -2542,8 +2634,8 @@
                     `)
                     .addTo(miniMap);
             });
-            miniMap.on('mouseenter', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = 'pointer');
-            miniMap.on('mouseleave', 'forecast-points-layer', () => miniMap.getCanvas().style.cursor = '');
+            miniMap.on('mouseenter', FORECAST_POINTS_LAYER_ID, () => miniMap.getCanvas().style.cursor = 'pointer');
+            miniMap.on('mouseleave', FORECAST_POINTS_LAYER_ID, () => miniMap.getCanvas().style.cursor = '');
             miniMap._clusterClickBound = true;
         }
     }
@@ -2631,7 +2723,7 @@
         }
 
         try {
-            const params = {};
+            const params = { lite: true };
             if (mapConfig.pointFilter !== 'all') params.filter = mapConfig.pointFilter;
             applyScopeParams(params);
 
@@ -2753,7 +2845,10 @@
         const mappedCountries = allCountries.filter((c) => {
             const code = (c?.code || '').toUpperCase();
             const name = (c?.name || '').toLowerCase();
-            return code !== 'UN' && name !== 'unknown';
+            if (code === 'UN' || name === 'unknown') return false;
+            // Only show countries with at least one station at moderate (warning) or above
+            const totalAlerts = (Number(c?.emergency) || 0) + (Number(c?.alarm) || 0) + (Number(c?.warning) || 0);
+            return totalAlerts > 0;
         });
 
         const unknownAtRisk = allCountries.reduce((acc, c) => {
@@ -2814,12 +2909,19 @@
         const summaryTable = document.getElementById('country-summary-table');
         if (summaryTable) {
             const displayed = countries.slice(0, cardLimit);
+            // Only show countries that have at least one station above threshold
+            const atRisk = displayed.filter(c => (c.emergency || 0) + (c.alarm || 0) + (c.warning || 0) > 0);
             const summaryTitle = getScopeSummaryTableTitle();
-            let tableHtml = `<div class="summary-table-title">${summaryTitle}</div><table class="summary-table"><thead><tr><th>Country</th><th class="emergency">Extreme</th><th class="alarm">Severe</th><th class="warning">Moderate</th></tr></thead><tbody>`;
-            displayed.forEach(c => {
-                tableHtml += `<tr><td>${c.name || c.code}</td><td class="emergency">${c.emergency || 0}</td><td class="alarm">${c.alarm || 0}</td><td class="warning">${c.warning || 0}</td></tr>`;
-            });
-            tableHtml += '</tbody></table>';
+            let tableHtml = `<div class="summary-table-title">${summaryTitle}</div>`;
+            if (atRisk.length > 0) {
+                tableHtml += `<table class="summary-table"><thead><tr><th>Country</th><th class="emergency">Extreme</th><th class="alarm">Severe</th><th class="warning">Moderate</th></tr></thead><tbody>`;
+                atRisk.forEach(c => {
+                    tableHtml += `<tr><td>${c.name || c.code}</td><td class="emergency">${c.emergency || 0}</td><td class="alarm">${c.alarm || 0}</td><td class="warning">${c.warning || 0}</td></tr>`;
+                });
+                tableHtml += '</tbody></table>';
+            } else {
+                tableHtml += '<p style="color:#b0b0b0; text-align:center; margin-top:1rem;">No flood alerts currently</p>';
+            }
             summaryTable.innerHTML = tableHtml;
         }
 
@@ -2911,4 +3013,3 @@
             });
         }
     }
-

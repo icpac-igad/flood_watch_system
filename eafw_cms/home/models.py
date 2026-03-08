@@ -1660,27 +1660,27 @@ class MultimodalClusterSettings(BaseGenericSetting):
     # Alert colors
     normal_color = models.CharField(
         max_length=7,
-        default="#b0b0b0",
+        default="#b0bec5",
         verbose_name=_("Normal Color"),
-        help_text=_("Color for normal alert level (hex format, e.g., #b0b0b0)"),
+        help_text=_("Color for normal alert level (hex format, e.g., #b0bec5)"),
     )
     warning_color = models.CharField(
         max_length=7,
-        default="#ffc107",
+        default="#b8f0f0",
         verbose_name=_("Moderate Color"),
-        help_text=_("Color for Moderate (Warning) alert level (hex format, e.g., #ffc107)"),
+        help_text=_("Color for Moderate (Warning) alert level (hex format, e.g., #b8f0f0)"),
     )
     alarm_color = models.CharField(
         max_length=7,
-        default="#ff9800",
+        default="#2f83d2",
         verbose_name=_("Severe Color"),
-        help_text=_("Color for Severe (Alarm) alert level (hex format, e.g., #ff9800)"),
+        help_text=_("Color for Severe (Alarm) alert level (hex format, e.g., #2f83d2)"),
     )
     emergency_color = models.CharField(
         max_length=7,
-        default="#d32f2f",
+        default="#1e1a97",
         verbose_name=_("Extreme Color"),
-        help_text=_("Color for Extreme (Emergency) alert level (hex format, e.g., #d32f2f)"),
+        help_text=_("Color for Extreme (Emergency) alert level (hex format, e.g., #1e1a97)"),
     )
 
     # Cluster configuration
@@ -1823,39 +1823,19 @@ class MultimodalClusterSettings(BaseGenericSetting):
 
     def get_animation_config(self):
         """
-        Return CSS animation configuration for blinking markers.
-        Different alert levels have different blink speeds.
+        Return CSS animation configuration for markers.
+        Animations are disabled for mapviewer to keep points static.
         """
         return {
-            "enabled": True,
-            "keyframes": {
-                "blink-warning": {
-                    "0%, 100%": {"opacity": 1},
-                    "50%": {"opacity": 0.5},
-                },
-                "blink-alarm": {
-                    "0%, 100%": {"opacity": 1},
-                    "50%": {"opacity": 0.3},
-                },
-                "blink-emergency": {
-                    "0%, 100%": {"opacity": 1},
-                    "25%": {"opacity": 0.2},
-                    "50%": {"opacity": 1},
-                    "75%": {"opacity": 0.2},
-                },
-            },
-            "durations": {
-                "warning": "2000ms",
-                "alarm": "1500ms",
-                "emergency": "1000ms",
-            },
+            "enabled": False,
+            "keyframes": {},
+            "durations": {},
             "classes": {
-                "warning": "animate-blink-warning",
-                "alarm": "animate-blink-alarm",
-                "emergency": "animate-blink-emergency",
+                "warning": "",
+                "alarm": "",
+                "emergency": "",
             },
-            # CSS to inject into frontend
-            "css": self._generate_animation_css(),
+            "css": "",
         }
 
     def _generate_animation_css(self):

@@ -3,10 +3,21 @@ Shared constants and async utilities for FloodWatch API routers.
 """
 from datetime import datetime
 
-# Default thresholds
-DEFAULT_WARNING_THRESHOLD = 300.0
-DEFAULT_ALARM_THRESHOLD = 500.0
-DEFAULT_EMERGENCY_THRESHOLD = 750.0
+# Fallback thresholds — used when a point has no row in gha.point_alert_thresholds
+FALLBACK_WARNING = 300.0
+FALLBACK_ALARM = 500.0
+FALLBACK_EMERGENCY = 750.0
+
+# Legacy aliases (used by reports.py, risk.py, models.py)
+DEFAULT_WARNING_THRESHOLD = FALLBACK_WARNING
+DEFAULT_ALARM_THRESHOLD = FALLBACK_ALARM
+DEFAULT_EMERGENCY_THRESHOLD = FALLBACK_EMERGENCY
+
+# Reusable SQL fragments for per-point thresholds (requires cp.point_id in scope)
+THRESHOLD_JOIN_SQL = "LEFT JOIN gha.point_alert_thresholds pt ON pt.point_id = cp.point_id"
+WARNING_SQL = f"COALESCE(pt.warning_threshold, {FALLBACK_WARNING})"
+ALARM_SQL = f"COALESCE(pt.alarm_threshold, {FALLBACK_ALARM})"
+EMERGENCY_SQL = f"COALESCE(pt.emergency_threshold, {FALLBACK_EMERGENCY})"
 
 # WHCA project countries
 WHCA_COUNTRY_CODES = ("SD", "SS", "UG", "ET", "RW")
