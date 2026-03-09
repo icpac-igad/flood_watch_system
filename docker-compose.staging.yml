@@ -152,6 +152,8 @@ services:
       - ./eafw_docker/volumes/cms/.cache:/root/.cache:z
       - ./eafw_cms/home/templates:/opt/eafw_cms/home/templates:z
       - ./eafw_cms/home/context_processors.py:/opt/eafw_cms/home/context_processors.py:z
+      - ./eafw_cms/geomanagerweb/static/js:/opt/eafw_cms/geomanagerweb/static/js:z
+      - ./eafw_cms/geomanagerweb/static/css:/opt/eafw_cms/geomanagerweb/static/css:z
       - ./eafw_cms/geomanagerweb/settings/base.py:/opt/eafw_cms/geomanagerweb/settings/base.py:z
       - ./eafw_cms/geomanagerweb/templates/base.html:/opt/eafw_cms/geomanagerweb/templates/base.html:z
       - ./eafw_docker/cms/seed:/opt/eafw_cms/seed:z
