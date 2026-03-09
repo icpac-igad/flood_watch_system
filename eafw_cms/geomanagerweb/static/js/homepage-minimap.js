@@ -2179,30 +2179,24 @@
         return wrfExtremeRainfallDateCache;
     }
 
-    // MapServer WMS layer names for each extreme rainfall percentile
-    const EXTREME_RAINFALL_WMS_LAYERS = Object.freeze({
-        f90: 'wrf_extreme_heavy',
-        f95: 'wrf_extreme_very_heavy',
-        f99: 'wrf_extreme_extremely_heavy',
+    // STAC collection IDs for each extreme rainfall percentile
+    const EXTREME_RAINFALL_STAC_COLLECTIONS = Object.freeze({
+        f90: 'wrf-extreme-rainfall-f90',
+        f95: 'wrf-extreme-rainfall-f95',
+        f99: 'wrf-extreme-rainfall-f99',
     });
 
-    /** Build WMS scope query params for MapServer mask clipping. */
-    function getWmsScopeParams() {
-        const parts = [];
-        if (selectedMapScope && selectedMapScope !== 'all') {
-            const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
-            const projectCountries = getScopeProjectCountries(scopeConfig);
-            if (selectedMapScope === 'whca') {
-                parts.push('scope=whca');
-            } else if (projectCountries.length > 0) {
-                parts.push('project_countries=' + encodeURIComponent(projectCountries.join(',')));
-            }
+    /**
+     * Build a TiTiler tile URL from a STAC search hash.
+     * Uses colormap to render single-band COG data with the percentile's colour.
+     */
+    function buildTitilerTileUrl(searchHash, colormap) {
+        const base = apiEndpoints.titilerTileBaseUrl;
+        let url = `${base}/${searchHash}/tiles/WebMercatorQuad/{z}/{x}/{y}.png?assets=data`;
+        if (colormap) {
+            url += '&colormap=' + encodeURIComponent(JSON.stringify(colormap));
         }
-        if (selectedCountry) {
-            const countryName = getCountryNameByCode(selectedCountry);
-            if (countryName) parts.push('country_name=' + encodeURIComponent(countryName));
-        }
-        return parts.length ? '&' + parts.join('&') : '';
+        return url;
     }
 
     async function loadExtremeRainfallRasterLayer(layerConfig, options = {}) {
@@ -2228,27 +2222,43 @@
             clearExtremeRainfallLayer();
 
             const beforeLayer = miniMap.getLayer(ADMIN0_FILL_LAYER_ID) ? ADMIN0_FILL_LAYER_ID : undefined;
-            const scopeParams = getWmsScopeParams();
 
             for (const pct of EXTREME_RAINFALL_PERCENTILES) {
-                const wmsLayerName = EXTREME_RAINFALL_WMS_LAYERS[pct];
-                if (!wmsLayerName) continue;
+                const collection = EXTREME_RAINFALL_STAC_COLLECTIONS[pct];
+                if (!collection) continue;
 
-                const tileUrl = '/mapserver/?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap'
-                    + `&LAYERS=${wmsLayerName}`
-                    + '&SRS=EPSG:3857&FORMAT=image/png&TRANSPARENT=true'
-                    + '&WIDTH=512&HEIGHT=512'
-                    + `&time=${latestDate}`
-                    + scopeParams
-                    + '&BBOX={bbox-epsg-3857}';
+                const colors = EXTREME_RAINFALL_TILE_COLORS[pct];
+                // Build CQL2 filter for the datetime
+                const filters = [{
+                    op: 'eq',
+                    args: [{ property: 'datetime' }, latestDate + 'T00:00:00Z']
+                }];
 
+                let searchHash;
+                try {
+                    searchHash = await registerStacTileSearch(collection, filters);
+                } catch (e) {
+                    console.warn(`[ExtremeRainfall] STAC search failed for ${pct}:`, e);
+                    continue;
+                }
+
+                // Build colormap: map the range to the percentile colour
+                const colorEntry = colors && colors[0];
+                const rgba = colorEntry ? colorEntry[1] : [23, 116, 205, 220];
+                const colormap = {};
+                // Single interval colormap: values 1-10000 → colour
+                for (let v = 1; v <= 255; v++) {
+                    colormap[String(v)] = [rgba[0] || 0, rgba[1] || 0, rgba[2] || 0, rgba[3] || 220];
+                }
+
+                const tileUrl = buildTitilerTileUrl(searchHash, colormap);
                 const sid = extremeRainfallSourceId(pct);
                 const lid = extremeRainfallLayerId(pct);
 
                 miniMap.addSource(sid, {
                     type: 'raster',
                     tiles: [tileUrl],
-                    tileSize: 512,
+                    tileSize: 256,
                     maxzoom: 8
                 });
 
@@ -2269,9 +2279,9 @@
             applyCountryFiltersToMapLayers();
             hideMapStatusToast();
 
-            return { ok: true, reason: 'loaded', dataDate: latestDate, mode: 'wms-raster' };
+            return { ok: true, reason: 'loaded', dataDate: latestDate, mode: 'titiler-raster' };
         } catch (error) {
-            console.error('Error loading extreme rainfall WMS layers:', error);
+            console.error('Error loading extreme rainfall layers:', error);
             if (!silent) {
                 showMapStatusToast(LAYER_VALIDATION_MESSAGE);
             }
@@ -2343,22 +2353,36 @@
 
             clearTotalRainfallLayer();
 
-            // MapServer WMS with scope-aware mask clipping
-            const scopeParams = getWmsScopeParams();
-            const tileUrl = '/mapserver/?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap'
-                + '&LAYERS=wrf_daily_rainfall'
-                + '&SRS=EPSG:3857&FORMAT=image/png&TRANSPARENT=true'
-                + '&WIDTH=512&HEIGHT=512'
-                + `&time=${latestDate}`
-                + scopeParams
-                + '&BBOX={bbox-epsg-3857}';
+            // TiTiler via STAC search-based mosaic
+            const filters = [{
+                op: 'eq',
+                args: [{ property: 'datetime' }, latestDate + 'T00:00:00Z']
+            }];
 
+            const searchHash = await registerStacTileSearch('wrf-daily-rainfall', filters);
+
+            // Rainfall colormap: grey→yellow→green gradient
+            const colormap = {};
+            // 1-9mm grey
+            for (let v = 1; v <= 9; v++) colormap[String(v)] = [217, 217, 217, 200];
+            // 10-29mm yellow-orange
+            for (let v = 10; v <= 29; v++) colormap[String(v)] = [255, 176, 0, 220];
+            // 30-49mm bright yellow
+            for (let v = 30; v <= 49; v++) colormap[String(v)] = [255, 242, 51, 220];
+            // 50-99mm light green
+            for (let v = 50; v <= 99; v++) colormap[String(v)] = [157, 255, 88, 220];
+            // 100-199mm green
+            for (let v = 100; v <= 199; v++) colormap[String(v)] = [50, 230, 70, 220];
+            // 200-255mm dark green
+            for (let v = 200; v <= 255; v++) colormap[String(v)] = [27, 157, 55, 220];
+
+            const tileUrl = buildTitilerTileUrl(searchHash, colormap);
             const beforeLayer = miniMap.getLayer(ADMIN0_FILL_LAYER_ID) ? ADMIN0_FILL_LAYER_ID : undefined;
 
             miniMap.addSource(TOTAL_RAINFALL_SOURCE_ID, {
                 type: 'raster',
                 tiles: [tileUrl],
-                tileSize: 512,
+                tileSize: 256,
                 maxzoom: 8
             });
 
@@ -2378,9 +2402,9 @@
             applyCountryFiltersToMapLayers();
             hideMapStatusToast();
 
-            return { ok: true, reason: 'loaded', dataDate: latestDate, mode: 'wms-total-rainfall' };
+            return { ok: true, reason: 'loaded', dataDate: latestDate, mode: 'titiler-total-rainfall' };
         } catch (error) {
-            console.error('Error loading total rainfall WMS layer:', error);
+            console.error('Error loading total rainfall layer:', error);
             if (!silent) {
                 showMapStatusToast(LAYER_VALIDATION_MESSAGE);
             }
