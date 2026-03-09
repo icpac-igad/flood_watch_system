@@ -315,7 +315,7 @@ def generate_mapcache_xml(
             else:
                 create_element(tileset_elem, "format", tileset_data["format_ref"])
 
-            # Add shared tileset attributes
+            # Add shared tileset attributes (per-tileset values override shared defaults)
             if "tileset_attrs" in config:
                 for key in config["tileset_attrs"].keys():
                     if key == "grids":
@@ -332,13 +332,15 @@ def generate_mapcache_xml(
                                 },
                             )
                     elif key != "dimensions":
+                        # Per-tileset value wins over shared default
+                        value = tileset_data.get(key, config["tileset_attrs"][key])
                         create_element(
                             tileset_elem,
                             key,
                             (
-                                config["tileset_attrs"][key]
-                                if isinstance(config["tileset_attrs"][key], int)
-                                else os.path.expandvars(config["tileset_attrs"][key])
+                                value
+                                if isinstance(value, int)
+                                else os.path.expandvars(str(value))
                             ),
                         )
 
