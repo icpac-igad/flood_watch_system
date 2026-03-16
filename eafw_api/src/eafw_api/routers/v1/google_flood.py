@@ -53,10 +53,16 @@ async def get_google_flood_geojson(
         if not exists:
             return {"type": "FeatureCollection", "features": []}
 
+        # When no date is specified, return ALL current gauges from the
+        # "latest" snapshot table.  The table is upserted each sync so every
+        # row is current, but HIGH and LOW confidence gauges may carry
+        # different data_date values because Google issues them hours apart.
+        # Filtering by MAX(data_date) would exclude the LOW-confidence batch
+        # when it falls on the previous calendar day.
         if date:
             query_date_sql = f"'{date}'::date"
         else:
-            query_date_sql = "(SELECT MAX(data_date) FROM gha.google_flood_points_latest)"
+            query_date_sql = None
 
         clip_geom_ewkt = await resolve_filter_geometry_ewkt(
             conn,
@@ -84,10 +90,7 @@ async def get_google_flood_geojson(
             spatial_clip_sql = f"AND ST_Within(g.geom, ST_GeomFromEWKT('{clip_geom_ewkt}'))"
 
         query = f"""
-            WITH query_params AS (
-                SELECT {query_date_sql} AS query_date
-            ),
-            point_data AS (
+            WITH point_data AS (
                 SELECT
                     g.gauge_id,
                     COALESCE(NULLIF(g.point_id, ''), g.gauge_id) AS point_id,
@@ -121,9 +124,8 @@ async def get_google_flood_geojson(
                     END AS alert_level,
                     g.geom
                 FROM gha.google_flood_points_latest g
-                CROSS JOIN query_params qp
-                WHERE (qp.query_date IS NULL OR g.data_date = qp.query_date)
-                  AND g.geom IS NOT NULL
+                WHERE g.geom IS NOT NULL
+                  {f"AND g.data_date = {query_date_sql}" if query_date_sql else ""}
                   {scope_sql}
                   {confidence_sql}
                   {spatial_clip_sql}

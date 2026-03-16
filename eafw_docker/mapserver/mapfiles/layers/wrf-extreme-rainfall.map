@@ -1,10 +1,10 @@
-# WRF Extreme Rainfall - 3 sub-layers with GHoA boundary filtering
-# Each sub-layer is individually toggleable in the mapviewer legend
+# WRF Extreme Rainfall - 3 sub-layers with scope-aware clipping
+# Uses wrf.get_extreme_rainfall_tiles() function for smart date + scope clipping
 
 # Heavy Rainfall
 LAYER
     INCLUDE "config/database.map"
-    DATA "geom from (select g.id, r.f90_mm as rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.extreme_rainfall r on g.id = r.grid_id where r.forecast_date = '%time%'::date and r.f90_mm > 0) as subq using unique id using srid=4326"
+    DATA "geom from (select g.id, g.rainfall_mm, g.geom from wrf.get_extreme_rainfall_tiles('%time%', 'f90', NULLIF('%scope%', ''), NULLIF(NULLIF('%project_countries%', '__none__'), '')) g where g.rainfall_mm > 0) as subq using unique id using srid=4326"
     MASK "gha_admin_extent_mask"
     INCLUDE "shared/common-layer-properties.map"
     CLASS
@@ -21,14 +21,18 @@ LAYER
     NAME "wrf_extreme_heavy"
     VALIDATION
         "time" "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-        "default_time" "2026-02-17"
+        "default_time" "2026-03-05"
+        "project_countries" "^[A-Za-z, _]+$"
+        "default_project_countries" ""
+        "scope" "^[a-z]+$"
+        "default_scope" ""
     END
 END
 
 # Very Heavy Rainfall
 LAYER
     INCLUDE "config/database.map"
-    DATA "geom from (select g.id, r.f95_mm as rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.extreme_rainfall r on g.id = r.grid_id where r.forecast_date = '%time%'::date and r.f95_mm > 0) as subq using unique id using srid=4326"
+    DATA "geom from (select g.id, g.rainfall_mm, g.geom from wrf.get_extreme_rainfall_tiles('%time%', 'f95', NULLIF('%scope%', ''), NULLIF(NULLIF('%project_countries%', '__none__'), '')) g where g.rainfall_mm > 0) as subq using unique id using srid=4326"
     MASK "gha_admin_extent_mask"
     INCLUDE "shared/common-layer-properties.map"
     CLASS
@@ -45,14 +49,18 @@ LAYER
     NAME "wrf_extreme_very_heavy"
     VALIDATION
         "time" "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-        "default_time" "2026-02-17"
+        "default_time" "2026-03-05"
+        "project_countries" "^[A-Za-z, _]+$"
+        "default_project_countries" ""
+        "scope" "^[a-z]+$"
+        "default_scope" ""
     END
 END
 
 # Extremely Heavy Rainfall
 LAYER
     INCLUDE "config/database.map"
-    DATA "geom from (select g.id, r.f99_mm as rainfall_mm, g.cell as geom from wrf.grid_01dd g join wrf.extreme_rainfall r on g.id = r.grid_id where r.forecast_date = '%time%'::date and r.f99_mm > 0) as subq using unique id using srid=4326"
+    DATA "geom from (select g.id, g.rainfall_mm, g.geom from wrf.get_extreme_rainfall_tiles('%time%', 'f99', NULLIF('%scope%', ''), NULLIF(NULLIF('%project_countries%', '__none__'), '')) g where g.rainfall_mm > 0) as subq using unique id using srid=4326"
     MASK "gha_admin_extent_mask"
     INCLUDE "shared/common-layer-properties.map"
     CLASS
@@ -69,6 +77,10 @@ LAYER
     NAME "wrf_extreme_extremely_heavy"
     VALIDATION
         "time" "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-        "default_time" "2026-02-17"
+        "default_time" "2026-03-05"
+        "project_countries" "^[A-Za-z, _]+$"
+        "default_project_countries" ""
+        "scope" "^[a-z]+$"
+        "default_scope" ""
     END
 END

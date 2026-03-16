@@ -252,6 +252,24 @@ services:
     expose:
       - "7800"
 
+  eafw_tipg:
+    container_name: ${TIPG_CNTR_NAME:-eafw-tipg}
+    image: ghcr.io/developmentseed/tipg:${TIPG_VERSION:-latest}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    depends_on:
+      - eafw_pgbouncer
+    environment:
+      - DATABASE_URL=postgresql://${CMS_DB_USER}:${CMS_DB_PASSWORD}@eafw_pgbouncer:${PGB_LISTEN_PORT:-6432}/${CMS_DB_NAME}
+      - TIPG_DB_SCHEMAS=["gha"]
+      - TIPG_DB_EXCLUDE_TABLES=["gha.multimodal_forecasts","gha.population_raster","gha.grid_025dd_admin_overlaps","gha.scope_geom_cache","gha.admin_extent_cache","gha.grid_config","gha.report_snapshots"]
+      - TIPG_TABLE_CONFIG__ADMIN0__PK=ogc_fid
+      - TIPG_TABLE_CONFIG__ADMIN1__PK=ogc_fid
+      - TIPG_TABLE_CONFIG__ADMIN2__PK=ogc_fid
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${TIPG_HOST_PORT:-9073}:8081
+    command: ["uvicorn", "tipg.main:app", "--host", "0.0.0.0", "--port", "8081", "--root-path", "/tipg"]
+
   eafw_nginx:
     container_name: ${NGINX_CNTR_NAME:-eafw-nginx}
     image: nginx:${NGINX_VERSION:-1.27-alpine}

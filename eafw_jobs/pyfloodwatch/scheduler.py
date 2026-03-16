@@ -186,11 +186,12 @@ def start_scheduler():
 
     scheduler = BlockingScheduler()
 
-    # Schedule multimodal sync - daily at 5:30 PM (17:30) East Africa Time
-    # Data is available around 5:00 PM, run at 5:30 PM to allow for upload completion
+    # Schedule multimodal sync - daily at 6:00 PM (18:00) East Africa Time
+    # MikeHYDRO server uploads CSVs to Drive at 5:40 PM via rclone;
+    # run at 6:00 PM to allow upload of ~3000 files to complete first.
     scheduler.add_job(
         run_multimodal_sync,
-        CronTrigger(hour=17, minute=30),
+        CronTrigger(hour=18, minute=0),
         id='multimodal_sync',
         name='Multimodal Ensemble Sync',
         replace_existing=True
@@ -235,21 +236,21 @@ def start_scheduler():
         replace_existing=True
     )
 
-    # Schedule DB backup - daily at 6:00 PM (18:00) EAT
-    # Runs after multimodal sync to capture fresh data
+    # Schedule DB backup - daily at 6:30 PM (18:30) EAT
+    # Runs after multimodal sync (18:00) to capture fresh data
     scheduler.add_job(
         run_db_backup,
-        CronTrigger(hour=18, minute=0),
+        CronTrigger(hour=18, minute=30),
         id='db_backup',
         name='Database Backup',
         replace_existing=True
     )
 
-    # Schedule daily email report - at 6:30 PM (18:30) EAT
+    # Schedule daily email report - at 7:00 PM (19:00) EAT
     # Runs after backup to summarize the day's job results
     scheduler.add_job(
         run_email_report,
-        CronTrigger(hour=18, minute=30),
+        CronTrigger(hour=19, minute=0),
         id='email_report',
         name='Daily Email Report',
         replace_existing=True
@@ -264,13 +265,13 @@ def start_scheduler():
     run_google_flood_sync_job()
 
     logger.info("Scheduler started. Jobs will run on schedule.")
-    logger.info("Multimodal sync: Daily at 17:30 (5:30 PM) EAT")
+    logger.info("Multimodal sync: Daily at 18:00 (6:00 PM) EAT")
     logger.info("FloodProofs sync: 01:00, 07:00, 13:00, 19:00 EAT")
     logger.info("GCS Inundation sync: Weekly on Sunday at 02:00 EAT")
     logger.info("WRF Rainfall sync: Daily at 06:00 EAT")
     logger.info("Google Flood sync: 00:20, 06:20, 12:20, 18:20 EAT")
-    logger.info("Database backup: Daily at 18:00 (6:00 PM) EAT, keep 7 days")
-    logger.info("Email report: Daily at 18:30 (6:30 PM) EAT")
+    logger.info("Database backup: Daily at 18:30 (6:30 PM) EAT, keep 7 days")
+    logger.info("Email report: Daily at 19:00 (7:00 PM) EAT")
 
     try:
         scheduler.start()

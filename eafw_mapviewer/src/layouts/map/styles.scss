@@ -96,11 +96,12 @@
     }
   }
 
-  .utility-panel {
+  .right-panels {
     position: absolute;
     right: rem(20px);
     top: rem(75px);
     z-index: 6;
+    width: rem(290px);
   }
 
   &.embed {

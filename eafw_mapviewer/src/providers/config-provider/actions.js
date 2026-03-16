@@ -1,6 +1,16 @@
 import { createAction, createThunkAction } from "@/redux/actions";
 import { getConfig } from "@/services/config";
 
+import defaultThumb from "@/components/map/images/default.png";
+import satelliteThumb from "@/components/map/images/satellite.png";
+import osmThumb from "@/components/map/images/osm.png";
+
+const BASEMAP_THUMBS = {
+  "current basemap": defaultThumb,
+  "esri world imagery": satelliteThumb,
+  "openstreetmap": osmThumb,
+};
+
 export const setConfigLoading = createAction("setConfigLoading");
 export const setConfig = createAction("setConfig");
 export const setSubCategorySettings = createAction("setSubCategorySettings");
@@ -66,6 +76,10 @@ export const fetchConfig = createThunkAction(
           if (item.mapStyle) {
             const sep = item.mapStyle.includes("?") ? "&" : "?";
             item.mapStyle = `${item.mapStyle}${sep}_ts=${styleCacheBust}`;
+          }
+          if (!item.image) {
+            const key = item.label.toLowerCase();
+            item.image = BASEMAP_THUMBS[key] || defaultThumb;
           }
           all[item.label] = item;
           return all;

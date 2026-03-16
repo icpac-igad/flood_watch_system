@@ -21,6 +21,7 @@ import Map from "@/components/map";
 import MapPrompts from "@/components/prompts/map-prompts";
 import MapMenu from "@/components/map-menu";
 import UtilityPanel from "@/components/utility-panel";
+import BasemapPanel from "./components/basemap-panel";
 
 import DataAnalysisMenu from "./components/data-analysis-menu";
 import MapControlButtons from "./components/map-controls";
@@ -102,7 +103,10 @@ class MainMapComponent extends PureComponent {
         {!hidePanels && (
           <Desktop>
             <DataAnalysisMenu className="data-analysis-menu" embed={embed} />
-            <UtilityPanel className="utility-panel" />
+            <div className="right-panels">
+              <UtilityPanel className="utility-panel" />
+              <BasemapPanel />
+            </div>
           </Desktop>
         )}
         {!embed && (
