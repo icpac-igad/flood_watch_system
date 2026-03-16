@@ -328,7 +328,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect-changes, security-gate, build-api, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs]
     if: always() && !cancelled()
-    environment: production
+    environment: staging
     steps:
       - name: Preflight - check SSH reachability
         id: ssh_preflight
