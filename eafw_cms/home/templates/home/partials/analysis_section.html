@@ -58,11 +58,13 @@
                 </div>
                 {% endif %}
 
-                <div class="map-scope-control" id="map-scope-control" role="group" aria-label="{% trans 'Mini map country filter' %}">
-                    <button type="button" class="map-scope-btn" data-scope="all">{% trans "All Countries" %}</button>
-                    {% for scope in map_scopes %}
-                    <button type="button" class="map-scope-btn" data-scope="{{ scope.key }}">{{ scope.name }}</button>
-                    {% endfor %}
+                <div class="map-scope-control" id="map-scope-control" aria-label="{% trans 'Mini map country filter' %}">
+                    <select id="map-scope-select" class="map-scope-select">
+                        <option value="all">{% trans "All Countries" %}</option>
+                        {% for scope in map_scopes %}
+                        <option value="{{ scope.key }}">{{ scope.name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
 
                 <div class="c-legend legend-{{ page.legend_position|default:'bottom-left' }}" style="display:none">

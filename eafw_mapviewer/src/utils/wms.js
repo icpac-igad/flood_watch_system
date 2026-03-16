@@ -31,7 +31,7 @@ function getValidTimestamps(rangeString) {
   let current_time = start_time.getTime();
   const valid_timestamps = [];
 
-  while (current_time < end_time.getTime()) {
+  while (current_time <= end_time.getTime()) {
     valid_timestamps.push(new Date(current_time).toISOString());
     current_time += duration;
   }

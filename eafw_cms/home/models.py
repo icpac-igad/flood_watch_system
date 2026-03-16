@@ -63,14 +63,71 @@ class Navbar(Page):
         related_name="+",
     )
 
+    logo_text_part_1 = models.CharField(
+        max_length=100,
+        blank=True,
+        default="EAST AFRICA",
+        verbose_name=_("Logo Text Part 1"),
+        help_text=_("First part of the text-based logo."),
+    )
+
+    logo_text_part_2 = models.CharField(
+        max_length=100,
+        blank=True,
+        default="FLOOD",
+        verbose_name=_("Logo Text Part 2"),
+        help_text=_("Second part of the text-based logo"),
+    )
+
+    logo_text_part_3 = models.CharField(
+        max_length=100,
+        blank=True,
+        default="WATCH FOR NILE",
+        verbose_name=_("Logo Text Part 3"),
+        help_text=_("Third part of the text-based logo"),
+    )
+
     menu_items = StreamField(
         [
             ("link", LinkBlock()),
             ("dropdown", LinkGroupBlock()),
         ],
         blank=True,
-        
         help_text=_("Add menu links and dropdown menus"),
+    )
+
+    background_image = models.ForeignKey(
+        "wagtailimages.Image",
+        verbose_name=_("Navbar Background Image"),
+        help_text=_("An optional background image for the navbar"),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    background_opacity = models.IntegerField(
+        default=55,
+        verbose_name=_("Background Overlay Opacity"),
+        help_text=_(
+            "Overlay opacity over the background image (0 = fully transparent, 100 = fully opaque). Default is 55."
+        ),
+    )
+
+    background_color = models.CharField(
+        max_length=7,
+        blank=True,
+        default="",
+        verbose_name=_("Background Color"),
+        help_text=_("Custom background color. Overrides the site-wide theme navbar color when set."),
+    )
+
+    theme_colored_lines = models.BooleanField(
+        default=False,
+        verbose_name=_("Display Color Lines"),
+        help_text=_(
+            "If checked, colored lines will be drawn below the navbar. Add custom lines below, or leave empty for default theme colors."
+        ),
     )
 
     # Utility Bar Settings
@@ -95,14 +152,36 @@ class Navbar(Page):
             ("link", LinkBlock()),
         ],
         blank=True,
-        
         verbose_name=_("Quick Links"),
         help_text=_("Quick links shown in utility bar"),
     )
 
     content_panels = Page.content_panels + [
         FieldPanel("logo"),
+        MultiFieldPanel(
+            [
+                FieldPanel("logo_text_part_1"),
+                FieldPanel("logo_text_part_2"),
+                FieldPanel("logo_text_part_3"),
+            ],
+            heading=_("Text-based Logo (fallback when no image)"),
+        ),
         FieldPanel("menu_items"),
+        MultiFieldPanel(
+            [
+                FieldPanel("background_image"),
+                FieldPanel("background_opacity"),
+                NativeColorPanel("background_color"),
+            ],
+            heading=_("Background"),
+        ),
+        MultiFieldPanel(
+            [
+                FieldPanel("theme_colored_lines"),
+                InlinePanel("color_lines", label=_("Color Lines"), max_num=5),
+            ],
+            heading=_("Theme Colored Lines"),
+        ),
         MultiFieldPanel(
             [
                 FieldPanel("show_utility_bar"),
@@ -113,6 +192,26 @@ class Navbar(Page):
             heading=_("Utility Bar"),
         ),
     ]
+
+
+class AbstractColorLine(Orderable):
+    """Abstract base for colored lines used in navbar and footer."""
+
+    color = models.CharField(
+        max_length=7,
+        default="#034930",
+        verbose_name=_("Line Color"),
+        help_text=_("Pick a color for this line"),
+    )
+
+    panels = [NativeColorPanel("color")]
+
+    class Meta(Orderable.Meta):
+        abstract = True
+
+
+class NavbarColorLine(AbstractColorLine):
+    page = ParentalKey("Navbar", related_name="color_lines", on_delete=models.CASCADE)
 
 
 class Footer(Page):

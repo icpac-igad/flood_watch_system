@@ -322,9 +322,11 @@
             '/api/v1/multimodal/situation-summary'
         ],
         admin0: [
+            '/tipg/collections/gha.admin0/items?f=geojson&limit=100',
             '/api/v1/boundaries/admin0'
         ],
         admin1: [
+            '/tipg/collections/gha.admin1/items?f=geojson&limit=500',
             '/api/v1/boundaries/admin1'
         ],
         riskMajority: [
@@ -801,7 +803,25 @@
         const titleEl = legend.querySelector('.c-legend-title');
         const listEl = legend.querySelector('.c-legend-basic');
         if (!titleEl || !listEl) return null;
-        return { titleEl, listEl };
+        return { titleEl, listEl, legend };
+    }
+
+    /** Show or hide a date subtitle in the legend box. */
+    function updateLegendDate(dateStr) {
+        const elements = getMiniMapLegendElements();
+        if (!elements) return;
+        let dateEl = elements.legend.querySelector('.c-legend-date');
+        if (!dateStr) {
+            if (dateEl) dateEl.remove();
+            return;
+        }
+        if (!dateEl) {
+            dateEl = document.createElement('div');
+            dateEl.className = 'c-legend-date';
+            dateEl.style.cssText = 'font-size:0.68rem;color:#777;margin-top:-4px;margin-bottom:4px;';
+            elements.titleEl.insertAdjacentElement('afterend', dateEl);
+        }
+        dateEl.textContent = 'Data: ' + dateStr;
     }
 
     function ensureMiniMapLegendDefaultsCaptured() {
@@ -924,6 +944,12 @@
         if (legendContainer) legendContainer.style.display = '';
 
         elements.titleEl.textContent = definition.title || miniMapDefaultLegendTitle || 'Legend';
+
+        // Clear date subtitle for non-raster layers (raster loaders set it after data loads)
+        const layerMode = getLayerMode(config);
+        if (layerMode !== 'wms-raster' && layerMode !== 'wms-total-rainfall') {
+            updateLegendDate(null);
+        }
 
         if (definition.useDefaultItems) {
             elements.listEl.innerHTML = miniMapDefaultLegendItemsHtml;
@@ -1307,23 +1333,19 @@
     // MINI-MAP SCOPE FILTER (CMS-driven project scopes)
     // ========================================
     function initMapScopeControl() {
-        const control = document.getElementById('map-scope-control');
-        if (!control) return;
+        const select = document.getElementById('map-scope-select');
+        if (!select) return;
 
-        control.addEventListener('click', async (event) => {
-            const button = event.target.closest('.map-scope-btn[data-scope]');
-            if (!button) return;
-            await setMapScope(button.getAttribute('data-scope'));
+        select.addEventListener('change', async () => {
+            await setMapScope(select.value);
         });
 
         updateMapScopeUI();
     }
 
     function updateMapScopeUI() {
-        document.querySelectorAll('.map-scope-btn[data-scope]').forEach((btn) => {
-            const isActive = btn.getAttribute('data-scope') === selectedMapScope;
-            btn.classList.toggle('active', isActive);
-        });
+        const select = document.getElementById('map-scope-select');
+        if (select) select.value = selectedMapScope;
     }
 
     async function setMapScope(nextScope) {
@@ -1525,6 +1547,23 @@
         if (heroTitleEl) heroTitleEl.textContent = siteTitle;
         const footerTitleEl = document.getElementById('footer-site-title');
         if (footerTitleEl) footerTitleEl.textContent = siteTitle;
+
+        // Update navbar text logo to reflect scope
+        const logoLine1 = document.getElementById('navbar-logo-line-1');
+        const logoLine2 = document.getElementById('navbar-logo-line-2');
+        const logoLine3 = document.getElementById('navbar-logo-line-3');
+        if (logoLine1 && logoLine2 && logoLine3) {
+            // Derive logo line 3 from scope site title
+            // Default: "EAST AFRICA" / "FLOOD" / "WATCH FOR NILE"
+            // All Countries: "EAST AFRICA" / "FLOOD" / "WATCH"
+            const afterEA = siteTitle.replace(/^East\s+Africa\s*/i, '');
+            const watchIdx = afterEA.toLowerCase().indexOf('watch');
+            if (watchIdx !== -1) {
+                logoLine1.textContent = 'EAST AFRICA';
+                logoLine2.textContent = afterEA.substring(0, watchIdx).trim().toUpperCase();
+                logoLine3.textContent = afterEA.substring(watchIdx).trim().toUpperCase();
+            }
+        }
         // Update footer description — replace base title reference with scope title
         const footerDescEl = document.getElementById('footer-site-desc');
         if (footerDescEl && footerDescEl.getAttribute('data-original') === null) {
@@ -1979,54 +2018,58 @@
     async function loadAdmin0Boundaries() {
         if (!miniMap || !miniMap.isStyleLoaded()) return null;
 
+        try {
         if (miniMap.getLayer(ADMIN0_LINE_LAYER_ID)) miniMap.removeLayer(ADMIN0_LINE_LAYER_ID);
         if (miniMap.getLayer(ADMIN0_FILL_LAYER_ID)) miniMap.removeLayer(ADMIN0_FILL_LAYER_ID);
         if (miniMap.getSource(ADMIN0_SOURCE_ID)) miniMap.removeSource(ADMIN0_SOURCE_ID);
 
-        let admin0Features = [];
-        try {
-            admin0Features = await getAdmin0Features();
-        } catch (error) {
-            console.error('Failed to load admin0 boundaries:', error);
-        }
-
-        const admin0Filter = getActiveScopeAdmin0Filter();
-        if (admin0Filter) {
-            admin0Features = admin0Features.filter((feature) =>
-                admin0Filter.has((feature.properties?.gid_0 || '').toUpperCase())
-            );
-        }
-
-        const scopeBounds = computeFeatureCollectionBounds(admin0Features);
-
+        // Use TiPG (OGC Tiles) for fast admin boundary rendering
+        var tileBaseUrl = window.location.protocol + '//' + window.location.host;
         miniMap.addSource(ADMIN0_SOURCE_ID, {
-            type: 'geojson',
-            data: {
-                type: 'FeatureCollection',
-                features: admin0Features
-            }
+            type: 'vector',
+            tiles: [tileBaseUrl + '/tipg/collections/gha.admin0/tiles/WebMercatorQuad/{z}/{x}/{y}'],
+            minzoom: 0,
+            maxzoom: 12
         });
 
-        miniMap.addLayer({
+        // Build scope filter for vector tiles
+        const admin0Filter = getActiveScopeAdmin0Filter();
+        const filterExpr = admin0Filter
+            ? ['in', ['upcase', ['get', 'gid_0']], ['literal', Array.from(admin0Filter)]]
+            : null;
+
+        const fillLayerDef = {
             id: ADMIN0_FILL_LAYER_ID,
             type: 'fill',
             source: ADMIN0_SOURCE_ID,
+            'source-layer': 'default',
             paint: {
                 'fill-color': '#2a6f97',
                 'fill-opacity': 0.1
             }
-        });
+        };
+        if (filterExpr) fillLayerDef.filter = filterExpr;
 
-        miniMap.addLayer({
+        const lineLayerDef = {
             id: ADMIN0_LINE_LAYER_ID,
             type: 'line',
             source: ADMIN0_SOURCE_ID,
+            'source-layer': 'default',
             paint: {
                 'line-color': '#0f3854',
                 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 1.1, 6, 1.7, 9, 2.3],
                 'line-opacity': 0.95
             }
-        });
+        };
+        if (filterExpr) lineLayerDef.filter = filterExpr;
+
+        miniMap.addLayer(fillLayerDef);
+        miniMap.addLayer(lineLayerDef);
+
+        // Compute scope bounds from config (avoid fetching full GeoJSON)
+        const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+        const scopeBounds = scopeBoundsByScope[selectedMapScope]
+            || (scopeConfig?.bounds ? [[scopeConfig.bounds[0], scopeConfig.bounds[1]], [scopeConfig.bounds[2], scopeConfig.bounds[3]]] : null);
 
         if (scopeBounds) {
             scopeBoundsByScope[selectedMapScope] = scopeBounds;
@@ -2060,6 +2103,10 @@
         }
 
         return scopeBounds;
+        } catch (err) {
+            console.error('[minimap] loadAdmin0Boundaries error:', err);
+            return null;
+        }
     }
 
     // ========================================
@@ -2179,21 +2226,36 @@
         return wrfExtremeRainfallDateCache;
     }
 
-    // STAC collection IDs for each extreme rainfall percentile
+    // STAC collection IDs for each extreme rainfall percentile (kept for future TiTiler use)
     const EXTREME_RAINFALL_STAC_COLLECTIONS = Object.freeze({
         f90: 'wrf-extreme-rainfall-f90',
         f95: 'wrf-extreme-rainfall-f95',
         f99: 'wrf-extreme-rainfall-f99',
     });
 
+    // MapServer WMS layer names for each extreme rainfall percentile
+    const EXTREME_RAINFALL_WMS_LAYERS = Object.freeze({
+        f90: 'wrf_extreme_heavy',
+        f95: 'wrf_extreme_very_heavy',
+        f99: 'wrf_extreme_extremely_heavy',
+    });
+
     /**
      * Build a TiTiler tile URL from a STAC search hash.
      * Uses colormap to render single-band COG data with the percentile's colour.
      */
-    function buildTitilerTileUrl(searchHash, colormap) {
+    function buildTitilerTileUrl(searchHash, colormap, options) {
         const base = apiEndpoints.titilerTileBaseUrl;
-        let url = `${base}/${searchHash}/tiles/WebMercatorQuad/{z}/{x}/{y}.png?assets=data`;
-        if (colormap) {
+        let url = `${base}/${searchHash}/tiles/WebMercatorQuad/{z}/{x}/{y}@2x.png?assets=data&resampling=cubic`;
+        if (options && options.rescale) {
+            url += '&rescale=' + options.rescale;
+        }
+        if (options && options.nodata != null) {
+            url += '&nodata=' + options.nodata;
+        }
+        if (options && options.colormap_name) {
+            url += '&colormap_name=' + options.colormap_name;
+        } else if (colormap) {
             url += '&colormap=' + encodeURIComponent(JSON.stringify(colormap));
         }
         return url;
@@ -2209,49 +2271,31 @@
             clearMapPopups();
             resetAdminFillStyle();
 
-            const latestDate = await getLatestWrfExtremeRainfallDate(true);
-            if (!latestDate) {
-                applyCountryFiltersToMapLayers();
-                const noDataMessage = `No ${layerConfig.label.toLowerCase()} data available for the current selection.`;
-                if (!silent) {
-                    showMapStatusToast(noDataMessage, { withSpinner: false, autoHideMs: 2200 });
-                }
-                return { ok: false, reason: 'no_data', message: noDataMessage };
-            }
-
             clearExtremeRainfallLayer();
 
-            const beforeLayer = miniMap.getLayer(ADMIN0_FILL_LAYER_ID) ? ADMIN0_FILL_LAYER_ID : undefined;
+            // MapServer SQL auto-resolves the best forecast run for the date.
+            const today = new Date().toISOString().slice(0, 10);
+            const beforeLayer = miniMap.getLayer(FOCUS_MASK_LAYER_ID) ? FOCUS_MASK_LAYER_ID
+                : (miniMap.getLayer(ADMIN0_FILL_LAYER_ID) ? ADMIN0_FILL_LAYER_ID : undefined);
+
+            // Scope clipping: pass scope/project_countries to MapServer
+            const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+            const projectCountries = getScopeProjectCountries(scopeConfig).join(',');
 
             for (const pct of EXTREME_RAINFALL_PERCENTILES) {
-                const collection = EXTREME_RAINFALL_STAC_COLLECTIONS[pct];
-                if (!collection) continue;
+                const wmsLayer = EXTREME_RAINFALL_WMS_LAYERS[pct];
+                if (!wmsLayer) continue;
 
-                const colors = EXTREME_RAINFALL_TILE_COLORS[pct];
-                // Build CQL2 filter for the datetime
-                const filters = [{
-                    op: 'eq',
-                    args: [{ property: 'datetime' }, latestDate + 'T00:00:00Z']
-                }];
-
-                let searchHash;
-                try {
-                    searchHash = await registerStacTileSearch(collection, filters);
-                } catch (e) {
-                    console.warn(`[ExtremeRainfall] STAC search failed for ${pct}:`, e);
-                    continue;
+                let tileUrl = '/mapcache/?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap'
+                    + '&FORMAT=image/png&TRANSPARENT=true&LAYERS=' + wmsLayer
+                    + '&STYLES=&WIDTH=256&HEIGHT=256&SRS=EPSG:3857'
+                    + '&BBOX={bbox-epsg-3857}&time=' + today;
+                if (selectedMapScope === 'whca') {
+                    tileUrl += '&scope=whca';
+                } else if (projectCountries) {
+                    tileUrl += '&project_countries=' + encodeURIComponent(projectCountries);
                 }
 
-                // Build colormap: map the range to the percentile colour
-                const colorEntry = colors && colors[0];
-                const rgba = colorEntry ? colorEntry[1] : [23, 116, 205, 220];
-                const colormap = {};
-                // Single interval colormap: values 1-10000 → colour
-                for (let v = 1; v <= 255; v++) {
-                    colormap[String(v)] = [rgba[0] || 0, rgba[1] || 0, rgba[2] || 0, rgba[3] || 220];
-                }
-
-                const tileUrl = buildTitilerTileUrl(searchHash, colormap);
                 const sid = extremeRainfallSourceId(pct);
                 const lid = extremeRainfallLayerId(pct);
 
@@ -2259,7 +2303,7 @@
                     type: 'raster',
                     tiles: [tileUrl],
                     tileSize: 256,
-                    maxzoom: 8
+                    maxzoom: 12
                 });
 
                 const layerDef = {
@@ -2278,8 +2322,9 @@
 
             applyCountryFiltersToMapLayers();
             hideMapStatusToast();
+            updateLegendDate(today);
 
-            return { ok: true, reason: 'loaded', dataDate: latestDate, mode: 'titiler-raster' };
+            return { ok: true, reason: 'loaded', dataDate: today, mode: 'mapserver-wms' };
         } catch (error) {
             console.error('Error loading extreme rainfall layers:', error);
             if (!silent) {
@@ -2341,49 +2386,31 @@
             clearMapPopups();
             resetAdminFillStyle();
 
-            const latestDate = await getLatestWrfTotalRainfallDate(true);
-            if (!latestDate) {
-                applyCountryFiltersToMapLayers();
-                const noDataMessage = `No ${layerConfig.label.toLowerCase()} data available for the current selection.`;
-                if (!silent) {
-                    showMapStatusToast(noDataMessage, { withSpinner: false, autoHideMs: 2200 });
-                }
-                return { ok: false, reason: 'no_data', message: noDataMessage };
-            }
-
             clearTotalRainfallLayer();
 
-            // TiTiler via STAC search-based mosaic
-            const filters = [{
-                op: 'eq',
-                args: [{ property: 'datetime' }, latestDate + 'T00:00:00Z']
-            }];
-
-            const searchHash = await registerStacTileSearch('wrf-daily-rainfall', filters);
-
-            // Rainfall colormap: grey→yellow→green gradient
-            const colormap = {};
-            // 1-9mm grey
-            for (let v = 1; v <= 9; v++) colormap[String(v)] = [217, 217, 217, 200];
-            // 10-29mm yellow-orange
-            for (let v = 10; v <= 29; v++) colormap[String(v)] = [255, 176, 0, 220];
-            // 30-49mm bright yellow
-            for (let v = 30; v <= 49; v++) colormap[String(v)] = [255, 242, 51, 220];
-            // 50-99mm light green
-            for (let v = 50; v <= 99; v++) colormap[String(v)] = [157, 255, 88, 220];
-            // 100-199mm green
-            for (let v = 100; v <= 199; v++) colormap[String(v)] = [50, 230, 70, 220];
-            // 200-255mm dark green
-            for (let v = 200; v <= 255; v++) colormap[String(v)] = [27, 157, 55, 220];
-
-            const tileUrl = buildTitilerTileUrl(searchHash, colormap);
-            const beforeLayer = miniMap.getLayer(ADMIN0_FILL_LAYER_ID) ? ADMIN0_FILL_LAYER_ID : undefined;
+            // Use MapServer WMS tiles — the SQL function auto-resolves the
+            // best forecast run for the given date, so just pass today.
+            const today = new Date().toISOString().slice(0, 10);
+            // Scope clipping: pass scope/project_countries to MapServer
+            const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
+            const projectCountries = getScopeProjectCountries(scopeConfig).join(',');
+            let tileUrl = '/mapcache/?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap'
+                + '&FORMAT=image/png&TRANSPARENT=true&LAYERS=wrf_daily_rainfall'
+                + '&STYLES=&WIDTH=256&HEIGHT=256&SRS=EPSG:3857'
+                + '&BBOX={bbox-epsg-3857}&time=' + today;
+            if (selectedMapScope === 'whca') {
+                tileUrl += '&scope=whca';
+            } else if (projectCountries) {
+                tileUrl += '&project_countries=' + encodeURIComponent(projectCountries);
+            }
+            const beforeLayer = miniMap.getLayer(FOCUS_MASK_LAYER_ID) ? FOCUS_MASK_LAYER_ID
+                : (miniMap.getLayer(ADMIN0_FILL_LAYER_ID) ? ADMIN0_FILL_LAYER_ID : undefined);
 
             miniMap.addSource(TOTAL_RAINFALL_SOURCE_ID, {
                 type: 'raster',
                 tiles: [tileUrl],
                 tileSize: 256,
-                maxzoom: 8
+                maxzoom: 12
             });
 
             const layerDef = {
@@ -2401,8 +2428,9 @@
 
             applyCountryFiltersToMapLayers();
             hideMapStatusToast();
+            updateLegendDate(today);
 
-            return { ok: true, reason: 'loaded', dataDate: latestDate, mode: 'titiler-total-rainfall' };
+            return { ok: true, reason: 'loaded', dataDate: today, mode: 'mapserver-wms' };
         } catch (error) {
             console.error('Error loading total rainfall layer:', error);
             if (!silent) {

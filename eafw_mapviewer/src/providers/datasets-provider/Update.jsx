@@ -4,6 +4,7 @@ import { isEmpty } from "lodash";
 import { connect } from "react-redux";
 import { wrap } from "comlink";
 import { apiRequest } from "@/utils/request";
+import { getTimeValuesFromWMS } from "@/utils/wms";
 import * as ownActions from "./actions";
 import { getDatasetProps } from "./selectors";
 import { setMapSettings } from "@/components/map/actions";
@@ -44,22 +45,16 @@ class LayerUpdate extends PureComponent {
     const { layer } = this.props;
 
     const {
-      id: layerId,
-      dataset: datasetId,
       getCapabilitiesUrl,
       layerName,
-      autoUpdateInterval,
       getCapabilitiesLayerName,
     } = layer;
 
-    this.initWmsWorker();
+    // Extract base URL (before query params) for getTimeValuesFromWMS
+    const baseUrl = getCapabilitiesUrl.split("?")[0];
+    const capLayerName = getCapabilitiesLayerName || layerName;
 
-    if (this.wmsWorkerRef.current) {
-      return await this.wmsWorkerRef.current.wmsGetLayerTimeFromCapabilities(
-        getCapabilitiesUrl,
-        getCapabilitiesLayerName || layerName
-      );
-    }
+    return await getTimeValuesFromWMS(baseUrl, capLayerName);
   };
 
   getWMSTilesetTimestamps = async () => {
@@ -98,7 +93,11 @@ class LayerUpdate extends PureComponent {
     }
 
     if (!getTimestamps && layerType === "wms") {
-      getLayerTimestamps = this.getWMSTilesetTimestamps;
+      if (layer.getCapabilitiesUrl) {
+        getLayerTimestamps = this.getWMSTimestamps;
+      } else {
+        getLayerTimestamps = this.getWMSTilesetTimestamps;
+      }
     }
 
     // update timestamps

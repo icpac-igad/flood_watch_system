@@ -79,11 +79,10 @@
 .c-map-logo { position: absolute; bottom: 25px; left: 15px; z-index: 99; height: 45px; width: 65px; background: rgba(255, 255, 255, 0.9); border-radius: 6px; padding: 4px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
 .c-map-logo img { width: 100%; height: 100%; object-fit: contain; }
 
-/* Map scope control */
-.map-scope-control { position: absolute; z-index: 120; top: 12px; right: 86px; display: inline-flex; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(18, 49, 72, 0.25); border-radius: 7px; padding: 4px; box-shadow: 0 2px 8px rgba(7, 27, 46, 0.16); }
-.map-scope-btn { appearance: none; border: 1px solid transparent; background: transparent; color: #1f3f5e; border-radius: 5px; padding: 4px 8px; font-size: 0.72rem; font-weight: 600; cursor: pointer; line-height: 1.2; transition: background-color 0.2s, color 0.2s, border-color 0.2s; }
-.map-scope-btn:hover { background: rgba(25, 118, 210, 0.1); }
-.map-scope-btn.active { background: #1976d2; color: #fff; border-color: #1565c0; }
+/* Map scope control (dropdown) */
+.map-scope-control { position: absolute; z-index: 120; top: 12px; right: 86px; }
+.map-scope-select { appearance: none; -webkit-appearance: none; background: rgba(255, 255, 255, 0.92) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%231f3f5e'/%3E%3C/svg%3E") no-repeat right 8px center; border: 1px solid rgba(18, 49, 72, 0.25); border-radius: 7px; padding: 5px 24px 5px 10px; font-size: 0.72rem; font-weight: 600; color: #1f3f5e; cursor: pointer; box-shadow: 0 2px 8px rgba(7, 27, 46, 0.16); line-height: 1.2; }
+.map-scope-select:focus { outline: 2px solid #1976d2; outline-offset: 1px; }
 
 /* Legend */
 .c-legend { position: absolute; z-index: 100; max-width: 220px; min-width: 160px; width: fit-content; background-color: #fff; padding: 10px 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); border-radius: 8px; bottom: 8px; right: 15px; }
@@ -229,8 +228,8 @@
   #mini-map, .map-wrapper { height: 100%; min-height: 0; }
   .map-wrapper { --map-cta-bottom: 10px; --map-cta-right: 10px; }
   .c-map-logo { bottom: 0; left: 0; border-radius: 0 6px 0 0; }
-  .map-scope-control { top: 10px; right: 44px; left: auto; flex-direction: column; padding: 3px; gap: 2px; border-radius: 6px; background: rgba(255, 255, 255, 0.94); }
-  .map-scope-btn { font-size: 0.62rem; padding: 4px 6px; }
+  .map-scope-control { top: 10px; right: 44px; left: auto; }
+  .map-scope-select { font-size: 0.62rem; padding: 4px 20px 4px 6px; }
   .c-menu-control .c-map-menu::before { width: 30px; border-radius: 18px; }
   .c-menu-control .c-map-menu .menu-category { padding: 9px 0; }
   .c-menu-control .c-map-menu .menu-category .category-icon { width: 30px; height: 30px; }
@@ -315,6 +314,6 @@ window.EAFW_CONFIG = {
     cmsLayerConfigs: {{ mini_map_layer_configs_json|safe }}
 };
 </script>
-<script src="{% static 'js/homepage-minimap.js' %}?v=20260305f"></script>
+<script src="{% static 'js/homepage-minimap.js' %}?v=20260313i"></script>
 
 {% endblock %}

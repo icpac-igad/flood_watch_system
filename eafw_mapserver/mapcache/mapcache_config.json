@@ -408,7 +408,7 @@
       "name": "wrf_daily_rainfall",
       "source": "wrf_daily_rainfall_source",
       "format_ref": "png_rgba",
-      "metatile": "2 2",
+      "metatile": "1 1",
       "metadata": {
         "title": "WRF Daily Total Rainfall"
       }
@@ -417,7 +417,7 @@
       "name": "wrf_extreme_heavy",
       "source": "wrf_extreme_heavy_source",
       "format_ref": "png_rgba",
-      "metatile": "2 2",
+      "metatile": "1 1",
       "metadata": {
         "title": "WRF Heavy Rainfall"
       }
@@ -426,7 +426,7 @@
       "name": "wrf_extreme_very_heavy",
       "source": "wrf_extreme_very_heavy_source",
       "format_ref": "png_rgba",
-      "metatile": "2 2",
+      "metatile": "1 1",
       "metadata": {
         "title": "WRF Very Heavy Rainfall"
       }
@@ -435,7 +435,7 @@
       "name": "wrf_extreme_extremely_heavy",
       "source": "wrf_extreme_extremely_heavy_source",
       "format_ref": "png_rgba",
-      "metatile": "2 2",
+      "metatile": "1 1",
       "metadata": {
         "title": "WRF Extremely Heavy Rainfall"
       }

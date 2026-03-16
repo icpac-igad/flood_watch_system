@@ -432,7 +432,7 @@ class MapControlsButtons extends PureComponent {
         <div className={`c-map-controls ${className || ""}`}>
           {isDesktop ? (
             <Fragment>
-              {!hidePanels && (
+              {!hidePanels && showBasemaps && (
                 <div className="map-actions">
                   {this.renderBasemapsTooltip()}
                 </div>
