@@ -333,7 +333,7 @@ jobs:
       - name: Preflight - check SSH reachability
         id: ssh_preflight
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || secrets.STAGING_HOST }}
         run: |
           if [ -z "${DEPLOY_HOST}" ]; then
             echo "reachable=false" >> "$GITHUB_OUTPUT"
@@ -353,9 +353,9 @@ jobs:
         id: ssh_auth_preflight
         if: steps.ssh_preflight.outputs.reachable == 'true'
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          SSH_KEY: ${{ secrets.SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || secrets.STAGING_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || secrets.STAGING_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY || secrets.STAGING_SSH_KEY }}
         run: |
           if [ -z "${DEPLOY_USER}" ] || [ -z "${SSH_KEY}" ]; then
             echo "auth_ok=false" >> "$GITHUB_OUTPUT"
@@ -406,9 +406,9 @@ jobs:
           SMTP_EMAIL_HOST_PASSWORD: ${{ secrets.SMTP_EMAIL_HOST_PASSWORD }}
           SKIP_BACKUP: ${{ github.event.inputs.skip_backup }}
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          host: ${{ secrets.DEPLOY_HOST || secrets.STAGING_HOST }}
+          username: ${{ secrets.DEPLOY_USER || secrets.STAGING_USER }}
+          key: ${{ secrets.SSH_KEY || secrets.STAGING_SSH_KEY }}
           port: 22
           command_timeout: 45m
           envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,SFTP_HOST,SFTP_USERNAME,SFTP_PASSWORD,FLOODPROOFS_SFTP_HOST,FLOODPROOFS_SFTP_USER,FLOODPROOFS_SFTP_PASSWORD,ENSEMBLE_FTP_HOST,ENSEMBLE_FTP_USER,ENSEMBLE_FTP_PASSWORD,WRF_FTP_HOST,WRF_FTP_USER,WRF_FTP_PASSWORD,FLOODS_API_KEY,SMTP_EMAIL_HOST,SMTP_EMAIL_HOST_USER,SMTP_EMAIL_HOST_PASSWORD,SKIP_BACKUP
