@@ -137,7 +137,8 @@
     "immutable": "^4.3.8",
     "minimatch": "^9.0.7",
     "dompurify": "^3.2.4",
-    "jsondiffpatch": "^0.7.2"
+    "jsondiffpatch": "^0.7.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "cacheDirectories": [
     ".next/cache"
