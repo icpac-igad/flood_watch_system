@@ -164,6 +164,36 @@
       "timeout": 300
     },
     {
+      "name": "admin0_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "admin0_fill,admin0_outline",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    },
+    {
+      "name": "admin1_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "admin1_outline",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    },
+    {
+      "name": "admin2_source",
+      "type": "wms",
+      "url_ref": "eafw_mapserver",
+      "layers": "admin2_outline",
+      "format": "image/png",
+      "transparent": "true",
+      "connection_timeout": 30,
+      "timeout": 300
+    },
+    {
       "name": "landscan_population_source",
       "type": "wms",
       "url_ref": "eafw_mapserver",
@@ -231,6 +261,33 @@
     ]
   },
   "tilesets": [
+    {
+      "name": "admin0_boundaries",
+      "source": "admin0_source",
+      "format_ref": "png_rgba",
+      "no_dimensions": true,
+      "metadata": {
+        "title": "Admin Level 0 Country Boundaries"
+      }
+    },
+    {
+      "name": "admin1_boundaries",
+      "source": "admin1_source",
+      "format_ref": "png_rgba",
+      "no_dimensions": true,
+      "metadata": {
+        "title": "Admin Level 1 Sub-National Boundaries"
+      }
+    },
+    {
+      "name": "admin2_boundaries",
+      "source": "admin2_source",
+      "format_ref": "png_rgba",
+      "no_dimensions": true,
+      "metadata": {
+        "title": "Admin Level 2 District Boundaries"
+      }
+    },
     {
       "name": "daily_hmc_alert",
       "source": "daily_hmc_alert_source",

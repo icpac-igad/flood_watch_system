@@ -603,9 +603,8 @@ class MapComponent extends Component {
 
         const currentZoom = this.map.getZoom();
         const maxZoom = typeof this.map.getMaxZoom === "function" ? this.map.getMaxZoom() : 19;
-        // Step deeper than the cluster threshold so one click is more likely
-        // to explode a cluster into individual points.
-        const targetZoom = Math.min(maxZoom, Math.max(currentZoom + 1.5, clusterZoom + 1.5));
+        // Jump directly past cluster threshold so one click explodes to individual points.
+        const targetZoom = Math.min(maxZoom, clusterZoom + 2);
 
         this.map.easeTo({
           center: { lng, lat },

@@ -1,0 +1,20 @@
+# Admin1 sub-national boundaries (states/regions/provinces)
+
+LAYER
+    INCLUDE "config/database.map"
+    NAME "admin1_outline"
+    TYPE POLYGON
+    STATUS ON
+    DATA "geom from (select a.id, a.geom from gha.admin1 a) as subq using unique id using srid=4326"
+    INCLUDE "shared/common-layer-properties.map"
+    CLASS
+        STYLE
+            OUTLINECOLOR 100 120 140
+            WIDTH 0.8
+        END
+    END
+    METADATA
+        "wms_title" "Admin1 Sub-National Boundaries"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+END

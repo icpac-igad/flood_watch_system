@@ -1,0 +1,21 @@
+# Admin2 district-level boundaries
+
+LAYER
+    INCLUDE "config/database.map"
+    NAME "admin2_outline"
+    TYPE POLYGON
+    STATUS ON
+    DATA "geom from (select a.id, a.geom from gha.admin2 a) as subq using unique id using srid=4326"
+    INCLUDE "shared/common-layer-properties.map"
+    MAXSCALEDENOM 5000000
+    CLASS
+        STYLE
+            OUTLINECOLOR 140 150 160
+            WIDTH 0.5
+        END
+    END
+    METADATA
+        "wms_title" "Admin2 District Boundaries"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+END
