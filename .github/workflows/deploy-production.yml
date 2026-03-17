@@ -561,12 +561,19 @@ jobs:
               fi
             }
 
-            upsert_env "API_IMAGE_NAME" "$(resolve_image_ref eafw-api)"
-            upsert_env "WEB_IMAGE_NAME" "$(resolve_image_ref eafw-cms)"
-            upsert_env "MAPVIEWER_IMAGE_NAME" "$(resolve_image_ref eafw-mapviewer)"
-            upsert_env "MAPSERVER_IMAGE_NAME" "$(resolve_image_ref eafw-mapserver)"
-            upsert_env "MAPCACHE_IMAGE_NAME" "$(resolve_image_ref eafw-mapcache)"
-            upsert_env "JOBS_IMAGE_NAME" "$(resolve_image_ref eafw-jobs)"
+            API_IMAGE_NAME="$(resolve_image_ref eafw-api)"
+            WEB_IMAGE_NAME="$(resolve_image_ref eafw-cms)"
+            MAPVIEWER_IMAGE_NAME="$(resolve_image_ref eafw-mapviewer)"
+            MAPSERVER_IMAGE_NAME="$(resolve_image_ref eafw-mapserver)"
+            MAPCACHE_IMAGE_NAME="$(resolve_image_ref eafw-mapcache)"
+            JOBS_IMAGE_NAME="$(resolve_image_ref eafw-jobs)"
+
+            upsert_env "API_IMAGE_NAME" "${API_IMAGE_NAME}"
+            upsert_env "WEB_IMAGE_NAME" "${WEB_IMAGE_NAME}"
+            upsert_env "MAPVIEWER_IMAGE_NAME" "${MAPVIEWER_IMAGE_NAME}"
+            upsert_env "MAPSERVER_IMAGE_NAME" "${MAPSERVER_IMAGE_NAME}"
+            upsert_env "MAPCACHE_IMAGE_NAME" "${MAPCACHE_IMAGE_NAME}"
+            upsert_env "JOBS_IMAGE_NAME" "${JOBS_IMAGE_NAME}"
 
             # Compare checksums to detect secret changes
             ENV_CHECKSUM_AFTER=$(sha256sum .env | cut -d' ' -f1)
