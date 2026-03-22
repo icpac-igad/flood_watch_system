@@ -1,7 +1,7 @@
 # FloodWatch Platform Feedback — WHCA / WMO
 
-**Source:** Rishi Tripathi (WMO) — rtripathi@wmo.int
-**Date:** March 2026
+**Source:** Ramesh Tripathi (WMO) — rtripathi@wmo.int
+**Date:** March 20, 2026
 
 ---
 
@@ -32,9 +32,26 @@ Add the following project context (e.g. in footer or About section):
 
 ![WHCA page on current site](feedback-images/feedback_image_14.png)
 
+### **Comment (RT):** WHCA Launch Page
+> I suggest to still keep the Launch page for WHCA. If integrated into http://floodwatch.icpac.net/ or stand alone WHCA page where NMHSs can go there at the start and on Login to platform click goes to http://floodwatch.icpac.net/
+>
+> This will be good for visibility to donor and also partners and specific support that can be provided in the Launch page.
+>
+> - Contact for HelpDesk
+> - Training materials can be added such as user guide or operational procedures
+> - Partners model specific info etc.
+
 ---
 
-## 2. Map Icons — Differentiate Station Types
+## 2. Platform Title & Branding
+
+### **Comment (RT):** Title and Icons
+> - **"Nile Flood Watch"** as the title and project icon
+> - On the side, put **WHCA icon**
+
+---
+
+## 3. Map Icons — Differentiate Station Types
 
 Currently all points use the same icon. The proposal is to differentiate:
 
@@ -47,7 +64,26 @@ This helps users distinguish between real station locations and modeled flood pl
 
 ---
 
-## 3. Sidebar Panel Reorganization
+## 4. Alert Color Coding — Use CAP Standard
+
+### **Comment (RT):** Standard CAP Warning Colors
+> I suggest to keep icon and marked levels as standard colour coding with the CAP type warning so that country understanding remains from Hydrology and Meteorology Thresholds:
+>
+> - 🟢 **GREEN (No Warning/Normal):** No meteorological risk is expected. Normal conditions prevail, with no special precautions required.
+> - 🟡 **YELLOW (Be Aware/Moderate):** Hazardous weather is possible, which may cause minor damage, localized, or short-term impacts. This is the most common alert level, requiring monitoring of the situation.
+> - 🟠 **ORANGE (Be Prepared/Severe):** Severe weather is expected, likely to cause significant damage, major disruptions, or serious health impacts. These are less common than yellow alerts and require immediate precautionary measures.
+> - 🔴 **RED (Take Action/Extreme):** Very dangerous, extreme, or life-threatening weather is expected, likely causing widespread, severe damage or disruption. Immediate action to ensure safety should be taken.
+
+### **Comment (RT):** Regional Variations
+> - **Canada (ECCC):** Uses a tri-coloured system (Yellow, Orange, Red) for warnings/watches
+> - **Meteoalarm (Europe):** Uses a four-level system (Green, Yellow, Orange, Red) to harmonize alerts across Europe
+> - **India (IMD):** Follows a four-stage system (Green, Yellow, Orange, Red) for various meteorological phenomena
+
+**Note:** Current FloodWatch thresholds use flow-based levels: Warning (≥300 m³/s), Alarm (≥500 m³/s), Emergency (≥750 m³/s). Mapping these to CAP Green/Yellow/Orange/Red needs alignment.
+
+---
+
+## 5. Sidebar Panel Reorganization
 
 The sidebar (black circle area in screenshot) should be reorganized into two tabs:
 
@@ -64,7 +100,7 @@ The sidebar (black circle area in screenshot) should be reorganized into two tab
 
 ---
 
-## 4. Date/Time Selector Bar
+## 6. Date/Time Selector Bar
 
 Add a **Start Time** and **End Time** selector bar (red circle area in screenshot), visible in the map toolbar.
 
@@ -74,17 +110,17 @@ The selector should allow users to pick a time range for viewing forecasts and o
 
 ---
 
-## 5. Show All Forecasting Points at All Zoom Levels
+## 7. Show All Forecasting Points at All Zoom Levels
 
 ![Map view showing partial points](feedback-images/feedback_image_9.png)
 
 Currently, only a few forecasting points are shown at lower zoom levels; others only appear when zooming in.
 
-**Request:** Show **all forecasting points** — both stations and dummy flood plain points — at all zoom levels. This gives users the full picture without needing to zoom in.
+**Request:** Show **all forecasting points** — both stations and dummy flood plain points — at all zoom levels.
 
 ---
 
-## 6. Hazard Layers
+## 8. Hazard Layers
 
 - Add a **Hazards** icon in the layer panel
 - Show **hazard maps for different return periods** as static layers:

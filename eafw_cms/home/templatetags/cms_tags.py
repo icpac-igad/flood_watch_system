@@ -183,6 +183,60 @@ def homepage_partners(stream_value):
     return featured_items or items
 
 
+NILE_BASIN_CODES = {"ET", "RW", "SS", "SD", "UG"}
+
+
+@register.filter
+def nile_basin_countries(stream_value):
+    """Filter member countries to Nile Basin 5: Ethiopia, Rwanda, South Sudan, Sudan, Uganda."""
+    items = _stream_items(stream_value)
+    if not items:
+        return []
+    return [b for b in items if _country_code_from_block(b) in NILE_BASIN_CODES]
+
+
+@register.filter
+def sort_partners(stream_value):
+    """Sort partners alphabetically by name."""
+    items = _stream_items(stream_value)
+    if not items:
+        return []
+
+    def _name(block):
+        value = _block_value(block)
+        if value is None:
+            return ""
+        if hasattr(value, "get"):
+            return (value.get("name") or "").strip().lower()
+        return (getattr(value, "name", "") or "").strip().lower()
+
+    return sorted(items, key=_name)
+
+
+@register.filter
+def exclude_partner(stream_value, name_fragment):
+    """Exclude partners whose name contains the given fragment (case-insensitive)."""
+    items = _stream_items(stream_value)
+    if not items:
+        return []
+    fragment = (name_fragment or "").strip().lower()
+    if not fragment:
+        return items
+
+    def _matches(block):
+        value = _block_value(block)
+        if value is None:
+            return False
+        n = ""
+        if hasattr(value, "get"):
+            n = (value.get("name") or "").lower()
+        else:
+            n = (getattr(value, "name", "") or "").lower()
+        return fragment in n
+
+    return [b for b in items if not _matches(b)]
+
+
 @register.simple_tag
 def safe_image_url(image, spec="original"):
     """

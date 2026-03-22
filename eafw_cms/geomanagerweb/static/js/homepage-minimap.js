@@ -322,12 +322,10 @@
             '/api/v1/multimodal/situation-summary'
         ],
         admin0: [
-            '/tipg/collections/gha.admin0/items?f=geojson&limit=100',
-            '/api/v1/boundaries/admin0'
+            '/api/v1/boundaries/admin0',
         ],
         admin1: [
-            '/tipg/collections/gha.admin1/items?f=geojson&limit=500',
-            '/api/v1/boundaries/admin1'
+            '/api/v1/boundaries/admin1',
         ],
         riskMajority: [
             '/api/v1/risk/risk-majority'
@@ -2027,7 +2025,7 @@
         var tileBaseUrl = window.location.protocol + '//' + window.location.host;
         miniMap.addSource(ADMIN0_SOURCE_ID, {
             type: 'vector',
-            tiles: [tileBaseUrl + '/tipg/collections/gha.admin0/tiles/WebMercatorQuad/{z}/{x}/{y}'],
+            tiles: [tileBaseUrl + '/pg/tileserv/gha.whca_admin0/{z}/{x}/{y}.pbf'],
             minzoom: 0,
             maxzoom: 12
         });
@@ -2042,7 +2040,7 @@
             id: ADMIN0_FILL_LAYER_ID,
             type: 'fill',
             source: ADMIN0_SOURCE_ID,
-            'source-layer': 'default',
+            'source-layer': 'gha.whca_admin0',
             paint: {
                 'fill-color': '#2a6f97',
                 'fill-opacity': 0.1
@@ -2054,7 +2052,7 @@
             id: ADMIN0_LINE_LAYER_ID,
             type: 'line',
             source: ADMIN0_SOURCE_ID,
-            'source-layer': 'default',
+            'source-layer': 'gha.whca_admin0',
             paint: {
                 'line-color': '#0f3854',
                 'line-width': ['interpolate', ['linear'], ['zoom'], 3, 1.1, 6, 1.7, 9, 2.3],
@@ -2273,8 +2271,8 @@
 
             clearExtremeRainfallLayer();
 
-            // MapServer SQL auto-resolves the best forecast run for the date.
-            const today = new Date().toISOString().slice(0, 10);
+            // Use the latest available date from the API
+            const today = await getLatestWrfExtremeRainfallDate() || new Date().toISOString().slice(0, 10);
             const beforeLayer = miniMap.getLayer(FOCUS_MASK_LAYER_ID) ? FOCUS_MASK_LAYER_ID
                 : (miniMap.getLayer(ADMIN0_FILL_LAYER_ID) ? ADMIN0_FILL_LAYER_ID : undefined);
 
@@ -2358,10 +2356,8 @@
             return wrfTotalRainfallDateCache;
         }
 
-        // Use extreme-rainfall dates endpoint — both layers share the same
-        // WRF forecast runs, and forecast_date is the run start date which
-        // the get_total_rainfall_tiles function uses to sum the 7-day window.
-        const payload = await fetchJsonWithFallback(apiEndpoints.wrfExtremeRainfallDates);
+        // Use daily-rainfall dates endpoint for total rainfall layer
+        const payload = await fetchJsonWithFallback(apiEndpoints.wrfDailyRainfallDates);
         const timestamps = Array.isArray(payload?.timestamps)
             ? payload.timestamps
             : (Array.isArray(payload?.dates) ? payload.dates : []);
@@ -2388,9 +2384,8 @@
 
             clearTotalRainfallLayer();
 
-            // Use MapServer WMS tiles — the SQL function auto-resolves the
-            // best forecast run for the given date, so just pass today.
-            const today = new Date().toISOString().slice(0, 10);
+            // Use the latest available date from the API
+            const today = await getLatestWrfTotalRainfallDate() || new Date().toISOString().slice(0, 10);
             // Scope clipping: pass scope/project_countries to MapServer
             const scopeConfig = MAP_SCOPE_CONFIG[selectedMapScope];
             const projectCountries = getScopeProjectCountries(scopeConfig).join(',');

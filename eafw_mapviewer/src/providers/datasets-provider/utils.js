@@ -114,35 +114,6 @@ const tileLayerUpdateProvider = (layer) => {
   };
 };
 
-// TiTiler/pgSTAC raster tile provider — uses the same timestamp-fetching
-// mechanism as raster_tile but is identified by the "titiler" layerType so
-// the CMS can distinguish layers served via /cog-tiles/ from legacy WMS.
-const titilerUpdateProvider = (layer) => {
-  const {
-    currentTimeMethod,
-    autoUpdateInterval,
-    settings = {},
-    tileJsonUrl,
-    timestampsResponseObjectKey,
-  } = layer;
-
-  const { autoUpdateActive = true } = settings;
-
-  return {
-    layer: layer,
-    getTimestamps: tileJsonUrl
-      ? () => fetchUrlTimestamps(tileJsonUrl, timestampsResponseObjectKey || "timestamps")
-      : undefined,
-    getCurrentLayerTime: (timestamps) => {
-      return getLayerTime(timestamps, currentTimeMethod);
-    },
-    ...(!!autoUpdateInterval &&
-      autoUpdateActive && {
-        updateInterval: autoUpdateInterval,
-      }),
-  };
-};
-
 export const createUpdateProviders = (activeLayers) => {
   const providers = activeLayers.reduce((all, layer) => {
     const { layerType, multiTemporal } = layer;
@@ -156,9 +127,6 @@ export const createUpdateProviders = (activeLayers) => {
           break;
         case "wms":
           provider = wmsUpdateProvider(layer);
-          break;
-        case "titiler":
-          provider = titilerUpdateProvider(layer);
           break;
         case "raster_tile":
           provider = tileLayerUpdateProvider(layer);

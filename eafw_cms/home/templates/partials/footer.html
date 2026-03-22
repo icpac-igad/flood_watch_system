@@ -9,13 +9,18 @@
           {% image footer.logo max-50x50 class="footer-logo" alt="ICPAC" %}
         {% endif %}
         <div class="footer-info">
-          <span class="footer-title" id="footer-site-title">East Africa Flood Watch</span>
+          <span class="footer-title" id="footer-site-title">Nile Flood Watch</span>
           <span class="footer-desc" id="footer-site-desc">{{ footer.description }}</span>
         </div>
       </div>
       <div class="footer-links">
         <a href="https://www.icpac.net/data-center/" target="_blank" rel="noopener noreferrer" class="footer-link">Data Center</a>
       </div>
+    </div>
+    <div class="footer-contacts">
+      <span class="footer-contacts-label">Technical Contacts:</span>
+      <a href="mailto:rtripathi@wmo.int" class="footer-contact-link">WMO: Ramesh Tripathi</a>
+      <a href="mailto:disaster-risk-management@igad.int" class="footer-contact-link">ICPAC: Disaster Risk Management Programme</a>
     </div>
     <span class="copyright">&copy; {{ footer.copyright_organization }} {% now "Y" %}. All rights reserved.</span>
   </div>
@@ -95,6 +100,31 @@
     color: #fff;
   }
 
+  .footer-contacts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.82);
+  }
+
+  .footer-contacts-label {
+    color: #fff;
+    font-weight: 600;
+  }
+
+  .footer-contact-link {
+    color: rgba(255,255,255,0.88);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .footer-contact-link:hover {
+    color: #fff;
+    text-decoration: underline;
+  }
+
   .copyright {
     font-size: 0.75rem;
     opacity: 0.7;
@@ -119,6 +149,11 @@
 
     .footer-brand {
       flex-direction: column;
+      text-align: center;
+    }
+
+    .footer-contacts {
+      justify-content: center;
       text-align: center;
     }
   }

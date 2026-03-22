@@ -1,6 +1,4 @@
 import { ALERT_COLORS, DEFAULT_THRESHOLDS, ALERT_ICON_NAMES, CLUSTER_ICON_PREFIX } from './multimodal-config';
-import { isTitilerTileUrl } from './stac-tiles';
-import { applyTitilerStyleDefaults } from './titiler-style-presets';
 
 // FloodWatch Custom: Params that should be passed to backend for filtering
 // These are the ONLY params we want to add to pg_tileserv URLs
@@ -412,7 +410,7 @@ const sanitizeTemplateParams = (url) => {
       }
 
       // Remove unresolved placeholders like date={{time}} that can break SQL casts,
-      // but preserve map coordinate placeholders needed by maplibre/mapcache/titiler.
+      // but preserve map coordinate placeholders needed by maplibre/mapcache.
       if (isTemplateToken(normalizedValue) && !SAFE_TILE_TEMPLATE_VALUES.has(normalizedValue)) {
         return false;
       }
@@ -459,10 +457,8 @@ const absolutizeRuntimeUrl = (url = '') => {
       '/tileserv/',
       '/mapcache/',
       '/mapserver/',
-      '/cog-tiles/',
       '/media/',
       '/static/',
-      '/stac-browser/api/',
     ];
     const shouldForceSameOrigin =
       parsed.origin !== origin &&
@@ -599,8 +595,7 @@ const appendGeojsonParamsToUrl = (url, params = {}) => {
 
 const isWmsTileUrl = (url = '') => /SERVICE=WMS/i.test(url) || url.includes('/mapserver/') || url.includes('/mapcache/');
 
-// Detect any raster tile URL that needs clipping scope params (WMS or TiTiler).
-const isRasterTileUrl = (url = '') => isWmsTileUrl(url) || isTitilerTileUrl(url);
+const isRasterTileUrl = (url = '') => isWmsTileUrl(url);
 
 // =============================================================================
 // FloodWatch Custom: WHCA Countries Filter - Tile source swapping
@@ -1190,23 +1185,6 @@ export const processLayers = (layers, paramInteractions, mapSide) => {
         }
       );
 
-      // Apply TiTiler style defaults (colormaps, rescale, resampling) as the
-      // FINAL step, after every URL manipulation is complete.  This guarantees
-      // the encoded colormap JSON is never corrupted by intermediate URL
-      // reconstruction in filter/param functions.
-      const styledFinalTiles = newLayer.layerConfig?.source?.tiles?.[0];
-      if (styledFinalTiles) {
-        const withStyles = applyTitilerStyleDefaults(styledFinalTiles);
-        if (withStyles !== styledFinalTiles) {
-          newLayer.layerConfig = {
-            ...newLayer.layerConfig,
-            source: {
-              ...newLayer.layerConfig.source,
-              tiles: [withStyles],
-            },
-          };
-        }
-      }
     }
 
     return newLayer;
