@@ -18,7 +18,8 @@ node_modules/
 # Docker volumes
 docker/volumes/
 logs/
-data/
+**/docker/volumes/
+**/data/mapfiles/
 
 # IDE
 .idea/
