@@ -181,7 +181,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./eafw_geomanager_web
-          file: ./eafw_geomanager_web/docker/mapcache/Dockerfile
+          file: docker/mapcache/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapcache:latest
