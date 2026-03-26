@@ -96,7 +96,7 @@ services:
     platform: linux/x86_64
     container_name: ${WEB_CNTR_NAME:-eafw-cms}
     image: ${WEB_IMAGE_NAME:-icpac/eafw-cms:local}
-    pull_policy: never
+    pull_policy: ${PULL_POLICY:-never}
     build:
       context: .
       dockerfile: ./docker/cms/Dockerfile
@@ -146,7 +146,7 @@ services:
     platform: linux/x86_64
     container_name: ${MAPVIEWER_CNTR_NAME:-eafw-mapviewer}
     image: ${MAPVIEWER_IMAGE_NAME:-icpac/eafw-mapviewer:local}
-    pull_policy: never
+    pull_policy: ${PULL_POLICY:-never}
     restart: ${RESTART_POLICY:-unless-stopped}
     build:
       context: ../eafw_geomapviewer
@@ -180,7 +180,7 @@ services:
         - GDAL_DATA=${GDAL_DATA_DIR:-/usr/share/gdal}
     container_name: ${MAPSERVER_CNTR_NAME:-eafw-mapserver}
     image: ${MAPSERVER_IMAGE_NAME:-icpac/eafw-mapserver:local}
-    pull_policy: never
+    pull_policy: ${PULL_POLICY:-never}
     restart: ${RESTART_POLICY:-unless-stopped}
     depends_on:
       - geomanager_pgbouncer
@@ -217,7 +217,7 @@ services:
         - MAPCACHE_BRANCH=${MAPCACHE_BRANCH:-main}
         - NGINX_VERISON=${NGINX_VERISON:-1.24.0}
     image: ${MAPCACHE_IMAGE_NAME:-icpac/eafw-mapcache:local}
-    pull_policy: never
+    pull_policy: ${PULL_POLICY:-never}
     container_name: ${MAPCACHE_CNTR_NAME:-eafw-mapcache}
     restart: ${RESTART_POLICY:-unless-stopped}
     depends_on:
@@ -265,7 +265,7 @@ services:
     platform: linux/x86_64
     container_name: ${JOBS_CNTR_NAME:-eafw-jobs}
     image: ${JOBS_IMAGE_NAME:-icpac/eafw-jobs:local}
-    pull_policy: never
+    pull_policy: ${PULL_POLICY:-never}
     build:
       context: .
       dockerfile: docker/jobs/Dockerfile

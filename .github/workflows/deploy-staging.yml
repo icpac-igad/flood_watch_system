@@ -308,6 +308,13 @@ jobs:
               ls -t ~/eafw-backups/staging_db_*.dump 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null
             fi
 
+            # Stop old project containers (from previous monorepo layout)
+            if [ -f ~/flood_watch_system/docker-compose.staging.yml ]; then
+              docker compose -f ~/flood_watch_system/docker-compose.staging.yml --env-file ~/flood_watch_system/.env down 2>/dev/null || true
+            fi
+            # Also remove any leftover eafw containers by name
+            docker ps -a --format '{{.Names}}' | grep '^eafw-' | xargs -r docker rm -f 2>/dev/null || true
+
             # Pull and deploy
             docker compose pull --ignore-pull-failures
             docker compose up -d
