@@ -1,0 +1,106 @@
+
+{% load static wagtailcore_tags wagtailuserbar wagtailimages_tags wagtailsettings_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>
+        {% block title %}
+        {% if page.seo_title %}{{ page.seo_title }}{% else %}{{ page.title }}{% endif %}
+        {% endblock %}
+        {% block title_suffix %}
+        {% wagtail_site as current_site %}
+        {% if current_site and current_site.site_name %}- {{ current_site.site_name }}{% endif %}
+        {% endblock %}
+    </title>
+    {% if page.search_description %}
+    <meta name="description" content="{{ page.search_description }}"/>
+    {% endif %}
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+    <!-- Browser Tab Icon (Favicon) -->
+    {% get_settings %}
+    {% if settings.home.SiteSettings.tabicon %}
+        {% image settings.home.SiteSettings.tabicon fill-32x32 as tabicon_32 %}
+        {% image settings.home.SiteSettings.tabicon fill-16x16 as tabicon_16 %}
+        {% image settings.home.SiteSettings.tabicon max-180x180 as tabicon_apple %}
+        <link rel="icon" type="image/png" href="{{ tabicon_32.url }}" sizes="32x32">
+        <link rel="icon" type="image/png" href="{{ tabicon_16.url }}" sizes="16x16">
+        <link rel="apple-touch-icon" href="{{ tabicon_apple.url }}">
+        <link rel="shortcut icon" href="{{ tabicon_32.url }}">
+    {% endif %}
+
+    {% if request.in_preview_panel %}<base target="_blank">{% endif %}
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Sans:300,300i,400,400i,500,500i">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/geomanagerweb.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        html, body { height: 100%; margin: 0; }
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .content-wrapper {
+            flex: 1;
+            padding-bottom: 1.5rem;
+        }
+    </style>
+    <!-- Dynamic Theming CSS Variables -->
+    <style>
+    :root {
+        /* Core color variables */
+        --primary-color: {{ theme.primary_color }};
+        --secondary-color: {{ theme.secondary_color }};
+        --accent-color: {{ theme.accent_color }};
+        --primary-text-color: {{ theme.primary_text_color }};
+        --secondary-text-color: {{ theme.secondary_text_color }};
+        --background-color: {{ theme.background_color }};
+
+        /* Derived variables */
+        --primary-hover: color-mix(in srgb, var(--primary-color) 90%, black);
+        --secondary-hover: color-mix(in srgb, var(--secondary-color) 90%, black);
+        --accent-hover: color-mix(in srgb, var(--accent-color) 90%, black);
+
+        /* Semantic variables */
+        --navbar-bg: var(--primary-color);
+        --navbar-text: var(--primary-text-color);
+        --footer-bg: var(--primary-color);
+        --footer-text: var(--primary-text-color);
+        --button-primary-bg: var(--secondary-color);
+        --button-primary-text: var(--primary-text-color);
+        --button-accent-bg: var(--accent-color);
+        --button-accent-text: var(--secondary-text-color);
+        --card-bg: var(--background-color);
+        --text-body: var(--secondary-text-color);
+    }
+    </style>
+
+    <!-- Hide Google Translate toolbar -->
+    <style>
+      .goog-te-banner-frame, .skiptranslate { display: none !important; }
+      body { top: 0 !important; }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body class="{% block body_class %}{% endblock %}">
+    {% include "partials/navbar.html" %}
+    {% wagtailuserbar %}
+
+    <div class="content-wrapper">
+        {% block content %}{% endblock %}
+    </div>
+
+    {% include "partials/footer.html" %}
+
+    <script src="{% static 'js/progressively.js' %}"></script>
+    <script>progressively.init()</script>
+    {% block extra_js %}{% endblock %}
+    {% include "partials/google_translate.html" %}
+</body>
+</html>

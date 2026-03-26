@@ -1,0 +1,117 @@
+{% if language_settings and language_settings.multilanguage_enabled %}
+<!-- Google Translate -->
+<div id="google_translate_element" style="display:none;"></div>
+<script type="text/javascript">
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    function setCookie(name, value, days) {
+        var expires = "";
+        if (days) {
+            var date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "") + expires + "; path=/";
+    }
+
+    function googleTranslateElementInit() {
+        new google.translate.TranslateElement({
+            pageLanguage: 'en',
+            includedLanguages: '{% for lang in languages %}{{ lang.code }}{% if not forloop.last %},{% endif %}{% endfor %}',
+            layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+            autoDisplay: false
+        }, 'google_translate_element');
+    }
+
+    function deleteCookie(name) {
+        var past = "; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        var h = document.location.hostname;
+        document.cookie = name + "=" + past + "; path=/";
+        document.cookie = name + "=" + past + "; path=/; domain=" + h;
+        document.cookie = name + "=" + past + "; path=/; domain=." + h;
+    }
+
+    function switchLanguage(lang) {
+        deleteCookie('googtrans');
+        setCookie('googtrans', '/en/' + lang, 1);
+        window.location.reload();
+    }
+
+    var defaultLangCode = '{{ default_language.code|default:"en" }}';
+
+    // Auto-set default language on first visit
+    (function() {
+        const langCookie = getCookie('googtrans');
+        if (!langCookie && defaultLangCode !== 'en') {
+            setCookie('googtrans', '/en/' + defaultLangCode, 1);
+            window.location.reload();
+        }
+    })();
+
+    // Update active language display based on current cookie
+    document.addEventListener('DOMContentLoaded', function() {
+        const langCookie = getCookie('googtrans');
+        let currentLang = defaultLangCode;
+
+        if (langCookie) {
+            const match = langCookie.match(/\/en\/([^;]+)/);
+            if (match) {
+                currentLang = match[1];
+            }
+        }
+
+        // Update switcher button label
+        const label = document.getElementById('active-lang-label');
+        if (label) {
+            label.textContent = currentLang.toUpperCase();
+        }
+
+        // Highlight active language in dropdown
+        const langItems = document.querySelectorAll('.lang-dropdown .nav-dropdown-item');
+        langItems.forEach(function(item) {
+            if (item.getAttribute('data-lang') === currentLang) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    });
+</script>
+<script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<script type="text/javascript">
+    // Continuously suppress Google Translate highlight styles
+    (function() {
+        var style = document.createElement('style');
+        style.setAttribute('id', 'gt-highlight-fix');
+        style.textContent =
+            '.goog-text-highlight { background-color: transparent !important; background: none !important; box-shadow: none !important; border: none !important; }' +
+            '#goog-gt-tt, .goog-te-balloon-frame { display: none !important; }' +
+            'font > font { background-color: transparent !important; background: none !important; box-shadow: none !important; }';
+
+        // Re-append our style to ensure it stays last (highest priority)
+        var observer = new MutationObserver(function() {
+            var existing = document.getElementById('gt-highlight-fix');
+            if (existing && existing !== document.head.lastElementChild) {
+                document.head.appendChild(existing);
+            }
+            if (!existing) {
+                document.head.appendChild(style);
+            }
+        });
+
+        if (document.head) {
+            document.head.appendChild(style);
+            observer.observe(document.head, { childList: true });
+        } else {
+            document.addEventListener('DOMContentLoaded', function() {
+                document.head.appendChild(style);
+                observer.observe(document.head, { childList: true });
+            });
+        }
+    })();
+</script>
+{% endif %}

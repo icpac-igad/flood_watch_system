@@ -1,0 +1,1339 @@
+{% load static mapwidget_tags wagtailimages_tags wagtailiconchooser_tags %}
+{% if map_widget.show_map_widget and datasets %}
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css">
+<style>
+  .map-widget-section { background-color: var(--background-color); }
+
+  /* ── Map wrapper ── */
+  .map-widget-wrapper {
+    position: relative;
+    height: 500px;
+    width: min(92%, 640px);
+    max-width: 100%;
+    margin: 0 auto;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.13);
+  }
+
+  #homepage-map { width: 100%; height: 100%; }
+
+  /* ── Dataset panel — overlaid top-left inside map ── */
+  .map-dataset-panel {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .map-scope-toggle {
+    position: absolute;
+    top: 14px;
+    right: 58px;
+    z-index: 6;
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.74);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .scope-btn {
+    padding: 6px 13px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: rgba(20, 20, 20, 0.72);
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+
+  .scope-btn + .scope-btn {
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+  }
+
+  .scope-btn.is-active {
+    background: rgba(3, 73, 48, 0.94);
+    color: #fff;
+  }
+
+  .map-dataset-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  /* Circle icon badge */
+  .mdb-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(45, 48, 47, 0.74);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    transition: background 0.2s, transform 0.15s;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+
+  .mdb-icon svg {
+    width: 16px;
+    height: 16px;
+    fill: #fff;
+  }
+
+  /* Text label */
+  .mdb-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(37, 37, 37, 0.76);
+    padding: 5px 10px 6px;
+    border-radius: 20px;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    max-width: 180px;
+    opacity: 1;
+    overflow: hidden;
+    transition: background 0.2s, color 0.2s, transform 0.18s ease;
+    white-space: nowrap;
+    text-shadow: none;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* Hover — inactive */
+  .map-dataset-btn:not(.is-active):hover .mdb-icon {
+    background: rgba(45, 48, 47, 0.9);
+    transform: scale(1.03);
+  }
+
+  /* Active */
+  .map-dataset-btn.is-active .mdb-icon {
+    background: var(--accent-color, #e07b00);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.2);
+  }
+
+  .map-dataset-btn.is-active .mdb-label,
+  .map-dataset-btn:hover .mdb-label,
+  .map-dataset-btn:focus-visible .mdb-label {
+    background: rgba(37, 37, 37, 0.84);
+    transform: translateX(0);
+  }
+
+  /* ── Loading spinner ── */
+  .map-widget-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.7);
+    z-index: 10;
+  }
+
+  .map-widget-spinner {
+    width: 36px;
+    height: 36px;
+    border: 4px solid var(--primary-color, #034930);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: mapwidget-spin 0.8s linear infinite;
+  }
+
+  @keyframes mapwidget-spin { to { transform: rotate(360deg); } }
+
+  /* ── Legend panel — bottom right ── */
+  #map-widget-legend {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 8px 10px;
+    border-radius: 12px;
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+    min-width: 118px;
+    max-width: 160px;
+    display: none;
+    z-index: 5;
+    pointer-events: none;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  #legend-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    font-size: 0.62rem;
+    color: rgba(0, 0, 0, 0.54);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  #legend-title:empty {
+    display: none;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+    font-size: 0.66rem;
+    color: rgba(0, 0, 0, 0.72);
+  }
+
+  .legend-swatch { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .legend-gradient-bar { height: 8px; border-radius: 999px; flex: 1; }
+  .legend-gradient-row { display: flex; align-items: center; gap: 4px; font-size: 0.6rem; margin-top: 2px; }
+  .legend-layer-title { font-size: 0.6rem; font-weight: 600; margin: 4px 0 2px; opacity: 0.56; }
+
+  /* ── CTA row below map ── */
+  .map-widget-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    margin-top: 1.1rem;
+  }
+
+  .map-cta-text {
+    font-size: 0.95rem;
+    color: var(--secondary-text-color, #555);
+  }
+
+  .map-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.6rem 1.4rem;
+    border-radius: 64px;
+    background: var(--secondary-color, #034930);
+    color: #fff;
+    font-weight: 500;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: opacity 0.18s;
+  }
+
+  .map-cta-btn .cta-arrow {
+    display: inline-block;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .map-cta-btn:hover { background: var(--secondary-hover, #023d25); border-color: var(--secondary-hover, #023d25); color: #fff; }
+  .map-cta-btn:hover .cta-arrow { transform: translateX(5px); }
+
+  /* ── Map logo — bottom left ── */
+  .map-widget-logo {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 5;
+    padding: 4px;
+    -webkit-backdrop-filter: blur(4px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  }
+  .map-widget-logo img {
+    display: block;
+    max-height: 52px;
+    max-width: 120px;
+    width: auto;
+    height: auto;
+  }
+
+  /* ── Date pill — compact bottom status chip ── */
+  .map-timing-pill {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    background: rgba(68, 68, 68, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fff;
+    padding: 9px 18px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100% - 220px);
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+    border: none;
+    transition: opacity 0.25s ease;
+  }
+
+  .map-timing-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #f0c24d;
+    flex-shrink: 0;
+  }
+
+  .map-timing-icon svg {
+    width: 15px;
+    height: 15px;
+    display: block;
+    stroke: currentColor;
+    stroke-width: 1.8;
+  }
+
+  .map-timing-pill.is-fading { opacity: 0; }
+
+  .map-timing-pill .pill-arrow {
+    appearance: none;
+    background: transparent;
+    border: none;
+    padding: 0 2px;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 0.72rem;
+    line-height: 1;
+    flex-shrink: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
+
+  .map-timing-pill .pill-arrow:hover:not(:disabled) {
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .map-timing-pill .pill-arrow:disabled {
+    color: rgba(255, 255, 255, 0.3);
+    cursor: default;
+  }
+
+  #map-timing-text {
+    min-width: 0;
+    text-align: left;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1024px) {
+    .map-widget-wrapper { width: 90%; }
+  }
+
+  @media (max-width: 768px) {
+    .map-widget-wrapper { height: 360px; width: 100%; }
+    .map-dataset-panel { top: 10px; left: 10px; gap: 7px; }
+    .map-scope-toggle { top: 10px; right: 50px; }
+    .scope-btn { padding: 5px 10px; font-size: 0.62rem; }
+    .mdb-icon { width: 32px; height: 32px; font-size: 0.86rem; }
+    .mdb-label { font-size: 0.66rem; padding: 4px 9px 5px; max-width: 150px; }
+    .map-widget-cta { flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+    .map-cta-text { font-size: 0.85rem; text-align: center; width: 100%; }
+    .map-cta-btn { font-size: 0.85rem; padding: 0.5rem 1.1rem; }
+    #map-widget-legend { max-width: 136px; min-width: 104px; }
+    .map-timing-pill {
+      bottom: 10px;
+      max-width: calc(100% - 130px);
+      font-size: 0.66rem;
+      padding: 7px 12px;
+      gap: 6px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .map-widget-wrapper { height: 300px; }
+
+    /* Map nav controls (+, -, home) */
+    .maplibregl-ctrl-group button {
+      width: 22px !important;
+      height: 22px !important;
+    }
+    .maplibregl-ctrl-icon {
+      background-size: 12px 12px !important;
+    }
+
+    /* Dataset toggles */
+    .map-dataset-panel { gap: 5px; }
+    .map-dataset-btn { gap: 5px; }
+    .mdb-icon { width: 26px; height: 26px; font-size: 0.75rem; }
+    .mdb-icon svg { width: 12px; height: 12px; }
+    .mdb-label { font-size: 0.58rem; padding: 3px 7px 4px; max-width: 112px; }
+    .map-scope-toggle { top: 8px; right: 42px; }
+    .scope-btn { padding: 4px 8px; font-size: 0.58rem; }
+
+    /* Legend */
+    #map-widget-legend {
+      bottom: 6px;
+      right: 4px;
+      padding: 5px 7px;
+      min-width: 90px;
+      max-width: 120px;
+      border-radius: 8px;
+    }
+    #legend-title { font-size: 0.48rem; margin-bottom: 2px; letter-spacing: 0.02em; }
+    .legend-layer-title { font-size: 0.42rem; margin: 3px 0 2px; }
+    .legend-item { font-size: 0.45rem; gap: 3px; margin-bottom: 2px; overflow: hidden; }
+    .legend-item span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 82px; }
+    .legend-swatch { width: 7px; height: 7px; flex-shrink: 0; }
+    .legend-gradient-bar { height: 6px; }
+    .legend-gradient-row { font-size: 0.42rem; }
+
+    /* Timing pill — smaller on phones */
+    .map-timing-pill {
+      font-size: 0.62rem;
+      padding: 5px 8px;
+      bottom: 8px;
+      gap: 4px;
+      max-width: calc(100% - 20px);
+    }
+    .map-timing-pill .pill-arrow { font-size: 0.58rem; }
+    #map-timing-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* CTA buttons — compact, centred */
+    .map-widget-cta {
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.6rem;
+    }
+    .map-cta-text { font-size: 0.78rem; text-align: center; }
+    .map-cta-btn {
+      font-size: 0.76rem;
+      padding: 0.4rem 1rem;
+      border-radius: 50px;
+    }
+  }
+</style>
+
+<section class="section map-widget-section">
+  <div class="container">
+    {% if map_widget.map_widget_heading %}
+    <h2 class="has-text-centered section-title">{{ map_widget.map_widget_heading }}</h2>
+    {% endif %}
+
+    <div class="map-widget-wrapper">
+      <div id="homepage-map"></div>
+
+      <!-- Scope filter — floats inside map, top-right but above zoom controls -->
+      <div class="map-scope-toggle">
+        <button class="scope-btn is-active" data-scope="all">All Countries</button>
+        <button class="scope-btn" data-scope="whca">WHCA</button>
+      </div>
+
+      <!-- Dataset picker — floats inside map, top-left -->
+      <div class="map-dataset-panel">
+        {% for ds in datasets %}
+        <button
+          class="map-dataset-btn {% if ds.default_active %}is-active{% endif %}"
+          data-layers='{{ ds.layers|jsonify }}'
+          data-available-times='{{ ds.available_times|jsonify }}'
+          data-date-meta='{{ ds.date_meta|jsonify }}'
+          data-latest-time="{{ ds.latest_time|default:'' }}"
+          data-title="{{ ds.title }}"
+          data-dataset-id="{{ ds.dataset_id }}">
+          <span class="mdb-icon">
+            {% if ds.title == "Extreme Rainfall" %}
+              {% svg_icon "storm" %}
+            {% elif ds.title == "Total Rainfall" %}
+              {% svg_icon "heavy-rain" %}
+            {% elif ds.icon %}
+              {% svg_icon ds.icon as dataset_icon %}
+              {% if dataset_icon %}
+              {{ dataset_icon }}
+              {% else %}
+              <i class="fas fa-layer-group"></i>
+              {% endif %}
+            {% else %}
+              <i class="fas fa-layer-group"></i>
+            {% endif %}
+          </span>
+          <span class="mdb-label">{{ ds.title }}</span>
+        </button>
+        {% endfor %}
+      </div>
+
+      <!-- Legend — bottom right -->
+      <div id="map-widget-legend">
+        <div id="legend-title"></div>
+        <div id="legend-items"></div>
+      </div>
+
+      <!-- Date pill — bottom centre -->
+      <div class="map-timing-pill" id="map-timing-pill">
+        <span class="map-timing-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="3.5" y="5.5" width="17" height="15" rx="3.5"></rect>
+            <path d="M7.5 3.5v4M16.5 3.5v4M3.5 9.5h17"></path>
+          </svg>
+        </span>
+        <span id="map-timing-text"></span>
+      </div>
+
+      <!-- Loading spinner -->
+      <div class="map-widget-loading" id="map-widget-loading">
+        <span class="map-widget-spinner"></span>
+      </div>
+
+      {% if map_widget.map_logo %}
+      <div class="map-widget-logo">
+        {% image map_widget.map_logo max-120x60 %}
+      </div>
+      {% endif %}
+    </div>
+
+    {% if map_widget.map_cta_button_label or map_widget.map_cta_button_label_2 %}
+    <div class="map-widget-cta">
+      {% if map_widget.map_cta_text %}
+      <span class="map-cta-text">{{ map_widget.map_cta_text }}</span>
+      {% endif %}
+      {% if map_widget.map_cta_button_label %}
+      <a href="{{ map_widget.map_cta_button_url|default:'/mapviewer' }}" class="map-cta-btn">
+        {{ map_widget.map_cta_button_label }} <span class="cta-arrow">&rarr;</span>
+      </a>
+      {% endif %}
+      {% if map_widget.map_cta_button_label_2 %}
+      <a href="{{ map_widget.map_cta_button_url_2|default:'#' }}" class="map-cta-btn">
+        {{ map_widget.map_cta_button_label_2 }} <span class="cta-arrow">&rarr;</span>
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
+<script>
+(function () {
+  var defaultBasemapConfig = {{ default_basemap|jsonify|safe }};
+  var mapStyleUrl = {{ basemap_style_url|jsonify|safe }};
+  var mapviewerDefaultStyle = {{ mapviewer_default_style|jsonify|safe }};
+  var initialBounds = null;
+  var initialCenter = [36.84, 5.73];
+  var initialZoom = window.innerWidth <= 480 ? 2.2 : 3.3;
+
+  function getFallbackBasemapStyle() {
+    return {
+      version: 8,
+      sources: {
+        'carto-light': {
+          type: 'raster',
+          tiles: ['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
+        },
+      },
+      layers: [{ id: 'basemap', type: 'raster', source: 'carto-light' }],
+    };
+  }
+
+  function getInitialMapStyle() {
+    if (mapviewerDefaultStyle) return mapviewerDefaultStyle;
+    if (defaultBasemapConfig && defaultBasemapConfig.url) {
+      return {
+        version: 8,
+        sources: {
+          'homepage-default-basemap': {
+            type: 'raster',
+            tiles: [defaultBasemapConfig.url],
+            tileSize: 256,
+          },
+        },
+        layers: [{ id: 'homepage-default-basemap', type: 'raster', source: 'homepage-default-basemap' }],
+      };
+    }
+    if (mapStyleUrl) return mapStyleUrl;
+    return getFallbackBasemapStyle();
+  }
+
+  var map = new maplibregl.Map({
+    container: 'homepage-map',
+    style: getInitialMapStyle(),
+    center: initialCenter,
+    zoom: initialZoom,
+    attributionControl: false,
+  });
+
+  function ResetViewControl() {}
+  ResetViewControl.prototype.onAdd = function (map) {
+    this._map = map;
+    this._container = document.createElement('div');
+    this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.title = 'Reset to default view';
+    btn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:29px;height:29px;';
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
+    var self = this;
+    btn.addEventListener('click', function () {
+      if (initialBounds) {
+        self._map.fitBounds(initialBounds, { padding: 50, duration: 600 });
+      } else {
+        self._map.flyTo({ center: initialCenter, zoom: initialZoom, duration: 600 });
+      }
+    });
+    this._container.appendChild(btn);
+    return this._container;
+  };
+  ResetViewControl.prototype.onRemove = function () {
+    this._container.parentNode.removeChild(this._container);
+    this._map = undefined;
+  };
+
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  map.addControl(new ResetViewControl(), 'top-right');
+
+  /* ── Scope state (shared with homepage JS via window.currentScope) ── */
+  if (typeof window.currentScope === 'undefined') window.currentScope = 'all';
+  var currentScope = window.currentScope;
+
+  var SCOPE_BOUNDS = {
+    all: null,
+    whca: [[21.84, -2.84], [47.96, 23.14]]
+  };
+  var WHCA_CC = ['SD', 'SS', 'UG', 'ET', 'RW'];
+
+  /* Scope toggle buttons inside map widget */
+  document.querySelectorAll('.scope-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var scope = btn.dataset.scope;
+      if (scope === currentScope) return;
+      currentScope = scope;
+      window.currentScope = scope;
+      document.querySelectorAll('.scope-btn').forEach(function(b) {
+        b.classList.toggle('is-active', b.dataset.scope === scope);
+      });
+      /* Zoom to scope bounds */
+      var bounds = SCOPE_BOUNDS[scope];
+      if (bounds) {
+        map.fitBounds(bounds, { padding: 40, duration: 600 });
+      } else if (initialBounds) {
+        map.fitBounds(initialBounds, { padding: 50, duration: 600 });
+      } else {
+        map.flyTo({ center: initialCenter, zoom: initialZoom, duration: 600 });
+      }
+      /* Reload boundary layers for scope */
+      removeBoundaryLayers();
+      loadBoundaryLayers();
+      /* Re-click active dataset to reload tiles with scope filter */
+      var ab = activeDatasetBtn || document.querySelector('.map-dataset-btn.is-active');
+      if (ab) ab.click();
+      /* Notify homepage JS */
+      window.dispatchEvent(new CustomEvent('minimap-scope-change', { detail: { scope: scope } }));
+    });
+  });
+
+  var activeLayers = [];
+  var activeSources = [];
+  var callGen = 0;
+  var firstBoundaryLayerId = null;
+  var tileParams = '';
+  var projectCountriesParam = '';
+  var summaryMap = {};
+  var activeDatasetBtn = null;
+  var availableTimesByDataset = {};
+  var dateMetaByDataset = {};
+  var pendingTimesByDataset = {};
+  var selectedTimeByDataset = {};
+
+  function setStyleGroupVisibility(groupKeyword, activeGroupName) {
+    var style = map.getStyle();
+    if (!style || !style.layers) return;
+
+    var metadataGroups = (style.metadata || {})['mapbox:groups'] || {};
+    var targetGroupIds = Object.keys(metadataGroups).filter(function (groupId) {
+      var groupName = String((metadataGroups[groupId] || {}).name || '').toLowerCase();
+      return groupName.indexOf(groupKeyword) !== -1;
+    });
+
+    if (!targetGroupIds.length || !activeGroupName) return;
+
+    style.layers.forEach(function (layer) {
+      var groupId = layer.metadata && layer.metadata['mapbox:group'];
+      if (!groupId || targetGroupIds.indexOf(groupId) === -1 || !map.getLayer(layer.id)) return;
+
+      var groupName = String((metadataGroups[groupId] || {}).name || '');
+      map.setLayoutProperty(layer.id, 'visibility', groupName === activeGroupName ? 'visible' : 'none');
+    });
+  }
+
+  function applyDefaultBasemapStyleSelection() {
+    if (!mapStyleUrl || !defaultBasemapConfig || defaultBasemapConfig.url) return;
+    try {
+      setStyleGroupVisibility('basemap', defaultBasemapConfig.basemap_group || '');
+      setStyleGroupVisibility('labels', defaultBasemapConfig.labels_group || '');
+    } catch (e) {
+      console.warn('map-widget: failed to apply default basemap selection', e);
+    }
+  }
+
+  function normalizeTimeValue(value) {
+    var raw = String(value || '').trim();
+    if (!raw) return '';
+    return raw.length >= 10 ? raw.slice(0, 10) : raw;
+  }
+
+  function normalizeAvailableTimes(values) {
+    var seen = {};
+    return (values || [])
+      .map(normalizeTimeValue)
+      .filter(function (value) {
+        if (!value || seen[value]) return false;
+        seen[value] = true;
+        return true;
+      })
+      .sort(function (a, b) { return new Date(a) - new Date(b); });
+  }
+
+  function getLayersFromButton(btn) {
+    try {
+      return JSON.parse(btn.dataset.layers || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function getAvailableTimesFromButton(btn) {
+    try {
+      return normalizeAvailableTimes(JSON.parse(btn.dataset.availableTimes || '[]'));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function getDateMetaFromButton(btn) {
+    try {
+      var parsed = JSON.parse(btn.dataset.dateMeta || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function getTimeLayer(layersData) {
+    return (layersData || []).find(function (layerDef) {
+      return !!layerDef.tile_json_url;
+    }) || null;
+  }
+
+  function syncSelectedTime(btn, availableTimes) {
+    var datasetId = btn.dataset.datasetId;
+    var latestTime = normalizeTimeValue(btn.dataset.latestTime || '');
+    var selectedTime = normalizeTimeValue(selectedTimeByDataset[datasetId] || '');
+
+    if (availableTimes && availableTimes.length) {
+      if (selectedTime && availableTimes.indexOf(selectedTime) !== -1) {
+        selectedTimeByDataset[datasetId] = selectedTime;
+        return selectedTime;
+      }
+      if (latestTime && availableTimes.indexOf(latestTime) !== -1) {
+        selectedTimeByDataset[datasetId] = latestTime;
+        return latestTime;
+      }
+      selectedTime = availableTimes[availableTimes.length - 1];
+      selectedTimeByDataset[datasetId] = selectedTime;
+      return selectedTime;
+    }
+
+    selectedTime = latestTime || selectedTime;
+    selectedTimeByDataset[datasetId] = selectedTime;
+    return selectedTime;
+  }
+
+  function fetchAvailableTimes(btn, layersData) {
+    var datasetId = btn.dataset.datasetId;
+    var buttonTimes = getAvailableTimesFromButton(btn);
+    var buttonDateMeta = getDateMetaFromButton(btn);
+
+    if (!dateMetaByDataset[datasetId] && Object.keys(buttonDateMeta).length) {
+      dateMetaByDataset[datasetId] = buttonDateMeta;
+    }
+
+    if (buttonTimes.length) {
+      availableTimesByDataset[datasetId] = buttonTimes;
+      return Promise.resolve(buttonTimes);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(availableTimesByDataset, datasetId)) {
+      return Promise.resolve(availableTimesByDataset[datasetId]);
+    }
+    if (pendingTimesByDataset[datasetId]) {
+      return pendingTimesByDataset[datasetId];
+    }
+
+    var timeLayer = getTimeLayer(layersData);
+    if (!timeLayer || !timeLayer.tile_json_url) {
+      availableTimesByDataset[datasetId] = [];
+      return Promise.resolve([]);
+    }
+
+    pendingTimesByDataset[datasetId] = fetch(timeLayer.tile_json_url)
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (payload) {
+        var responseKey = timeLayer.timestamps_response_object_key || 'timestamps';
+        var times = payload && payload[responseKey];
+        var payloadDateMeta = payload && (payload.date_meta || payload.dateMeta || payload.ranges);
+        if (!Array.isArray(times)) {
+          times = payload && payload.timestamps;
+        }
+        if (!Array.isArray(times)) {
+          times = payload && payload.dates;
+        }
+        if (payloadDateMeta && typeof payloadDateMeta === 'object') {
+          dateMetaByDataset[datasetId] = payloadDateMeta;
+        }
+        var normalized = normalizeAvailableTimes(times);
+        availableTimesByDataset[datasetId] = normalized;
+        return normalized;
+      })
+      .catch(function () {
+        availableTimesByDataset[datasetId] = [];
+        return [];
+      })
+      .finally(function () {
+        delete pendingTimesByDataset[datasetId];
+      });
+
+    return pendingTimesByDataset[datasetId];
+  }
+
+  function removeActiveLayers() {
+    activeLayers.forEach(function (id) {
+      if (map.getLayer(id)) map.removeLayer(id);
+    });
+    activeSources.forEach(function (id) {
+      if (map.getSource(id)) map.removeSource(id);
+    });
+    activeLayers = [];
+    activeSources = [];
+  }
+
+  function removeQueryParam(url, key) {
+    var pattern = new RegExp('([?&])' + key + '=[^&]*', 'g');
+    var normalized = String(url || '').replace(pattern, '$1');
+    normalized = normalized.replace(/[?&]{2,}/g, '&');
+    normalized = normalized.replace(/\?&/, '?');
+    normalized = normalized.replace(/[?&]$/, '');
+    return normalized;
+  }
+
+  function setQueryParam(url, key, value) {
+    var normalized = removeQueryParam(url, key);
+    var separator = normalized.indexOf('?') === -1 ? '?' : '&';
+    return normalized + separator + key + '=' + value;
+  }
+
+  function detectBoundaryAdminLevel(url, renderLayers) {
+    var candidates = [];
+    if (url) candidates.push(String(url));
+    (renderLayers || []).forEach(function (layer) {
+      if (layer && layer['source-layer']) candidates.push(String(layer['source-layer']));
+    });
+    for (var i = 0; i < candidates.length; i++) {
+      var match = candidates[i].match(/admin(?:_by_zoom|_whca|_clipped)?(?:[^0-9]|^)([012])(?:[^0-9]|$)|admin([012])/);
+      if (match) {
+        return match[1] || match[2] || '0';
+      }
+      if (candidates[i].indexOf('admin0') !== -1) return '0';
+      if (candidates[i].indexOf('admin1') !== -1) return '1';
+      if (candidates[i].indexOf('admin2') !== -1) return '2';
+    }
+    return '0';
+  }
+
+  function buildWhcaBoundaryUrl(url, adminLevel) {
+    var normalized = String(url || '');
+    if (!normalized) {
+      return '/pg/tileserv/gha.admin_whca/{z}/{x}/{y}.pbf?admin_level=' + (adminLevel || '0');
+    }
+
+    normalized = normalized.replace(
+      /\/pg\/tileserv\/gha\.admin_by_zoom\/\{z\}\/\{x\}\/\{y\}\.pbf(?:\?.*)?$/,
+      '/pg/tileserv/gha.admin_whca/{z}/{x}/{y}.pbf'
+    );
+
+    if (normalized.indexOf('/pg/tileserv/gha.admin_whca/') === -1) {
+      normalized = normalized.replace(
+        /\/pg\/tileserv\/[^/?]+(?:\/\{z\}\/\{x\}\/\{y\}\.pbf)?(?:\?.*)?$/,
+        '/pg/tileserv/gha.admin_whca/{z}/{x}/{y}.pbf'
+      );
+    }
+
+    return setQueryParam(normalized, 'admin_level', adminLevel || '0');
+  }
+
+  function appendTileParams(url) {
+    var normalizedUrl = String(url || '');
+    if (tileParams) {
+      normalizedUrl += (normalizedUrl.indexOf('?') === -1 ? '?' : '&') + tileParams;
+    }
+    var isWrfRaster = url && url.indexOf('LAYERS=wrf_') !== -1;
+    var isForecastVector = url && (
+      url.indexOf('/pg/tileserv/gha.multimodal_points_raw/') !== -1 ||
+      url.indexOf('/pg/tileserv/gha.forecast_points_clustered/') !== -1 ||
+      url.indexOf('/pg/tileserv/gha.google_flood_points_clustered/') !== -1
+    );
+    if (currentScope === 'whca') {
+      /* WHCA: mapcache forwards scope to mapserver which applies admin mask */
+      normalizedUrl = setQueryParam(normalizedUrl, 'scope', 'whca');
+    } else if (projectCountriesParam && !isWrfRaster) {
+      normalizedUrl = setQueryParam(
+        normalizedUrl,
+        'project_countries',
+        encodeURIComponent(projectCountriesParam)
+      );
+    }
+    return normalizedUrl;
+  }
+
+  var BOUNDARY_DATASET_ID = '{{ map_widget.boundary_dataset_id }}';
+  var boundaryLayerIds = [];
+
+  function removeBoundaryLayers() {
+    boundaryLayerIds.forEach(function(id) { if (map.getLayer(id)) map.removeLayer(id); });
+    boundaryLayerIds = [];
+    if (map.getSource('bnd-src')) map.removeSource('bnd-src');
+    firstBoundaryLayerId = null;
+  }
+
+  function loadBoundaryLayers() {
+    if (!BOUNDARY_DATASET_ID) return;
+    fetch('/api/datasets/')
+      .then(function (r) { return r.json(); })
+      .then(function (datasets) {
+        var bnd = datasets.find(function (d) { return d.id === BOUNDARY_DATASET_ID; });
+        if (!bnd || !bnd.layers || !bnd.layers.length) return;
+
+        var layerConfig = bnd.layers[0].layerConfig;
+        if (!layerConfig || !layerConfig.source || !layerConfig.source.tiles) return;
+
+        var tilesUrl = layerConfig.source.tiles[0];
+        if (!tilesUrl) return;
+        var renderLayers = (layerConfig.render && layerConfig.render.layers) || [];
+
+        /* Scope filtering: just append &scope=whca — admin_clipped handles it server-side */
+        if (currentScope === 'whca') {
+          tilesUrl = setQueryParam(tilesUrl, 'scope', 'whca');
+        }
+
+        map.addSource('bnd-src', { type: 'vector', tiles: [tilesUrl] });
+        var fallbackSourceLayerMatch = String(tilesUrl).match(/\/pg\/tileserv\/([^/?]+)\//);
+        var fallbackSourceLayer = fallbackSourceLayerMatch ? fallbackSourceLayerMatch[1] : 'default';
+        var boundaryLayers = renderLayers.length ? renderLayers : [
+          {
+            type: 'fill',
+            'source-layer': fallbackSourceLayer,
+            paint: { 'fill-color': '#ffffff', 'fill-opacity': 0 }
+          },
+          {
+            type: 'line',
+            'source-layer': fallbackSourceLayer,
+            paint: { 'line-color': '#000', 'line-width': 1.1, 'line-opacity': 0.95 }
+          }
+        ];
+
+        boundaryLayers.forEach(function(renderLayer, index) {
+          var boundaryLayer = Object.assign({}, renderLayer, {
+            id: 'bnd-' + index,
+            source: 'bnd-src'
+          });
+          if (!boundaryLayer['source-layer']) {
+            boundaryLayer['source-layer'] = fallbackSourceLayer;
+          }
+          map.addLayer(boundaryLayer);
+          boundaryLayerIds.push(boundaryLayer.id);
+          if (firstBoundaryLayerId === null) {
+            firstBoundaryLayerId = boundaryLayer.id;
+          }
+        });
+      })
+      .catch(function (e) {
+        console.warn('map-widget: failed to load boundary layers', e);
+      });
+  }
+
+  function renderOneLegend(legendConfig, layerTitle, container) {
+    if (!legendConfig) return;
+    var type = legendConfig.type;
+    var hasItems = Array.isArray(legendConfig.items) && legendConfig.items.length;
+    if (!hasItems && type !== 'image' && type !== 'gradient') return;
+
+    if (layerTitle) {
+      var heading = document.createElement('div');
+      heading.className = 'legend-layer-title';
+      heading.textContent = layerTitle;
+      container.appendChild(heading);
+    }
+
+    if (type === 'image' && legendConfig.imageUrl) {
+      var img = document.createElement('img');
+      img.src = legendConfig.imageUrl;
+      img.style.maxWidth = '100%';
+      container.appendChild(img);
+    } else if (type === 'gradient' && Array.isArray(legendConfig.colors)) {
+      var gradRow = document.createElement('div');
+      gradRow.className = 'legend-gradient-row';
+      var minLabel = document.createElement('span');
+      minLabel.textContent = legendConfig.minLabel || legendConfig.min || '';
+      var bar = document.createElement('div');
+      bar.className = 'legend-gradient-bar';
+      bar.style.background = 'linear-gradient(to right, ' + legendConfig.colors.join(', ') + ')';
+      var maxLabel = document.createElement('span');
+      maxLabel.textContent = legendConfig.maxLabel || legendConfig.max || '';
+      gradRow.appendChild(minLabel);
+      gradRow.appendChild(bar);
+      gradRow.appendChild(maxLabel);
+      container.appendChild(gradRow);
+    } else if (hasItems) {
+      legendConfig.items.forEach(function (item) {
+        var row = document.createElement('div');
+        row.className = 'legend-item';
+        var swatch = document.createElement('span');
+        swatch.className = 'legend-swatch';
+        swatch.style.background = item.color || '#ccc';
+        var label = document.createElement('span');
+        label.textContent = item.name || item.label || '';
+        row.appendChild(swatch);
+        row.appendChild(label);
+        container.appendChild(row);
+      });
+    }
+  }
+
+  function renderLegend(layersData, datasetTitle) {
+    var panel = document.getElementById('map-widget-legend');
+    var titleEl = document.getElementById('legend-title');
+    var itemsEl = document.getElementById('legend-items');
+    itemsEl.innerHTML = '';
+
+    var hasContent = false;
+    var showLayerTitles = layersData.filter(function (l) { return l.legend; }).length > 1;
+
+    layersData.forEach(function (layerDef) {
+      if (!layerDef.legend) return;
+      var before = itemsEl.childElementCount;
+      renderOneLegend(layerDef.legend, showLayerTitles ? layerDef.title : null, itemsEl);
+      if (itemsEl.childElementCount > before) hasContent = true;
+    });
+
+    if (hasContent) {
+      titleEl.textContent = showLayerTitles ? (datasetTitle || '') : '';
+      panel.style.display = 'block';
+    } else {
+      panel.style.display = 'none';
+    }
+  }
+
+  function addLayers(layersData, latestTime, datasetTitle) {
+    removeActiveLayers();
+    if (!layersData || !layersData.length) { renderLegend([], datasetTitle); return; }
+
+    callGen++;
+    var gen = callGen;
+    var before = firstBoundaryLayerId || undefined;
+
+    layersData.slice().reverse().forEach(function (layerDef, i) {
+      var url = layerDef.tile_url;
+      var type = layerDef.layer_type;
+      if (!url) return;
+
+      if (latestTime) url = url.replace('{time}', latestTime);
+      url = appendTileParams(url);
+
+      var srcId = 'mw-src-' + gen + '-' + i;
+      var lyrId = 'mw-lyr-' + gen + '-' + i;
+
+      try {
+        if (type === 'vector') {
+          /* Detect source-layer from URL path (tileserv uses schema.function_name) */
+          var slMatch = url.match(/tileserv\/([^/]+)\//);
+          var sourceLayer = slMatch ? slMatch[1] : 'default';
+          /* Detect point layers */
+          var isPoints = url.indexOf('points_alerts') !== -1 || url.indexOf('control_points') !== -1 || url.indexOf('forecast_points') !== -1;
+          map.addSource(srcId, { type: 'vector', tiles: [url] });
+          if (isPoints) {
+            var isWhca = currentScope === 'whca';
+            var circleLayer = {
+              id: lyrId, type: 'circle', source: srcId, 'source-layer': sourceLayer,
+              paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 3, 6, 5, 9, 7],
+                'circle-color': ['match', ['get', 'alert_level'],
+                  'emergency', '#d32f2f',
+                  'alarm', '#ff9800',
+                  'warning', '#fbc02d',
+                  'normal', '#b0b0b0',
+                  '#b0b0b0'],
+                'circle-opacity': 0.85,
+                'circle-stroke-width': 0.5,
+                'circle-stroke-color': '#fff'
+              }
+            };
+            if (isWhca) circleLayer.filter = ['in', 'country_code', 'SD', 'SS', 'UG', 'ET', 'RW'];
+            map.addLayer(circleLayer, before);
+          } else {
+            map.addLayer({ id: lyrId, type: 'fill', source: srcId, 'source-layer': sourceLayer, paint: { 'fill-color': '#034930', 'fill-opacity': 0.5 } }, before);
+          }
+        } else if (type === 'geojson') {
+          fetch(url)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              map.addSource(srcId, { type: 'geojson', data: data });
+              map.addLayer({ id: lyrId, type: 'fill', source: srcId, paint: { 'fill-color': '#034930', 'fill-opacity': 0.5 } }, before);
+            });
+        } else {
+          map.addSource(srcId, { type: 'raster', tiles: [url], tileSize: 256 });
+          map.addLayer({ id: lyrId, type: 'raster', source: srcId }, before);
+        }
+        activeSources.push(srcId);
+        activeLayers.push(lyrId);
+      } catch (e) {
+        console.warn('map-widget: failed to add layer', srcId, e);
+      }
+    });
+
+    renderLegend(layersData, datasetTitle);
+  }
+
+  function updateTimingPill(btn) {
+    var pill = document.getElementById('map-timing-pill');
+    var text = document.getElementById('map-timing-text');
+    var datasetId = btn.dataset.datasetId;
+    var layersData = getLayersFromButton(btn);
+    var availableTimes = availableTimesByDataset[datasetId] || [];
+    var selectedTime = syncSelectedTime(btn, availableTimes);
+    var summaryText = String(summaryMap[datasetId] || '').trim();
+    var latestTime = normalizeTimeValue(btn.dataset.latestTime || '');
+    var initializationTime = selectedTime || latestTime;
+    var dateMeta = dateMetaByDataset[datasetId] || getDateMetaFromButton(btn);
+    var activeDateMeta = initializationTime && dateMeta && typeof dateMeta === 'object'
+      ? (dateMeta[initializationTime] || null)
+      : null;
+
+    function formatPillDate(d) {
+      if (!d) return '';
+      var dt = new Date(d + 'T00:00:00');
+      if (isNaN(dt)) return d;
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
+    }
+
+    var effectiveDisplayTime = normalizeTimeValue(
+      (activeDateMeta && (activeDateMeta.initialized || activeDateMeta.latest || activeDateMeta.latest_date)) || ''
+    ) || initializationTime || latestTime;
+    var label = '';
+    if (effectiveDisplayTime) {
+      label = 'Latest: ' + formatPillDate(effectiveDisplayTime) +
+        ' | Initialized: ' + formatPillDate(effectiveDisplayTime);
+    } else if (summaryText && /(initialized|\bto\b)/i.test(summaryText)) {
+      label = summaryText;
+    } else if (latestTime) {
+      label = 'Latest: ' + formatPillDate(latestTime);
+    } else if (summaryText) {
+      label = summaryText;
+    }
+
+    if (label) {
+      pill.classList.add('is-fading');
+      setTimeout(function () {
+        text.textContent = label;
+        pill.style.display = 'flex';
+        pill.classList.remove('is-fading');
+      }, 200);
+    } else {
+      pill.style.display = 'none';
+    }
+  }
+
+  function stepActiveDatasetTime(direction) {
+    var btn = activeDatasetBtn || document.querySelector('.map-dataset-btn.is-active');
+    if (!btn) return;
+
+    var layersData = getLayersFromButton(btn);
+    fetchAvailableTimes(btn, layersData).then(function (availableTimes) {
+      var currentTime = syncSelectedTime(btn, availableTimes);
+      var currentIndex = availableTimes.indexOf(currentTime);
+      if (currentIndex === -1) return;
+
+      var nextIndex = currentIndex + direction;
+      if (nextIndex < 0 || nextIndex >= availableTimes.length) return;
+
+      selectedTimeByDataset[btn.dataset.datasetId] = availableTimes[nextIndex];
+      updateTimingPill(btn);
+      addLayers(layersData, availableTimes[nextIndex], btn.dataset.title || '');
+    });
+  }
+
+  function loadDatasetSummaries() {
+    fetch('/api/datasets/')
+      .then(function (r) { return r.json(); })
+      .then(function (datasets) {
+        datasets.forEach(function (d) {
+          if (d.id && d.summary) summaryMap[d.id] = d.summary;
+        });
+        var activeBtn = document.querySelector('.map-dataset-btn.is-active');
+        if (activeBtn) updateTimingPill(activeBtn);
+      })
+      .catch(function () {});
+  }
+
+  function isFloodForecastDataset(btn, layersData) {
+    var title = String((btn && btn.dataset && btn.dataset.title) || '').toLowerCase();
+    if (title.indexOf('multi model') !== -1) return true;
+    var timeLayer = getTimeLayer(layersData);
+    var tileJsonUrl = String((timeLayer && timeLayer.tile_json_url) || '');
+    return tileJsonUrl.indexOf('/api/flood/forecast-dates') !== -1;
+  }
+
+  function syncHomepageFloodState(btn, layersData) {
+    if (!btn || !isFloodForecastDataset(btn, layersData)) return;
+    var datasetId = btn.dataset.datasetId;
+    var selectedTime = syncSelectedTime(btn, availableTimesByDataset[datasetId] || []);
+    var effectiveDate = normalizeTimeValue(selectedTime || btn.dataset.latestTime || '');
+    window.dispatchEvent(new CustomEvent('minimap-flood-state-change', {
+      detail: {
+        scope: currentScope,
+        datasetId: datasetId,
+        title: btn.dataset.title || '',
+        date: effectiveDate
+      }
+    }));
+  }
+
+  function activateBtn(btn) {
+    document.querySelectorAll('.map-dataset-btn').forEach(function (b) {
+      b.classList.remove('is-active');
+    });
+    btn.classList.add('is-active');
+    activeDatasetBtn = btn;
+    updateTimingPill(btn);
+    var layersData = getLayersFromButton(btn);
+    var selectedTime = syncSelectedTime(btn, availableTimesByDataset[btn.dataset.datasetId] || []);
+    addLayers(layersData, selectedTime || '', btn.dataset.title || '');
+    syncHomepageFloodState(btn, layersData);
+    fetchAvailableTimes(btn, layersData).then(function (availableTimes) {
+      var resolvedTime = syncSelectedTime(btn, availableTimes);
+      if (activeDatasetBtn === btn && resolvedTime !== selectedTime) {
+        addLayers(layersData, resolvedTime || '', btn.dataset.title || '');
+      }
+      if (activeDatasetBtn === btn) {
+        updateTimingPill(btn);
+        syncHomepageFloodState(btn, layersData);
+      }
+    });
+  }
+
+  function initMapLayers() {
+    loadBoundaryLayers();
+    var defaultBtn = document.querySelector('.map-dataset-btn.is-active');
+    if (defaultBtn) activateBtn(defaultBtn);
+  }
+
+  map.on('load', function () {
+    document.getElementById('map-widget-loading').style.display = 'none';
+    applyDefaultBasemapStyleSelection();
+
+    fetch('/api/mapviewer-config')
+      .then(function (r) { return r.json(); })
+      .then(function (config) {
+        // Fit map to bounds if available
+        var b = config.bounds;
+        var countries = config.countries || [];
+        if (b && b.length >= 4) {
+          initialBounds = [[b[0], b[1]], [b[2], b[3]]];
+          map.fitBounds(initialBounds, { padding: 50, duration: 0 });
+        }
+
+        if (countries.length) {
+          var seenCountries = {};
+          projectCountriesParam = countries
+            .map(function (country) { return (country && country.name ? String(country.name).trim() : ''); })
+            .filter(function (name) {
+              if (!name || seenCountries[name]) return false;
+              seenCountries[name] = true;
+              return true;
+            })
+            .join(',');
+        }
+
+        // Build tile params from fixed_code filter
+        var filterTypes = config.filterTypes || [];
+        var adminFilter = filterTypes.find(function (f) { return f.value === 'admin'; });
+        if (adminFilter && adminFilter.levels && adminFilter.levels.length) {
+          var lv = adminFilter.levels[0];
+          if (lv.fixed_code) {
+            var code = lv.fixed_code;
+            var project = adminFilter.fixed_project_name || '';
+            var admin = lv.admin_level || '0';
+            var border = lv.border_level || '0';
+            tileParams = [
+              'unit_id=' + encodeURIComponent(code),
+              'admin_level=' + encodeURIComponent(admin),
+              'project_name=' + encodeURIComponent(project),
+              'border_level=' + encodeURIComponent(border),
+              'MASK_UNIT_ID=' + encodeURIComponent(code),
+              'MASK_AREA=' + encodeURIComponent(project),
+              'MASK_ADMIN_LEVEL=' + encodeURIComponent(admin),
+            ].join('&');
+
+            // Fetch bbox from boundary API if no bounds in config
+            if (!b && adminFilter.boundary_api_url) {
+              var bboxUrl = adminFilter.boundary_api_url +
+                '?admin_level=' + encodeURIComponent(admin) +
+                '&with_bbox=true';
+              fetch(bboxUrl)
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                  var match = (data || []).find(function (item) { return item.code === code; });
+                  if (match && match.bbox) {
+                    var bb = match.bbox;
+                    initialBounds = [[bb.left, bb.bottom], [bb.right, bb.top]];
+                    map.fitBounds(initialBounds, { padding: 50, duration: 0 });
+                  } else {
+                    console.warn('map-widget: no bbox found for code', code);
+                  }
+                })
+                .catch(function (e) { console.error('map-widget: bbox fetch failed', e); });
+            }
+          }
+        }
+        initMapLayers();
+        loadDatasetSummaries();
+      })
+      .catch(function () {
+        initMapLayers();
+        loadDatasetSummaries();
+      });
+  });
+
+  document.querySelectorAll('.map-dataset-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { activateBtn(btn); });
+  });
+
+  /* Date pill arrows removed — show latest date only */
+})();
+</script>
+{% endif %}

@@ -1,0 +1,96 @@
+@import "@/styles/settings.scss";
+
+.c-config-panel {
+  display: flex;
+  flex-flow: column;
+  max-height: calc(100vh - 70px);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.25);
+  background: $white;
+  position: relative;
+  z-index: 1;
+  padding: rem(10px) 0 rem(15px);
+
+  .config-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 rem(15px) rem(10px);
+    margin-bottom: rem(10px);
+    gap: rem(8px);
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .config-icon {
+      width: rem(16px);
+      height: rem(16px);
+      fill: $greyish-brown;
+    }
+
+    .config-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: $greyish-brown;
+      text-align: center;
+    }
+  }
+
+  &.collapsed {
+    padding-bottom: 0;
+
+    .config-header {
+      margin-bottom: 0;
+      padding-bottom: rem(10px);
+      border-bottom: 1px solid #ddd;
+    }
+  }
+
+  .config-content {
+    padding: rem(5px) rem(10px) 0;
+    overflow-y: auto;
+
+    // Override map controls floating/box styles for panel context
+    .c-map-controls {
+      .map-actions {
+        margin-bottom: rem(8px);
+      }
+
+      .map-tour-map-controls {
+        .controls-wrapper {
+          flex-direction: column;
+          box-shadow: none;
+          margin-bottom: rem(8px);
+
+          .map-control {
+            width: 100%;
+            justify-content: flex-start;
+            padding: rem(6px) rem(10px);
+            border-bottom: 1px solid $border;
+            border-right: none;
+
+            &:last-child {
+              border-bottom: none;
+            }
+
+            svg {
+              margin-right: rem(8px);
+            }
+          }
+        }
+
+        .map-position {
+          font-size: rem(10px);
+          padding: rem(5px) rem(8px);
+          background: rgba($white, 0.8);
+          flex-direction: column;
+          gap: rem(2px);
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+LAYER
+    NAME "asap_rangeland"
+    TYPE RASTER
+    STATUS ON
+    DATA "/opt/rasterdata/landcover/asap_rangeland_gha.tif"
+    MASK "gha_admin_extent_mask"
+    PROCESSING "NODATA=0"
+    PROJECTION
+        "init=epsg:4326"
+    END
+    INCLUDE "classifications/asap-rangeland.classes.map"
+    METADATA
+        "wms_title" "ASAP Rangeland Mask v02"
+        "wms_abstract" "JRC ASAP rangeland mask v02 (~1 km resolution). Values represent percentage of rangeland cover per pixel. Source: European Commission Joint Research Centre (JRC)."
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+END

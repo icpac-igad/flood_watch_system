@@ -1,0 +1,20 @@
+LAYER
+    INCLUDE "config/database.map"
+    NAME "gha_admin_extent_mask"
+    TYPE POLYGON
+    STATUS ON
+    DATA "geom from (SELECT e.id, ST_Transform(e.geom, 3857) as geom FROM gha.whca_extent e WHERE '%scope%' = 'whca' UNION ALL SELECT e.id, ST_Transform(e.geom, 3857) as geom FROM gha.gha_extent e WHERE '%scope%' != 'whca') as subq using unique id using srid=3857"
+    PROJECTION
+        "init=epsg:3857"
+    END
+    VALIDATION
+        "scope" "^(|all|project|whca)$"
+        "default_scope" "all"
+    END
+    CLASS
+        STYLE
+            COLOR 255 255 255
+            OUTLINECOLOR 255 255 255
+        END
+    END
+END

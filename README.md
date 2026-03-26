@@ -1,173 +1,72 @@
-# GHoA Flood Watcher (EAFW)
+# East Africa Flood Watch System
 
-Operational codebase for the Greater Horn of Africa FloodWatch platform.
+A comprehensive flood monitoring and early warning system for the Greater Horn of Africa region, built on the [GeoManager](https://github.com/icpac-igad/geomanager) platform.
 
-This repository runs a containerized geospatial early warning stack made of:
-- CMS (`eafw_cms`) for content and geodata management (GeoManager/Wagtail)
-- API (`eafw_api`) for public and internal flood data endpoints
-- Jobs (`eafw_jobs`) for scheduled ingestion/sync from FTP, SFTP, Drive, and WRF sources
-- Map services (`eafw_mapserver`, `eafw_mapcache`, `pg_tileserv`) and UI (`eafw_mapviewer`)
+## Architecture
 
-## Current stack and compose files
+The system is composed of three core components, each maintained as a separate upstream project:
 
-Use these compose files:
-- `docker-compose.yml`: local development and integration testing
-- `docker-compose.staging.yml`: staging deployment
-
-## Quick start (local)
-
-### 1. Prerequisites
-
-- Docker Engine + Docker Compose plugin (`docker compose`)
-- At least 8 GB RAM (16 GB recommended)
-- 20+ GB free disk
-
-### 2. Configure environment
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set at minimum:
-- `CMS_DB_PASSWORD`
-- `SECRET_KEY`
-- `FLOODPROOFS_SFTP_*` credentials
-- `ENSEMBLE_FTP_*` credentials
-- `WRF_FTP_*` credentials
-
-If using Drive sync:
-- put Google service account credentials at `eafw_jobs/credentials/google-credentials.json`
-- set `DRIVE_FOLDER_ID`
-
-### 3. Start services
-
-```bash
-docker compose up --build -d
-```
-
-### 4. Verify
-
-```bash
-docker compose ps
-curl -f http://127.0.0.1:9068/health
-curl -f http://127.0.0.1:9069/health
-```
-
-## Service endpoints (local defaults)
-
-| Service | URL | Notes |
+| Component | Directory | Upstream |
 |---|---|---|
-| Nginx entrypoint | `http://127.0.0.1:9068` | Main public gateway |
-| CMS admin | `http://127.0.0.1:9068/cms-admin` | Path controlled by `ADMIN_URL_PATH` |
-| FastAPI docs (via nginx) | `http://127.0.0.1:9068/api/docs` | Preferred public docs route |
-| FastAPI direct | `http://127.0.0.1:9069/api/docs` | Container direct exposure |
-| MapServer | `http://127.0.0.1:9065/mapserver/` | Direct mapserver endpoint |
-| MapCache | `http://127.0.0.1:9066/mapcache/` | Direct mapcache endpoint |
-| pg_tileserv | `http://127.0.0.1:9067/pg/tileserv/` | Direct tiles endpoint |
+| **GeoManager Web** | `eafw_geomanager_web/` | [geomanager-web](https://github.com/icpac-igad/geomanager-web) |
+| **GeoManager** | `eafw_geomanager/` | [geomanager](https://github.com/icpac-igad/geomanager) |
+| **GeoMapViewer** | `eafw_geomapviewer/` | [geomapviewer](https://github.com/icpac-igad/geomapviewer) |
 
-## Common operations
+### Services
 
-### Logs
+| Service | Description | Port |
+|---|---|---|
+| **eafw-nginx** | Reverse proxy (entry point) | 9068 |
+| **eafw-cms** | Django/Wagtail CMS + GeoManager | 8000 (internal) |
+| **eafw-mapviewer** | Next.js map viewer | 3000 (internal) |
+| **eafw-pgdb** | PostGIS database | 5431 |
+| **eafw-pgbouncer** | Connection pooler | 6432 (internal) |
+| **eafw-memcached** | Cache layer | 11211 (internal) |
+| **eafw-mapserver** | WMS/WFS raster rendering | 80 (internal) |
+| **eafw-mapcache** | Tile caching | 80 (internal) |
+| **eafw-tileserv** | pg_tileserv vector tiles | 7800 (internal) |
+| **eafw-jobs** | Data sync (WRF, Google Floods, FloodProofs) | - |
 
-```bash
-docker compose logs -f
-docker compose logs -f eafw_cms
-docker compose logs -f eafw_api
-docker compose logs -f eafw_jobs
-```
+## Quick Start
 
-### Stop / restart
+### Prerequisites
+- Docker & Docker Compose
+- Git
 
-```bash
-docker compose down
-docker compose restart eafw_cms eafw_api eafw_jobs
-```
-
-### MapServer / MapCache maintenance (automated)
-
-```bash
-# Default: sync mapfiles + restart map stack + smoke tests
-scripts/manage_map_services.sh
-
-# Full reset including mapcache tile cleanup
-scripts/manage_map_services.sh --all-with-cache
-
-# Staging-style run with explicit compose/env
-scripts/manage_map_services.sh --compose-file docker-compose.staging.yml --env-file .env --all-with-cache
-```
-
-### Django admin and migrations
+### Local Development
 
 ```bash
-docker compose exec eafw_cms python manage.py migrate
-docker compose exec eafw_cms python manage.py createsuperuser
+# Clone
+git clone https://github.com/icpac-igad/flood_watch_system.git
+cd flood_watch_system/eafw_geomanager_web
+
+# Configure
+cp ../.env.example .env
+# Edit .env with your settings
+
+# Build and start
+docker compose up -d --build
+
+# Access at http://127.0.0.1:9068
 ```
 
-### Run jobs manually (inside jobs container)
+### Staging Deployment
 
-```bash
-docker compose exec eafw_jobs python -m pyfloodwatch.floodproofs_sync
-docker compose exec eafw_jobs python -m pyfloodwatch.ensemble_sync
-docker compose exec eafw_jobs python -m pyfloodwatch.wrf_rainfall_job
-```
+Push to the `eafw` branch triggers automatic CI/CD:
+1. Detects which components changed
+2. Builds Docker images and pushes to GHCR
+3. Deploys to staging server via SSH
 
-### Database backup / restore helpers
+## Data Sources
 
-```bash
-# Backup (writes into ./backups and container /backups volume)
-./scripts/db-dump.sh local
+- **WRF Rainfall** — Weekly rainfall forecasts from KMD
+- **Google Flood Forecasting** — River flood alerts via Google API
+- **FloodProofs** — Deterministic discharge forecasts
+- **Flash Floods** — FFPI/DFFPI from Nile Basin GeoServer
+- **Admin Boundaries** — GADM administrative boundaries
+- **Rivers** — HydroSHEDS river network
+- **Lakes** — Water bodies dataset
 
-# Restore
-./scripts/db-load.sh backups/<dump-file>.dump
-```
+## License
 
-## Repository layout
-
-- `eafw_cms/`: CMS application and GeoManager package
-- `eafw_api/`: FastAPI service
-- `eafw_jobs/`: scheduled ingestion/sync jobs
-- `eafw_docker/`: Dockerfiles, init SQL, nginx config
-- `eafw_mapserver/`: MapServer resources
-- `eafw_mapviewer/`: frontend map viewer
-- `scripts/`: operational scripts (backup/restore, fixes, utilities)
-- `docs/`: architecture and reference documentation
-
-Note on naming:
-- `eafw_jobs/` = jobs source code
-- `eafw-jobs/` = runtime data/log directory kept for uniform naming
-
-## Troubleshooting
-
-### CMS login loop on staging
-
-Run:
-
-```bash
-bash scripts/fix-staging-cms-login.sh
-```
-
-### Jobs failing due credentials
-
-- confirm `.env` has valid `FLOODPROOFS_SFTP_*`, `ENSEMBLE_FTP_*`, and `WRF_FTP_*`
-- if `SYNC_SOURCE=drive`, verify `DRIVE_FOLDER_ID` and credential file path
-
-### API reachable directly but not through nginx
-
-Check nginx routing and API container health:
-
-```bash
-docker compose logs -f eafw_nginx eafw_api
-```
-
-## Documentation
-
-- `docs/API_DOCUMENTATION.md`
-- `docs/FLOODWATCH_API_DOCUMENTATION.md`
-- `docs/SIMPLIFIED_FRONTEND_ARCHITECTURE.md`
-- `docs/STAGING_DEPLOYMENT.md` (legacy notes may exist; validate against current compose files)
-
-## Security notes
-
-- Never commit `.env` with real credentials.
-- Rotate any secret if it was previously exposed.
-- Use strong unique values for `SECRET_KEY` and external credential fields.
+See [LICENSE](LICENSE) for details.

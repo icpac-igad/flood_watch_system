@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="Flood extent 100-year thumbnail">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#521f1f"/><stop offset="100%" stop-color="#b33b3b"/></linearGradient></defs>
-  <rect width="320" height="180" rx="12" fill="url(#g)"/>
-  <path d="M0 112 C52 94, 108 132, 166 108 S258 85, 320 108 L320 180 L0 180 Z" fill="#ff9d8f" opacity="0.85"/>
-  <path d="M0 132 C56 118, 110 148, 164 130 S257 106, 320 126 L320 180 L0 180 Z" fill="#ef6e61" opacity="0.78"/>
-  <text x="16" y="30" fill="#ffe9e5" font-size="17" font-family="Segoe UI, Arial" font-weight="700">Flood Extent 100-year</text>
-  <text x="16" y="50" fill="#ffd6d0" font-size="11" font-family="Segoe UI, Arial">Extreme return period hazard</text>
-</svg>

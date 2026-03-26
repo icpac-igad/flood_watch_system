@@ -1,0 +1,364 @@
+{% load wagtailimages_tags %}
+
+<!-- if a Footer instance is found, then render-->
+{% if footer %}
+{% if footer.background_image %}{% image footer.background_image original as bg_img %}{% endif %}
+<footer class="footer {% if footer.background_image %}has-bg-image{% endif %}"
+        style="{% if footer.background_color %}--footer-bg: {{ footer.background_color }};{% endif %}{% if footer.background_image %}--bg-image: url('{{ bg_img.url }}'); --bg-opacity-value: {{ footer.background_opacity|default:55 }}%;{% endif %}">
+  {% if footer.theme_colored_lines %}
+  <div class="color-lines-container" style="top: 0; bottom: auto;">
+    {% if footer.color_lines.all %}
+      {% for line in footer.color_lines.all %}
+      <div class="color-line" style="background-color: {{ line.color }};"></div>
+      {% endfor %}
+    {% else %}
+      <div class="color-line" style="background-color: var(--primary-color);"></div>
+      <div class="color-line" style="background-color: var(--accent-color);"></div>
+      <div class="color-line" style="background-color: var(--secondary-color);"></div>
+    {% endif %}
+  </div>
+  {% endif %}
+  <div class="container">
+    <div class="columns is-multiline">
+
+      <!-- Logo & Description  -->
+      <div class="column">
+        {% if footer.logo %}
+          {% image footer.logo max-150x150 class="footer-logo" %}
+        {% endif %}
+        <p class="footer-text">
+          {{ footer.description }}
+        </p>
+      </div>
+
+      <!-- Dynamic Footer Sections  -->
+      {% for section in footer.sections %}
+        <div class="column">
+          <h2 class="footer-heading is-size-5">{{ section.value.title|upper }}</h2>
+          <ul>
+            {% for link in section.value.links %}
+              <li>
+                <a href="{{ link.url }}"
+                   title="{{ link.name }}"
+                   {% if link.open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                  {{ link.name }}
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+
+    </div>
+
+    {% if footer.cta %}
+    <div class="footer-cta-wrapper">
+      {% for cta_block in footer.cta %}
+      <a href="{{ cta_block.value.url }}" class="footer-cta-btn">
+        {{ cta_block.value.title }}
+        <span class="footer-cta-arrow">&rarr;</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <hr class="footer-divider">
+
+      <!-- COPYRIGHT & SOCIAL ICONS  in {if statements} blocks to only render if icon is non-empty -->
+    <div class="columns">
+      <div class="column is-half">
+        <p class="copyright">
+          © {{ footer.copyright_organization }} {% now "Y" %} – All Rights Reserved
+        </p>
+      </div>
+      <div class="column is-half">
+        <div class="social-icons">
+          {% for social in footer.social_links %}
+            <a href="{{ social.value.url }}" class="social-icon" title="{{ social.value.name }}" target="_blank" rel="noopener noreferrer">
+              <i class="{{ social.value.icon }}"></i>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</footer>
+{% endif %}
+
+<style>
+  .footer {
+    background-color: var(--footer-bg);
+    padding: 2.5rem 1.5rem;
+    color: var(--footer-text);
+    margin-top: auto;
+    position: relative;
+  }
+
+  .footer .container {
+      position: relative;
+      z-index: 2;
+  }
+
+  .footer.has-bg-image {
+      background-image: var(--bg-image);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+  }
+
+  .footer.has-bg-image::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: color-mix(in srgb, var(--footer-bg) var(--bg-opacity-value, 55%), transparent);
+      z-index: 1;
+  }
+
+  .footer-logo {
+    max-width: 150px;
+    max-height: 150px;
+    width: auto;
+    height: auto;
+    margin-bottom: 1rem;
+    display: block;
+    object-fit: contain;
+  }
+
+  .footer a {
+    color: color-mix(in srgb, var(--footer-text) 90%, white);
+    transition: color 0.3s ease;
+  }
+
+  .footer a:hover {
+    color: var(--footer-text);
+    text-decoration: underline;
+  }
+
+  .footer ul {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .footer li {
+    margin-bottom: 0.5rem;
+  }
+
+  .footer-heading {
+    color: var(--footer-text);
+    margin-bottom: 1rem;
+    font-weight: bold;
+  }
+
+  .footer-text {
+    color: color-mix(in srgb, var(--footer-text) 90%, white);
+  }
+
+  .footer-cta-wrapper {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+  }
+
+  .footer-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1.25rem;
+    border-radius: 50px;
+    background: color-mix(in srgb, var(--footer-text) 12%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid color-mix(in srgb, var(--footer-text) 25%, transparent);
+    color: var(--footer-text);
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: background 0.25s, transform 0.2s;
+  }
+
+  .footer-cta-btn:hover {
+    background: color-mix(in srgb, var(--footer-text) 22%, transparent);
+    color: var(--footer-text) !important;
+    text-decoration: none !important;
+    transform: translateY(-2px);
+  }
+
+  .footer-cta-arrow {
+    display: inline-block;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .footer-cta-btn:hover .footer-cta-arrow {
+    transform: translateX(5px);
+  }
+
+  .footer-divider {
+    background-color: color-mix(in srgb, var(--footer-text) 20%, transparent);
+    margin: 1.5rem 0;
+    height: 1px;
+  }
+
+  .copyright {
+    color: color-mix(in srgb, var(--footer-text) 90%, white);
+    font-size: 0.9rem;
+  }
+
+  .social-icons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+  }
+
+  .social-icon {
+    display: inline-block;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+
+  .social-icon img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    filter: brightness(0) invert(1); /* Make icons white  */
+  }
+
+  .social-icon:hover {
+    opacity: 0.8;
+    transform: scale(1.08);
+  }
+
+  @media screen and (max-width: 768px) {
+    .footer {
+      padding: 1.5rem 1rem;
+    }
+
+    /* 2-column grid for footer sections */
+    .footer .columns.is-multiline {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem 1rem;
+    }
+
+    /* Logo/description column spans full width */
+    .footer .columns.is-multiline .column:first-child {
+      grid-column: 1 / -1;
+      margin-bottom: 0.25rem;
+    }
+
+    .footer .columns.is-multiline .column {
+      width: 100%;
+      margin-bottom: 0;
+      padding: 0.5rem;
+    }
+
+    .footer-logo {
+      max-width: 100px;
+      max-height: 80px;
+      margin-bottom: 0.5rem;
+    }
+
+    .footer-heading {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .footer li {
+      margin-bottom: 0.35rem;
+    }
+
+    .footer a {
+      font-size: 0.85rem;
+    }
+
+    .footer-text {
+      font-size: 0.85rem;
+    }
+
+    /* Copyright/social row stays stacked */
+    .footer .columns:not(.is-multiline) {
+      flex-direction: column;
+    }
+
+    .footer .columns:not(.is-multiline) .column {
+      width: 100%;
+      margin-bottom: 0.75rem;
+    }
+
+    .social-icons {
+      justify-content: center;
+      margin-top: 0.5rem;
+    }
+
+    .copyright {
+      text-align: center;
+    }
+
+    .footer-cta-wrapper {
+      justify-content: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .footer-cta-btn {
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 0.4rem 1rem;
+    }
+  }
+
+  /* Additional responsive tweaks for better mobile experience */
+  @media screen and (max-width: 480px) {
+    .footer {
+      padding: 1rem 0.75rem;
+    }
+
+    .footer-logo {
+      max-width: 80px;
+      max-height: 60px;
+    }
+
+    .footer-heading {
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .footer a,
+    .footer-text {
+      font-size: 0.78rem;
+    }
+
+    .footer-cta-btn {
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 0.35rem 0.85rem;
+    }
+
+    .social-icons {
+      gap: 0.75rem;
+    }
+
+    .social-icon {
+      font-size: 1rem;
+    }
+  }
+
+  /* Color Lines Styling */
+  .color-lines-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .color-line {
+    height: 6px;
+    width: 100%;
+  }
+</style>

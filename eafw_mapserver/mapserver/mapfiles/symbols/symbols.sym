@@ -1,8 +1,0 @@
-SYMBOLSET
-    SYMBOL
-        NAME "circle"
-        TYPE ELLIPSE
-        POINTS 1 1 END
-        FILLED TRUE
-    END
-END

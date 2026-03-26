@@ -1,0 +1,28 @@
+[
+  {
+    "backgroundColor": "#A2DFFF",
+    "basemapGroup": "basemap-light",
+    "image": "",
+    "label": "default",
+    "labelsGroup": "labels-light",
+    "mapStyle": ""
+  },
+  {
+    "baseStyle": true,
+    "basemapGroup": "basemap-dark",
+    "color": "#31312F",
+    "image": "",
+    "label": "dark",
+    "labelsGroup": "labels-dark",
+    "mapStyle": ""
+  },
+  {
+    "basemapGroup": "basemap-satellite",
+    "color": "#131620",
+    "image": "",
+    "label": "satellite",
+    "labelsGroup": "labels-dark",
+    "mapStyle": "http://20.56.94.119/tileserver-gl/styles/ahw/style.json",
+    "url": "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+  }
+]

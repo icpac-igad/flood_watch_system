@@ -14,183 +14,72 @@ on:
         description: 'Force rebuild all images'
         type: boolean
         default: false
-      skip_backup:
-        description: 'Skip staging DB backup (faster emergency deploy)'
-        type: boolean
-        default: false
 
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
-
-concurrency:
-  group: staging-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   detect-changes:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      api: ${{ steps.changes.outputs.api }}
       cms: ${{ steps.changes.outputs.cms }}
       mapviewer: ${{ steps.changes.outputs.mapviewer }}
       mapserver: ${{ steps.changes.outputs.mapserver }}
       mapcache: ${{ steps.changes.outputs.mapcache }}
       jobs: ${{ steps.changes.outputs.jobs }}
-      stac_browser: ${{ steps.changes.outputs.stac_browser }}
-      deploy_only: ${{ steps.changes.outputs.deploy_only }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
 
       - name: Check for changes
         id: changes
         run: |
-          # Compare all commits in this push (not just the last one)
-          BEFORE="${{ github.event.before }}"
-          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-            # First push or force push — compare against parent
-            BEFORE="HEAD~1"
-          fi
-          CHANGED=$(git diff --name-only "$BEFORE" HEAD 2>/dev/null || echo "")
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
           echo "Changed files: $CHANGED"
 
-          # Check each component
-          if echo "$CHANGED" | grep -qE "^eafw_api/"; then
-            echo "api=true" >> $GITHUB_OUTPUT
-          else
-            echo "api=false" >> $GITHUB_OUTPUT
-          fi
-
-          if echo "$CHANGED" | grep -qE "^eafw_cms/|^eafw_docker/cms/"; then
+          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/|^eafw_geomanager/"; then
             echo "cms=true" >> $GITHUB_OUTPUT
           else
             echo "cms=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_mapviewer/|^eafw_docker/mapviewer/"; then
+          if echo "$CHANGED" | grep -qE "^eafw_geomapviewer/|^eafw_geomanager_web/docker/mapviewer/"; then
             echo "mapviewer=true" >> $GITHUB_OUTPUT
           else
             echo "mapviewer=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_docker/mapserver/"; then
+          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/docker/mapserver/"; then
             echo "mapserver=true" >> $GITHUB_OUTPUT
           else
             echo "mapserver=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_docker/mapcache/"; then
+          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/docker/mapcache/"; then
             echo "mapcache=true" >> $GITHUB_OUTPUT
           else
             echo "mapcache=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_jobs/|^eafw_docker/jobs/"; then
+          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/docker/jobs/|^eafw_geomanager_web/eafw_jobs/"; then
             echo "jobs=true" >> $GITHUB_OUTPUT
           else
             echo "jobs=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_docker/stac/|^eafw_stac/"; then
-            echo "stac_browser=true" >> $GITHUB_OUTPUT
-          else
-            echo "stac_browser=false" >> $GITHUB_OUTPUT
-          fi
-
-          # Check if only config/deploy files changed (no build needed)
-          if echo "$CHANGED" | grep -qvE "^eafw_api/|^eafw_cms/|^eafw_docker/cms/|^eafw_mapviewer/|^eafw_docker/mapviewer/|^eafw_docker/mapserver/|^eafw_docker/mapcache/|^eafw_jobs/|^eafw_docker/jobs/|^eafw_docker/stac/|^eafw_stac/"; then
-            echo "deploy_only=true" >> $GITHUB_OUTPUT
-          else
-            echo "deploy_only=false" >> $GITHUB_OUTPUT
-          fi
-
-  security-gate:
-    name: Security Gate
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Block forbidden files from deployment branch
-        run: |
-          set -euo pipefail
-
-          SHAPEFILE_RE='\.((shp|shx|dbf|prj|cpg|qmd))$'
-          SENSITIVE_ENV_RE='(^|/)\.env$|(^|/)staging\.env$|(^|/)production\.env$'
-          HIGH_RISK_SECRET_RE='(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (RSA|OPENSSH|EC|PRIVATE) KEY-----)'
-
-          tracked_shapefiles="$(git ls-files | grep -E -i "${SHAPEFILE_RE}" || true)"
-          tracked_env_files="$(git ls-files | grep -E "${SENSITIVE_ENV_RE}" || true)"
-          secret_hits="$(git grep -n -I -E "${HIGH_RISK_SECRET_RE}" -- . ':!*.md' ':!*.example' ':!*.sample' || true)"
-
-          if [ -n "${tracked_shapefiles}" ]; then
-            echo "::error::Blocked: shapefile artifacts are tracked in git."
-            echo "${tracked_shapefiles}"
-            exit 1
-          fi
-
-          if [ -n "${tracked_env_files}" ]; then
-            echo "::error::Blocked: raw environment files are tracked in git."
-            echo "${tracked_env_files}"
-            exit 1
-          fi
-
-          if [ -n "${secret_hits}" ]; then
-            echo "::error::Blocked: high-risk secret pattern detected in tracked files."
-            echo "${secret_hits}"
-            exit 1
-          fi
-
-          echo "Security gate passed: no blocked files or high-risk secret patterns."
-
-  build-api:
-    name: Build API
-    runs-on: ubuntu-latest
-    needs: [detect-changes, security-gate]
-    if: needs.detect-changes.outputs.api == 'true' || github.event.inputs.force_build == 'true'
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            eafw_api
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push API
-        uses: docker/build-push-action@v5
-        with:
-          context: ./eafw_api
-          file: eafw_api/Dockerfile
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}/eafw-api:latest
-            ${{ env.IMAGE_PREFIX }}/eafw-api:${{ github.sha }}
-          cache-from: type=gha,scope=eafw-api
-          cache-to: type=gha,scope=eafw-api,mode=max
-
   build-cms:
     name: Build CMS
     runs-on: ubuntu-latest
-    needs: [detect-changes, security-gate]
+    needs: detect-changes
     if: needs.detect-changes.outputs.cms == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            eafw_cms
-            eafw_docker/cms
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -200,31 +89,25 @@ jobs:
       - name: Build and push CMS
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: eafw_docker/cms/Dockerfile
+          context: ./eafw_geomanager_web
+          file: ./eafw_geomanager_web/docker/cms/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-cms:latest
             ${{ env.IMAGE_PREFIX }}/eafw-cms:${{ github.sha }}
-          cache-from: type=gha,scope=eafw-cms
-          cache-to: type=gha,scope=eafw-cms,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   build-mapviewer:
     name: Build Mapviewer
     runs-on: ubuntu-latest
-    needs: [detect-changes, security-gate]
+    needs: detect-changes
     if: needs.detect-changes.outputs.mapviewer == 'true' || github.event.inputs.force_build == 'true'
-    env:
-      ANALYTICS_PROPERTY_ID: ${{ secrets.STAGING_ANALYTICS_PROPERTY_ID }}
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            eafw_mapviewer
-            eafw_docker/mapviewer
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -234,34 +117,32 @@ jobs:
       - name: Build and push Mapviewer
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: eafw_docker/mapviewer/Dockerfile
+          context: ./eafw_geomapviewer
+          file: ./eafw_geomanager_web/docker/mapviewer/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapviewer:latest
             ${{ env.IMAGE_PREFIX }}/eafw-mapviewer:${{ github.sha }}
           build-args: |
             CMS_API=/api
-            BASE_PATH=/ 
+            BASE_PATH=/
             ASSET_PREFIX=
-            ADMIN_BOUNDARY_API=/api/v1/boundaries/admin-boundaries/
-            ANALYTICS_PROPERTY_ID=${{ env.ANALYTICS_PROPERTY_ID }}
-          cache-from: type=gha,scope=eafw-mapviewer
-          cache-to: type=gha,scope=eafw-mapviewer,mode=max
+            ADMIN_BOUNDARY_API=/pg/tileserv/
+            ANALYTICS_PROPERTY_ID=${{ secrets.STAGING_ANALYTICS_PROPERTY_ID }}
+            NEXT_TELEMETRY_DISABLED=1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   build-mapserver:
     name: Build Mapserver
     runs-on: ubuntu-latest
-    needs: [detect-changes, security-gate]
+    needs: detect-changes
     if: needs.detect-changes.outputs.mapserver == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            eafw_docker/mapserver
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -271,28 +152,25 @@ jobs:
       - name: Build and push Mapserver
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: eafw_docker/mapserver/Dockerfile
+          context: ./eafw_geomanager_web
+          file: ./eafw_geomanager_web/docker/mapserver/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapserver:latest
             ${{ env.IMAGE_PREFIX }}/eafw-mapserver:${{ github.sha }}
-          cache-from: type=gha,scope=eafw-mapserver
-          cache-to: type=gha,scope=eafw-mapserver,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   build-mapcache:
     name: Build Mapcache
     runs-on: ubuntu-latest
-    needs: [detect-changes, security-gate]
+    needs: detect-changes
     if: needs.detect-changes.outputs.mapcache == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            eafw_docker/mapcache
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -302,29 +180,25 @@ jobs:
       - name: Build and push Mapcache
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: eafw_docker/mapcache/Dockerfile
+          context: ./eafw_geomanager_web
+          file: ./eafw_geomanager_web/docker/mapcache/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapcache:latest
             ${{ env.IMAGE_PREFIX }}/eafw-mapcache:${{ github.sha }}
-          cache-from: type=gha,scope=eafw-mapcache
-          cache-to: type=gha,scope=eafw-mapcache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   build-jobs:
     name: Build Jobs
     runs-on: ubuntu-latest
-    needs: [detect-changes, security-gate]
+    needs: detect-changes
     if: needs.detect-changes.outputs.jobs == 'true' || github.event.inputs.force_build == 'true'
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            eafw_jobs
-            eafw_docker/jobs
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -334,147 +208,31 @@ jobs:
       - name: Build and push Jobs
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: eafw_docker/jobs/Dockerfile
+          context: ./eafw_geomanager_web
+          file: ./eafw_geomanager_web/docker/jobs/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-jobs:latest
             ${{ env.IMAGE_PREFIX }}/eafw-jobs:${{ github.sha }}
-          cache-from: type=gha,scope=eafw-jobs
-          cache-to: type=gha,scope=eafw-jobs,mode=max
-
-  build-stac-browser:
-    name: Build STAC Browser
-    runs-on: ubuntu-latest
-    needs: [detect-changes, security-gate]
-    if: needs.detect-changes.outputs.stac_browser == 'true' || github.event.inputs.force_build == 'true'
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            eafw_docker/stac
-            eafw_stac
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push STAC Browser
-        uses: docker/build-push-action@v5
-        with:
-          context: ./eafw_docker/stac
-          file: eafw_docker/stac/Dockerfile.stac-browser
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}/eafw-stac-browser:latest
-            ${{ env.IMAGE_PREFIX }}/eafw-stac-browser:${{ github.sha }}
-          cache-from: type=gha,scope=eafw-stac-browser
-          cache-to: type=gha,scope=eafw-stac-browser,mode=max
-
-  build-stac-loader:
-    name: Build STAC Loader
-    runs-on: ubuntu-latest
-    needs: [detect-changes, security-gate]
-    if: needs.detect-changes.outputs.stac_browser == 'true' || github.event.inputs.force_build == 'true'
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            eafw_docker/pgstac
-            eafw_stac
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push STAC Loader
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: eafw_docker/pgstac/Dockerfile.stac-loader
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}/eafw-stac-loader:latest
-            ${{ env.IMAGE_PREFIX }}/eafw-stac-loader:${{ github.sha }}
-          cache-from: type=gha,scope=eafw-stac-loader
-          cache-to: type=gha,scope=eafw-stac-loader,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    needs: [detect-changes, security-gate, build-api, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs, build-stac-browser, build-stac-loader]
+    needs: [detect-changes, build-cms, build-mapviewer, build-mapserver, build-mapcache, build-jobs]
     if: always() && !cancelled()
     environment: staging
     steps:
-      - name: Preflight - check SSH reachability
-        id: ssh_preflight
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || secrets.STAGING_HOST }}
-        run: |
-          if [ -z "${DEPLOY_HOST}" ]; then
-            echo "reachable=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No deploy host configured in DEPLOY_HOST or STAGING_HOST. Skipping deploy."
-            exit 0
-          fi
-
-          if timeout 8 bash -lc "cat < /dev/null > /dev/tcp/${DEPLOY_HOST}/22" 2>/dev/null; then
-            echo "reachable=true" >> "$GITHUB_OUTPUT"
-            echo "SSH preflight passed for ${DEPLOY_HOST}:22"
-          else
-            echo "reachable=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Cannot reach ${DEPLOY_HOST}:22 from GitHub runner. Skipping deploy."
-          fi
-
-      - name: Preflight - check SSH authentication
-        id: ssh_auth_preflight
-        if: steps.ssh_preflight.outputs.reachable == 'true'
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || secrets.STAGING_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER || secrets.STAGING_USER }}
-          SSH_KEY: ${{ secrets.SSH_KEY || secrets.STAGING_SSH_KEY }}
-        run: |
-          if [ -z "${DEPLOY_USER}" ] || [ -z "${SSH_KEY}" ]; then
-            echo "auth_ok=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Missing DEPLOY_USER/STAGING_USER or SSH_KEY/STAGING_SSH_KEY. Skipping deploy."
-            exit 0
-          fi
-
-          KEY_FILE="$RUNNER_TEMP/staging_deploy_key"
-          printf '%s\n' "${SSH_KEY}" > "${KEY_FILE}"
-          chmod 600 "${KEY_FILE}"
-
-          if timeout 12 ssh -i "${KEY_FILE}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 "${DEPLOY_USER}@${DEPLOY_HOST}" 'echo ssh-auth-ok' >/dev/null 2>&1; then
-            echo "auth_ok=true" >> "$GITHUB_OUTPUT"
-            echo "SSH auth preflight passed for ${DEPLOY_USER}@${DEPLOY_HOST}"
-          else
-            echo "auth_ok=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::SSH auth preflight failed for ${DEPLOY_USER}@${DEPLOY_HOST}. Skipping deploy."
-          fi
-
       - name: Deploy to staging server
-        if: steps.ssh_preflight.outputs.reachable == 'true' && steps.ssh_auth_preflight.outputs.auth_ok == 'true'
         uses: appleboy/ssh-action@v1.0.3
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-          SFTP_USERNAME: ${{ secrets.SFTP_USERNAME }}
-          SFTP_PASSWORD: ${{ secrets.SFTP_PASSWORD }}
           FLOODPROOFS_SFTP_HOST: ${{ secrets.FLOODPROOFS_SFTP_HOST }}
           FLOODPROOFS_SFTP_USER: ${{ secrets.FLOODPROOFS_SFTP_USER }}
           FLOODPROOFS_SFTP_PASSWORD: ${{ secrets.FLOODPROOFS_SFTP_PASSWORD }}
-          ENSEMBLE_FTP_HOST: ${{ secrets.ENSEMBLE_FTP_HOST }}
-          ENSEMBLE_FTP_USER: ${{ secrets.ENSEMBLE_FTP_USER }}
-          ENSEMBLE_FTP_PASSWORD: ${{ secrets.ENSEMBLE_FTP_PASSWORD }}
           WRF_FTP_HOST: ${{ secrets.WRF_FTP_HOST }}
           WRF_FTP_USER: ${{ secrets.WRF_FTP_USER }}
           WRF_FTP_PASSWORD: ${{ secrets.WRF_FTP_PASSWORD }}
@@ -482,489 +240,111 @@ jobs:
           SMTP_EMAIL_HOST: ${{ secrets.SMTP_EMAIL_HOST }}
           SMTP_EMAIL_HOST_USER: ${{ secrets.SMTP_EMAIL_HOST_USER }}
           SMTP_EMAIL_HOST_PASSWORD: ${{ secrets.SMTP_EMAIL_HOST_PASSWORD }}
-          SMTP_EMAIL_PORT: ${{ secrets.SMTP_EMAIL_PORT }}
-          SMTP_EMAIL_USE_TLS: ${{ secrets.SMTP_EMAIL_USE_TLS }}
-          STAC_API_KEY: ${{ secrets.STAC_API_KEY }}
-          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
-          SYNC_SOURCE: ${{ secrets.SYNC_SOURCE }}
-          SYNC_INTERVAL: ${{ secrets.SYNC_INTERVAL }}
-          SYNC_DAYS: ${{ secrets.SYNC_DAYS }}
-          FLOODPROOFS_REMOTE_DIR: ${{ secrets.FLOODPROOFS_REMOTE_DIR }}
-          ENSEMBLE_REMOTE_DIR: ${{ secrets.ENSEMBLE_REMOTE_DIR }}
-          WRF_REMOTE_DIR: ${{ secrets.WRF_REMOTE_DIR }}
-          GOOGLE_FLOOD_REGION_CODES: ${{ secrets.GOOGLE_FLOOD_REGION_CODES }}
-          GOOGLE_FLOOD_PAGE_SIZE: ${{ secrets.GOOGLE_FLOOD_PAGE_SIZE }}
-          RECAPTCHA_PUBLIC_KEY: ${{ secrets.RECAPTCHA_PUBLIC_KEY }}
-          RECAPTCHA_PRIVATE_KEY: ${{ secrets.RECAPTCHA_PRIVATE_KEY }}
-          GOOGLE_SEARCH_API_KEY: ${{ secrets.GOOGLE_SEARCH_API_KEY }}
-          GOOGLE_CUSTOM_SEARCH_CX: ${{ secrets.GOOGLE_CUSTOM_SEARCH_CX }}
-          BITLY_TOKEN: ${{ secrets.BITLY_TOKEN }}
-          ANALYTICS_PROPERTY_ID: ${{ secrets.ANALYTICS_PROPERTY_ID }}
-          SKIP_BACKUP: ${{ github.event.inputs.skip_backup }}
         with:
-          host: ${{ secrets.DEPLOY_HOST || secrets.STAGING_HOST }}
-          username: ${{ secrets.DEPLOY_USER || secrets.STAGING_USER }}
-          key: ${{ secrets.SSH_KEY || secrets.STAGING_SSH_KEY }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.SSH_KEY }}
           port: 22
-          command_timeout: 35m
-          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,SFTP_HOST,SFTP_USERNAME,SFTP_PASSWORD,FLOODPROOFS_SFTP_HOST,FLOODPROOFS_SFTP_USER,FLOODPROOFS_SFTP_PASSWORD,FLOODPROOFS_REMOTE_DIR,ENSEMBLE_FTP_HOST,ENSEMBLE_FTP_USER,ENSEMBLE_FTP_PASSWORD,ENSEMBLE_REMOTE_DIR,WRF_FTP_HOST,WRF_FTP_USER,WRF_FTP_PASSWORD,WRF_REMOTE_DIR,FLOODS_API_KEY,SMTP_EMAIL_HOST,SMTP_EMAIL_HOST_USER,SMTP_EMAIL_HOST_PASSWORD,SMTP_EMAIL_PORT,SMTP_EMAIL_USE_TLS,STAC_API_KEY,DRIVE_FOLDER_ID,SYNC_SOURCE,SYNC_INTERVAL,SYNC_DAYS,GOOGLE_FLOOD_REGION_CODES,GOOGLE_FLOOD_PAGE_SIZE,RECAPTCHA_PUBLIC_KEY,RECAPTCHA_PRIVATE_KEY,GOOGLE_SEARCH_API_KEY,GOOGLE_CUSTOM_SEARCH_CX,BITLY_TOKEN,ANALYTICS_PROPERTY_ID,SKIP_BACKUP
+          command_timeout: 60m
+          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,FLOODPROOFS_SFTP_HOST,FLOODPROOFS_SFTP_USER,FLOODPROOFS_SFTP_PASSWORD,WRF_FTP_HOST,WRF_FTP_USER,WRF_FTP_PASSWORD,FLOODS_API_KEY,SMTP_EMAIL_HOST,SMTP_EMAIL_HOST_USER,SMTP_EMAIL_HOST_PASSWORD
           script: |
-            set -euo pipefail
-            export GIT_TERMINAL_PROMPT=0
+            set -e
             cd ~
-            log_ts() { date '+%Y-%m-%d %H:%M:%S UTC'; }
 
             echo "========================================="
             echo "  STAGING DEPLOYMENT"
-            echo "  $(log_ts)"
+            echo "  $(date '+%Y-%m-%d %H:%M:%S UTC')"
             echo "========================================="
 
-            # Preflight outbound registry access from target host.
-            # Skip deploy gracefully when staging server networking is not ready.
-            if ! getent hosts ghcr.io >/dev/null 2>&1; then
-              echo "WARN: ghcr.io DNS resolution failed on target host. Skipping deploy."
-              exit 0
-            fi
-            if ! timeout 10 bash -lc "cat < /dev/null > /dev/tcp/ghcr.io/443" 2>/dev/null; then
-              echo "WARN: ghcr.io:443 is unreachable from target host. Skipping deploy."
-              exit 0
-            fi
-
             # Login to GitHub Container Registry
-            echo "[$(log_ts)] Logging into GHCR"
-            if ! timeout 90 bash -lc "echo \"${GH_TOKEN}\" | docker login ghcr.io -u icpac-igad --password-stdin"; then
-              echo "FATAL: docker login failed or timed out after 90s"
-              exit 1
-            fi
-
-            # Use temporary askpass credentials so token is not embedded in git URLs.
-            ASKPASS_FILE="$(mktemp)"
-            cat > "${ASKPASS_FILE}" <<'EOF'
-            #!/bin/sh
-            case "$1" in
-              *Username*) echo "x-access-token" ;;
-              *Password*) echo "${GH_TOKEN}" ;;
-              *) echo "" ;;
-            esac
-            EOF
-            chmod 700 "${ASKPASS_FILE}"
-            export GIT_ASKPASS="${ASKPASS_FILE}"
-            trap 'rm -f "${ASKPASS_FILE}"; unset GIT_ASKPASS' EXIT
+            echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
 
             # Safe repo update
-            if [ -d "eafw/.git" ]; then
-              echo "[$(log_ts)] Updating existing repo..."
+            REPO_DIR=~/flood_watch_system
+            if [ -d "$REPO_DIR/.git" ]; then
               echo "Updating existing repo..."
-              cd eafw
-              git remote set-url origin https://github.com/icpac-igad/flood_watch_system.git
-              timeout 180 git fetch origin
-              timeout 60 git reset --hard origin/eafw
-            elif [ -d "eafw" ]; then
-              echo "[$(log_ts)] Existing eafw directory is not a git repo; replacing"
-              echo "Directory eafw/ exists but is not a git repo. Renaming and cloning fresh..."
-              mv eafw eafw_old_$(date +%Y%m%d%H%M%S)
-              timeout 300 git clone -b eafw https://github.com/icpac-igad/flood_watch_system.git eafw
-              cd eafw
+              cd $REPO_DIR
+              git fetch origin
+              git reset --hard origin/eafw
             else
-              echo "[$(log_ts)] Cloning repo..."
               echo "Cloning repo..."
-              timeout 300 git clone -b eafw https://github.com/icpac-igad/flood_watch_system.git eafw
-              cd eafw
+              git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git $REPO_DIR
+              cd $REPO_DIR
             fi
 
-            echo "Current directory: $(pwd)"
             echo "Git SHA: $(git rev-parse --short HEAD)"
 
-            # ─── CHECKSUM-BASED SECRET DETECTION ─────────────────
-            # Compute checksum of current .env before any changes
-            ENV_CHECKSUM_BEFORE=""
-            if [ -f .env ]; then
-              ENV_CHECKSUM_BEFORE=$(sha256sum .env | cut -d' ' -f1)
-              echo "Current .env checksum: ${ENV_CHECKSUM_BEFORE:0:16}..."
-            fi
+            # Work from the compose directory
+            cd $REPO_DIR/eafw_geomanager_web
 
             # Smart .env — create from template only on first deploy
             if [ ! -f .env ]; then
-              cp staging.env.example .env
+              cp ../staging.env.example .env
               echo "FIRST DEPLOY: created .env from template"
             fi
 
-            # Upsert .env keys robustly (handles missing keys and leading spaces)
-            upsert_env() {
-              key="$1"
-              value="$2"
-              awk -v key="$key" -v value="$value" '
-                BEGIN { done=0 }
-                {
-                  if ($0 ~ "^[[:space:]]*" key "=") {
-                    if (!done) {
-                      print key "=" value
-                      done=1
-                    }
-                    next
-                  }
-                  print
-                }
-                END {
-                  if (!done) print key "=" value
-                }
-              ' .env > .env.tmp && mv .env.tmp .env
-            }
+            # Inject secrets
+            sed -i "s|^CMS_DB_PASSWORD=.*|CMS_DB_PASSWORD=${DB_PASSWORD}|" .env
+            sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${DJANGO_SECRET_KEY}|" .env
+            sed -i "s|^FLOODPROOFS_SFTP_HOST=.*|FLOODPROOFS_SFTP_HOST=${FLOODPROOFS_SFTP_HOST}|" .env
+            sed -i "s|^FLOODPROOFS_SFTP_USER=.*|FLOODPROOFS_SFTP_USER=${FLOODPROOFS_SFTP_USER}|" .env
+            sed -i "s|^FLOODPROOFS_SFTP_PASSWORD=.*|FLOODPROOFS_SFTP_PASSWORD=${FLOODPROOFS_SFTP_PASSWORD}|" .env
+            sed -i "s|^WRF_FTP_HOST=.*|WRF_FTP_HOST=${WRF_FTP_HOST}|" .env
+            sed -i "s|^WRF_FTP_USER=.*|WRF_FTP_USER=${WRF_FTP_USER}|" .env
+            sed -i "s|^WRF_FTP_PASSWORD=.*|WRF_FTP_PASSWORD=${WRF_FTP_PASSWORD}|" .env
+            sed -i "s|^FLOODS_API_KEY=.*|FLOODS_API_KEY=${FLOODS_API_KEY}|" .env
+            sed -i "s|^SMTP_EMAIL_HOST=.*|SMTP_EMAIL_HOST=${SMTP_EMAIL_HOST}|" .env
+            sed -i "s|^SMTP_EMAIL_HOST_USER=.*|SMTP_EMAIL_HOST_USER=${SMTP_EMAIL_HOST_USER}|" .env
+            sed -i "s|^SMTP_EMAIL_HOST_PASSWORD=.*|SMTP_EMAIL_HOST_PASSWORD=${SMTP_EMAIL_HOST_PASSWORD}|" .env
+            sed -i "s|^CMS_DEBUG=.*|CMS_DEBUG=False|" .env
 
-            # Canonical staging values to prevent drift on existing servers
-            upsert_env "CMS_DB_USER" "eafw_user"
-            upsert_env "CMS_DB_NAME" "eafw_db"
-            upsert_env "NGINX_HOST_BIND" "0.0.0.0"
-            upsert_env "NGINX_HOST_PORT" "9068"
-            upsert_env "ALLOWED_HOSTS" "41.139.151.242,floodwatch.icpac.net,10.10.1.13,0.0.0.0,127.0.0.1,localhost"
-            upsert_env "CSRF_TRUSTED_ORIGINS" "http://41.139.151.242,http://41.139.151.242:9068,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net"
-            upsert_env "CORS_ALLOWED_ORIGINS" "http://41.139.151.242,http://41.139.151.242:9068,http://10.10.1.13,http://10.10.1.13:9068,http://127.0.0.1,http://localhost,https://floodwatch.icpac.net,http://floodwatch.icpac.net"
-
-            # Inject ALL secrets from GitHub Environment into .env
-            upsert_env "CMS_DB_PASSWORD" "${DB_PASSWORD}"
-            upsert_env "SECRET_KEY" "${DJANGO_SECRET_KEY}"
-            upsert_env "SFTP_HOST" "${SFTP_HOST}"
-            upsert_env "SFTP_USERNAME" "${SFTP_USERNAME}"
-            upsert_env "SFTP_PASSWORD" "${SFTP_PASSWORD}"
-            upsert_env "FLOODPROOFS_SFTP_HOST" "${FLOODPROOFS_SFTP_HOST}"
-            upsert_env "FLOODPROOFS_SFTP_USER" "${FLOODPROOFS_SFTP_USER}"
-            upsert_env "FLOODPROOFS_SFTP_PASSWORD" "${FLOODPROOFS_SFTP_PASSWORD}"
-            upsert_env "ENSEMBLE_FTP_HOST" "${ENSEMBLE_FTP_HOST}"
-            upsert_env "ENSEMBLE_FTP_USER" "${ENSEMBLE_FTP_USER}"
-            upsert_env "ENSEMBLE_FTP_PASSWORD" "${ENSEMBLE_FTP_PASSWORD}"
-            upsert_env "WRF_FTP_HOST" "${WRF_FTP_HOST}"
-            upsert_env "WRF_FTP_USER" "${WRF_FTP_USER}"
-            upsert_env "WRF_FTP_PASSWORD" "${WRF_FTP_PASSWORD}"
-            upsert_env "FLOODS_API_KEY" "${FLOODS_API_KEY}"
-            upsert_env "SMTP_EMAIL_HOST" "${SMTP_EMAIL_HOST}"
-            upsert_env "SMTP_EMAIL_HOST_USER" "${SMTP_EMAIL_HOST_USER}"
-            upsert_env "SMTP_EMAIL_HOST_PASSWORD" "${SMTP_EMAIL_HOST_PASSWORD}"
-            upsert_env "SMTP_EMAIL_PORT" "${SMTP_EMAIL_PORT}"
-            upsert_env "SMTP_EMAIL_USE_TLS" "${SMTP_EMAIL_USE_TLS}"
-            # STAC / eoAPI
-            upsert_env "STAC_API_KEY" "${STAC_API_KEY}"
-            # Google Drive sync
-            upsert_env "DRIVE_FOLDER_ID" "${DRIVE_FOLDER_ID}"
-            upsert_env "SYNC_SOURCE" "${SYNC_SOURCE}"
-            upsert_env "SYNC_INTERVAL" "${SYNC_INTERVAL}"
-            upsert_env "SYNC_DAYS" "${SYNC_DAYS}"
-            # Remote directories for data ingestion
-            upsert_env "FLOODPROOFS_REMOTE_DIR" "${FLOODPROOFS_REMOTE_DIR}"
-            upsert_env "ENSEMBLE_REMOTE_DIR" "${ENSEMBLE_REMOTE_DIR}"
-            upsert_env "WRF_REMOTE_DIR" "${WRF_REMOTE_DIR}"
-            # Google Flood API config
-            upsert_env "GOOGLE_FLOOD_REGION_CODES" "${GOOGLE_FLOOD_REGION_CODES}"
-            upsert_env "GOOGLE_FLOOD_PAGE_SIZE" "${GOOGLE_FLOOD_PAGE_SIZE}"
-            # Optional integrations
-            upsert_env "RECAPTCHA_PUBLIC_KEY" "${RECAPTCHA_PUBLIC_KEY}"
-            upsert_env "RECAPTCHA_PRIVATE_KEY" "${RECAPTCHA_PRIVATE_KEY}"
-            upsert_env "GOOGLE_SEARCH_API_KEY" "${GOOGLE_SEARCH_API_KEY}"
-            upsert_env "GOOGLE_CUSTOM_SEARCH_CX" "${GOOGLE_CUSTOM_SEARCH_CX}"
-            upsert_env "BITLY_TOKEN" "${BITLY_TOKEN}"
-            upsert_env "ANALYTICS_PROPERTY_ID" "${ANALYTICS_PROPERTY_ID}"
-            # Force DEBUG off on staging
-            upsert_env "CMS_DEBUG" "False"
-
-            # Pin deployments to this commit when SHA-tagged images exist.
-            GIT_SHA="$(git rev-parse HEAD)"
-            IMAGE_OWNER="ghcr.io/icpac-igad"
-            resolve_image_ref() {
-              image_name="$1"
-              sha_ref="${IMAGE_OWNER}/${image_name}:${GIT_SHA}"
-              latest_ref="${IMAGE_OWNER}/${image_name}:latest"
-              if docker manifest inspect "${sha_ref}" >/dev/null 2>&1; then
-                echo "${sha_ref}"
-              else
-                echo "${latest_ref}"
-              fi
-            }
-
-            upsert_env "API_IMAGE_NAME" "$(resolve_image_ref eafw-api)"
-            upsert_env "WEB_IMAGE_NAME" "$(resolve_image_ref eafw-cms)"
-            upsert_env "MAPVIEWER_IMAGE_NAME" "$(resolve_image_ref eafw-mapviewer)"
-            upsert_env "MAPSERVER_IMAGE_NAME" "$(resolve_image_ref eafw-mapserver)"
-            upsert_env "MAPCACHE_IMAGE_NAME" "$(resolve_image_ref eafw-mapcache)"
-            upsert_env "JOBS_IMAGE_NAME" "$(resolve_image_ref eafw-jobs)"
-            upsert_env "STAC_BROWSER_IMAGE_NAME" "$(resolve_image_ref eafw-stac-browser)"
-
-            # Compare checksums to detect secret changes
-            ENV_CHECKSUM_AFTER=$(sha256sum .env | cut -d' ' -f1)
-            SECRETS_CHANGED=false
-            if [ -n "$ENV_CHECKSUM_BEFORE" ] && [ "$ENV_CHECKSUM_BEFORE" != "$ENV_CHECKSUM_AFTER" ]; then
-              SECRETS_CHANGED=true
-              echo "SECRETS CHANGED: .env was updated with new values"
-            elif [ -n "$ENV_CHECKSUM_BEFORE" ]; then
-              echo "NO SECRET CHANGES: .env unchanged"
-            else
-              SECRETS_CHANGED=true
-              echo "FIRST DEPLOY: all secrets are new"
-            fi
-
-            # Ensure mapfiles exist before mapserver starts (volume mount can be empty on first deploy)
-            if ! bash scripts/manage_map_services.sh \
-              --compose-file docker-compose.staging.yml \
-              --env-file .env \
-              --sync-mapfiles; then
-              echo "FATAL: mapfiles bootstrap failed"
-              exit 1
-            fi
-
-            # ─── DATABASE BACKUP WITH CHECKSUM VERIFICATION ──────
+            # Database backup
             mkdir -p ~/eafw-backups
             DB_STATUS=$(docker inspect --format='{{.State.Status}}' eafw-pgdb 2>/dev/null || echo "none")
-            DB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' eafw-pgdb 2>/dev/null || echo "none")
-
-            if [ "${SKIP_BACKUP}" = "true" ]; then
-              echo "SKIP_BACKUP=true — skipping staging database backup"
-            elif [ "$DB_STATUS" = "running" ] && [ "$DB_HEALTH" != "unhealthy" ]; then
+            if [ "$DB_STATUS" = "running" ]; then
               echo "Backing up database..."
               BACKUP="$HOME/eafw-backups/staging_db_$(date +%Y%m%d_%H%M%S).dump"
-              PG_DUMP_TIMEOUT_SECONDS=300
-
-              # Create backup, but do not block staging deploy forever on slow dumps.
-              if timeout "${PG_DUMP_TIMEOUT_SECONDS}" docker exec eafw-pgdb pg_dump -U eafw_user -Fc eafw_db > "$BACKUP"; then
-                # Verify backup with checksum
-                if [ -f "$BACKUP" ] && [ -s "$BACKUP" ]; then
-                  BACKUP_SIZE=$(du -h "$BACKUP" | cut -f1)
-                  BACKUP_CHECKSUM=$(sha256sum "$BACKUP" | cut -d' ' -f1)
-                  echo "Backup saved: $BACKUP"
-                  echo "  Size: $BACKUP_SIZE"
-                  echo "  SHA256: ${BACKUP_CHECKSUM:0:16}..."
-
-                  # Save checksum alongside backup
-                  echo "$BACKUP_CHECKSUM  $(basename $BACKUP)" > "${BACKUP}.sha256"
-                fi
-              else
-                echo "WARN: backup failed or timed out after ${PG_DUMP_TIMEOUT_SECONDS}s, continuing deploy"
-                rm -f "$BACKUP" "${BACKUP}.sha256" 2>/dev/null || true
-              fi
-
-              # Keep last 5 staging backups
-              ls -t ~/eafw-backups/staging_db_*.dump 2>/dev/null | tail -n +6 | while read f; do
-                rm -f "$f" "${f}.sha256"
-              done
-            else
-              echo "DB not healthy ($DB_STATUS/$DB_HEALTH), skipping backup"
+              docker exec eafw-pgdb pg_dump -U ${CMS_DB_USER:-geomanager} -Fc ${CMS_DB_NAME:-geomanager_web} > "$BACKUP" || echo "WARN: backup failed"
+              ls -t ~/eafw-backups/staging_db_*.dump 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null
             fi
 
-            # If DB is crash-looping, reset corrupt pgdata volume
-            if [ "$DB_STATUS" = "restarting" ] || [ "$DB_STATUS" = "exited" ]; then
-              echo "DB is in failed state ($DB_STATUS), resetting pgdata volume..."
-              docker compose -f docker-compose.staging.yml --env-file .env down 2>/dev/null || true
-              docker volume rm eafw_pgdata 2>/dev/null || true
-              echo "pgdata volume removed. Fresh init will run on next start."
-            fi
+            # Pull and deploy
+            docker compose pull --ignore-pull-failures
+            docker compose up -d
 
-            # ─── DEPLOY ──────────────────────────────────────────
-            # Pull images in two passes: core services first, then large STAC images
-            echo "[$(log_ts)] Pulling core images"
-            if ! timeout 600 docker compose -f docker-compose.staging.yml --env-file .env pull --ignore-pull-failures \
-                eafw_pgdb eafw_pgbouncer eafw_cms eafw_api eafw_mapviewer eafw_nginx eafw_jobs \
-                eafw_mapserver eafw_mapcache eafw_tileserv eafw_memcached; then
-              echo "WARN: core image pull failed or timed out; continuing with cached images"
-            fi
-
-            echo "[$(log_ts)] Pulling STAC/eoAPI images (may be large)"
-            if ! timeout 1200 docker compose -f docker-compose.staging.yml --env-file .env pull --ignore-pull-failures \
-                eafw_stac eafw_titiler eafw_stac_browser; then
-              echo "WARN: STAC image pull failed or timed out; continuing with cached images"
-            fi
-
-            # Start core services first, then STAC
-            echo "[$(log_ts)] Starting core services"
-            if ! timeout 300 docker compose -f docker-compose.staging.yml --env-file .env up -d \
-                eafw_pgdb eafw_pgbouncer eafw_memcached; then
-              echo "WARN: DB services start failed"
-            fi
-            sleep 5
-
-            echo "[$(log_ts)] Starting application services"
-            if ! timeout 600 docker compose -f docker-compose.staging.yml --env-file .env up -d; then
-              echo "WARN: docker compose up failed or timed out; proceeding to readiness checks"
-            fi
-
-            # Wait for DB to be ready (init loads 60MB+ on first deploy)
-            echo "Waiting for database to be ready..."
-            DB_READY=0
+            # Wait for DB
+            echo "Waiting for database..."
             for i in $(seq 1 60); do
-              if docker exec eafw-pgdb pg_isready -U eafw_user 2>/dev/null; then
-                DB_READY=1
+              if docker exec eafw-pgdb pg_isready -U ${CMS_DB_USER:-geomanager} 2>/dev/null; then
                 echo "DB ready after $((i*5))s"
                 break
               fi
-              [ $((i % 10)) -eq 0 ] && echo "  Still waiting ($i/60)..."
               sleep 5
             done
-            if [ "$DB_READY" -eq 0 ]; then
-              echo "=== DB LOGS ==="
-              docker logs eafw-pgdb 2>&1 | tail -30
-              echo "FATAL: DB did not start"
-              exit 1
-            fi
 
-            echo "Restarting CMS service to refresh runtime static manifest cache..."
-            docker compose -f docker-compose.staging.yml --env-file .env restart eafw_cms 2>&1 || docker restart eafw-cms 2>&1 || echo "WARN: CMS restart failed"
-
-            # Run DB migrations
-            echo "Running DB migrations..."
-            docker exec eafw-pgdb psql -U eafw_user -d eafw_db -c "
-              ALTER TABLE gha.multimodal_control_points ADD COLUMN IF NOT EXISTS country_code VARCHAR(2);
-            " 2>/dev/null || true
-            docker exec eafw-pgdb psql -U eafw_user -d eafw_db -c "
-              UPDATE gha.multimodal_control_points cp
-              SET country_code = CASE
-                WHEN LOWER(a0.country) = 'ethiopia' THEN 'ET'
-                WHEN LOWER(a0.country) = 'kenya' THEN 'KE'
-                WHEN LOWER(a0.country) = 'uganda' THEN 'UG'
-                WHEN LOWER(a0.country) = 'sudan' THEN 'SD'
-                WHEN LOWER(a0.country) = 'south sudan' THEN 'SS'
-                WHEN LOWER(a0.country) IN ('tanzania','zanzibar') THEN 'TZ'
-                WHEN LOWER(a0.country) = 'rwanda' THEN 'RW'
-                WHEN LOWER(a0.country) = 'burundi' THEN 'BI'
-                WHEN LOWER(a0.country) = 'somalia' THEN 'SO'
-                WHEN LOWER(a0.country) = 'djibouti' THEN 'DJ'
-                WHEN LOWER(a0.country) = 'eritrea' THEN 'ER'
-                ELSE 'UN'
-              END
-              FROM gha.admin0 a0
-              WHERE ST_Within(cp.geom, a0.geom) AND cp.country_code IS NULL;
-            " 2>/dev/null || true
-
-            # Fix hardcoded localhost URLs from local DB dump
-            echo "Fixing localhost tile URLs in CMS layers..."
-            docker exec eafw-pgdb psql -U eafw_user -d eafw_db -c "
-              -- Fix base_url fields
-              UPDATE geomanager_vectortilelayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:9068', '') WHERE base_url LIKE '%127.0.0.1:9068%';
-              UPDATE geomanager_rastertilelayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:9068', '') WHERE base_url LIKE '%127.0.0.1:9068%';
-              UPDATE geomanager_wmslayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:9068', '') WHERE base_url LIKE '%127.0.0.1:9068%';
-              UPDATE geomanager_vectortilelayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:8180', '') WHERE base_url LIKE '%127.0.0.1:8180%';
-              UPDATE geomanager_rastertilelayer SET base_url = REPLACE(base_url, 'http://127.0.0.1:8180', '') WHERE base_url LIKE '%127.0.0.1:8180%';
-              -- Fix tile_json_url fields
-              UPDATE geomanager_vectortilelayer SET tile_json_url = REPLACE(tile_json_url, 'http://127.0.0.1:9068', '') WHERE tile_json_url LIKE '%127.0.0.1:9068%';
-              UPDATE geomanager_vectortilelayer SET tile_json_url = REPLACE(tile_json_url, 'http://127.0.0.1:8180', '') WHERE tile_json_url LIKE '%127.0.0.1:8180%';
-              UPDATE geomanager_rastertilelayer SET tile_json_url = REPLACE(tile_json_url, 'http://127.0.0.1:9068', '') WHERE tile_json_url LIKE '%127.0.0.1:9068%';
-              UPDATE geomanager_rastertilelayer SET tile_json_url = REPLACE(tile_json_url, 'http://127.0.0.1:8180', '') WHERE tile_json_url LIKE '%127.0.0.1:8180%';
-            " 2>&1 || echo "WARN: localhost URL fix failed (tables may not exist yet)"
-
-            echo "Running Django migrations (with retries while CMS starts)..."
-            MIGRATE_OK=0
-            MIGRATE_MAX_ATTEMPTS=24
-            MIGRATE_RETRY_SECONDS=10
-            for i in $(seq 1 "${MIGRATE_MAX_ATTEMPTS}"); do
-              if timeout 120 docker exec eafw-cms /opt/venv/bin/python manage.py migrate --noinput 2>&1; then
-                MIGRATE_OK=1
-                echo "Migrations completed on attempt ${i}/${MIGRATE_MAX_ATTEMPTS}"
+            # Wait for CMS and run migrations
+            echo "Waiting for CMS..."
+            for i in $(seq 1 30); do
+              if docker exec eafw-cms curl -sf http://localhost:8000/ >/dev/null 2>&1; then
+                echo "CMS ready"
+                docker exec eafw-cms /home/app/.venv/bin/python manage.py migrate --noinput 2>&1 || true
+                docker exec eafw-cms /home/app/.venv/bin/python manage.py collectstatic --clear --no-input 2>&1 || true
                 break
               fi
-              echo "WARN: migrate attempt ${i}/${MIGRATE_MAX_ATTEMPTS} failed; retrying in ${MIGRATE_RETRY_SECONDS}s..."
-              [ $((i % 6)) -eq 0 ] && docker logs eafw-cms 2>&1 | tail -20 || true
-              sleep "${MIGRATE_RETRY_SECONDS}"
+              sleep 5
             done
-            if [ "$MIGRATE_OK" -ne 1 ]; then
-              echo "FATAL: unable to run Django migrations after ${MIGRATE_MAX_ATTEMPTS} attempts"
-              docker logs eafw-cms 2>&1 | tail -80 || true
-              exit 1
-            fi
-
-            echo "Clearing Django cache to avoid stale rendered homepage assets..."
-            docker exec eafw-cms /opt/venv/bin/python manage.py shell -c "from django.core.cache import caches; caches['default'].clear(); print('cache-cleared')" 2>&1 || echo "WARN: cache clear failed"
-
-            echo "Verifying homepage static assets (with retries)..."
-            ASSET_OK=0
-            ASSET_MAX_CHECKS=24
-            ASSET_RETRY_SECONDS=5
-            for i in $(seq 1 "${ASSET_MAX_CHECKS}"); do
-              if docker exec eafw-cms sh -lc "ls /opt/eafw_cms/static/css/geomanagerweb*.css >/dev/null"; then
-                ASSET_OK=1
-                echo "Static assets ready on check ${i}/${ASSET_MAX_CHECKS}"
-                break
-              fi
-              sleep "${ASSET_RETRY_SECONDS}"
-            done
-            if [ "$ASSET_OK" -ne 1 ]; then
-              echo "FATAL: homepage static assets missing after retries"
-              docker logs eafw-cms 2>&1 | tail -80 || true
-              exit 1
-            fi
-
-            echo "Verifying rendered homepage is accessible..."
-            HOME_HTML="$(curl -fsS --max-time 12 http://127.0.0.1:9068/ || true)"
-            HOME_CSS_PATH="$(printf '%s' "$HOME_HTML" | grep -o '/static/css/geomanagerweb[^\"]*' | head -n1 || true)"
-            if [ -n "$HOME_CSS_PATH" ]; then
-              HOME_CSS_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 "http://127.0.0.1:9068${HOME_CSS_PATH}")"
-              if [ "$HOME_CSS_CODE" != "200" ]; then
-                echo "FATAL: homepage references missing CSS (${HOME_CSS_PATH} -> ${HOME_CSS_CODE})"
-                exit 1
-              fi
-            else
-              echo "WARN: could not detect geomanagerweb CSS path in rendered homepage HTML"
-            fi
 
             # Reload nginx
-            echo "Reloading nginx config..."
-            docker exec eafw-nginx nginx -s reload 2>&1 || docker restart eafw-nginx 2>&1 || echo "WARN: nginx reload/restart failed"
+            docker exec eafw-nginx nginx -s reload 2>&1 || docker restart eafw-nginx
 
-            # Cleanup dangling images (non-fatal if another prune is running)
+            # Cleanup
             docker image prune -f 2>/dev/null || true
 
-            # ─── HEALTH CHECK ────────────────────────────────────
-            echo "Waiting 30s for services to stabilize..."
-            sleep 30
-            FAILED=0
-            # Core services — must be running
-            for svc in eafw-pgdb eafw-pgbouncer eafw-cms eafw-api eafw-mapviewer eafw-nginx eafw-mapserver eafw-mapcache eafw-tileserv; do
-              STATUS=$(docker inspect --format='{{.State.Status}}' $svc 2>/dev/null)
-              if [ "$STATUS" != "running" ]; then
-                echo "FAIL: $svc is $STATUS"
-                docker logs $svc 2>&1 | tail -5
-                FAILED=1
-              fi
-            done
-            # STAC services — warn but don't fail deploy (images may still be pulling)
-            for svc in eafw-stac eafw-titiler eafw-stac-browser; do
-              STATUS=$(docker inspect --format='{{.State.Status}}' $svc 2>/dev/null || echo "not_found")
-              if [ "$STATUS" != "running" ]; then
-                echo "WARN: $svc is $STATUS (non-fatal, STAC services may need manual pull on first deploy)"
-              fi
-            done
-
-            # Endpoint smoke tests for mapserver/mapcache through nginx (non-fatal)
-            if ! bash scripts/manage_map_services.sh \
-              --compose-file docker-compose.staging.yml \
-              --env-file .env \
-              --base-url http://127.0.0.1:9068 \
-              --smoke-test; then
-              echo "WARN: map service smoke tests failed (non-fatal, data may not be loaded yet)"
-            fi
-
+            # Health check
             echo ""
             echo "========================================="
             echo "  DEPLOYMENT SUMMARY"
             echo "========================================="
-            echo "  Secrets changed: $SECRETS_CHANGED"
-            echo "  Git SHA: $(git rev-parse --short HEAD)"
-            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+            docker ps --format "table {{.Names}}\t{{.Status}}" | grep eafw
             echo "========================================="
-
-            [ $FAILED -eq 1 ] && echo "SOME SERVICES NOT HEALTHY" && exit 1
             echo "Staging deploy successful!"
-
-      - name: Deployment skipped summary
-        if: steps.ssh_preflight.outputs.reachable != 'true' || steps.ssh_auth_preflight.outputs.auth_ok != 'true'
-        env:
-          SSH_REACHABLE: ${{ steps.ssh_preflight.outputs.reachable }}
-          SSH_AUTH_OK: ${{ steps.ssh_auth_preflight.outputs.auth_ok }}
-        run: |
-          {
-            echo "### Staging Deployment Skipped"
-            echo ""
-            if [ "${SSH_REACHABLE}" != "true" ]; then
-              echo "- Runner could not reach deploy host on SSH port 22."
-            fi
-            if [ "${SSH_AUTH_OK}" != "true" ]; then
-              echo "- SSH authentication preflight failed (user/key mismatch or key not authorized)."
-            fi
-            echo "This is treated as a controlled skip to avoid noisy failed pipelines."
-            echo ""
-            echo "Check firewall/NAT/public SSH exposure and staging deploy key/user secrets."
-          } >> "$GITHUB_STEP_SUMMARY"

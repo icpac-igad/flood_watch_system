@@ -1,4 +1,0 @@
-tipg==1.2.1
-uvicorn[standard]==0.32.0
-psycopg[binary,pool]==3.2.3
-python-decouple==3.8

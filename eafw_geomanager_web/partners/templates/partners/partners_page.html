@@ -1,0 +1,470 @@
+{% extends "base.html" %}
+{% load wagtailimages_tags static lazyimages_tags wagtailcore_tags %}
+
+{% block body_class %}partners-page{% endblock %}
+
+{% block content %}
+
+{% if page.banner_image %}
+{% image page.banner_image original as banner_img %}
+<div class="partners-hero" style="background-image: url('{{ banner_img.url }}');">
+  <div class="partners-hero-overlay">
+    <div class="container">
+      <nav class="partners-breadcrumb">
+        <a href="/">Home</a>
+        <span>/</span>
+        <span>{{ page.title }}</span>
+      </nav>
+      <h1 class="partners-hero-title">{{ page.page_title }}</h1>
+      {% if page.page_subtitle %}
+      <p class="partners-hero-subtitle">{{ page.page_subtitle }}</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<section class="partners-section">
+    <div class="container">
+        {% if page.partners %}
+            <div class="partners-grid">
+                {% for partner in page.partners %}
+                    <div class="partner-card-container" data-url="{{ partner.value.website_url|default:'' }}">
+                        <div class="partner-card">
+                            <!-- Front of card -->
+                            <div class="partner-card-front">
+                                {% if partner.value.logo %}
+                                    <div class="partner-logo-container">
+                                        {% image partner.value.logo original as partner_logo %}
+                                        <img class="partner-logo progressive__img progressive--not-loaded"
+                                             data-progressive="{{ partner_logo.url }}"
+                                             src="{% lazy_image_url partner_logo %}"
+                                             alt="{{ partner.value.name|default:'Partner' }} logo"/>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Back of card -->
+                            <div class="partner-card-back">
+                                <div>
+                                    {% if partner.value.name %}
+                                        <h2 class="partner-name" style="color: var(--primary-text-color); margin-bottom: 0.75rem;">{{ partner.value.name }}</h2>
+                                    {% endif %}
+
+                                    {% if partner.value.description %}
+                                        <div class="partner-back-description">{{ partner.value.description }}</div>
+                                    {% else %}
+                                        <div class="partner-back-description">Partner organization</div>
+                                    {% endif %}
+                                </div>
+
+                                {% if partner.value.website_url %}
+                                    <div class="has-text-centered">
+                                        <span class="click-more-btn">Visit Website</span>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="no-partners">
+                <p>No partners have been added yet.</p>
+            </div>
+        {% endif %}
+    </div>
+</section>
+
+{% if page.cta %}
+<section class="section partners-cta-section">
+  <div class="container has-text-centered">
+    {% for cta_block in page.cta %}
+    <a href="{{ cta_block.value.url }}" class="partners-cta-btn">
+      {{ cta_block.value.title }}
+      <span class="partners-cta-arrow">&rarr;</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<style>
+  /* CTA section */
+  .partners-cta-section {
+    padding-top: 0;
+  }
+
+  .partners-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1.75rem;
+    border-radius: 50px;
+    background: color-mix(in srgb, var(--primary-color, #034930) 12%, transparent);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid color-mix(in srgb, var(--primary-color, #034930) 30%, transparent);
+    color: var(--primary-color, #034930);
+    font-weight: 600;
+    font-size: 1rem;
+    text-decoration: none;
+    transition: background 0.25s, transform 0.2s;
+  }
+
+  .partners-cta-btn:hover {
+    background: color-mix(in srgb, var(--primary-color, #034930) 20%, transparent);
+    color: var(--primary-color, #034930);
+    text-decoration: none;
+    transform: translateY(-2px);
+  }
+
+  .partners-cta-arrow {
+    display: inline-block;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .partners-cta-btn:hover .partners-cta-arrow {
+    transform: translateX(5px);
+  }
+
+  /* Hero banner */
+  .partners-hero {
+    width: 100%;
+    height: 38vh;
+    min-height: 260px;
+    margin-top: 4.9rem;
+    background-size: cover;
+    background-position: center 33%;
+    background-repeat: no-repeat;
+    position: relative;
+  }
+
+  .partners-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 2.5rem;
+  }
+
+  .partners-breadcrumb {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.9rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .partners-breadcrumb a {
+    color: var(--accent-color);
+    text-decoration: none;
+  }
+
+  .partners-breadcrumb a:hover { text-decoration: underline; }
+
+  .partners-breadcrumb span { margin: 0 0.4rem; }
+
+  .partners-hero-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .partners-hero-subtitle {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 1.1rem;
+    margin-top: 0.5rem;
+    max-width: 600px;
+    line-height: 1.5;
+  }
+
+  @media screen and (max-width: 768px) {
+    .partners-hero { height: 38vh; min-height: 260px; }
+    .partners-hero-title { font-size: 1.6rem; }
+    .partners-hero-subtitle { font-size: 0.95rem; }
+  }
+
+  /* Partners section */
+  .partners-section {
+    padding: 4rem 1.5rem;
+    padding-top: 8rem;
+    background-color: var(--background-color);
+  }
+
+  .partners-hero + .partners-section {
+    padding-top: 4rem;
+  }
+
+  /* CSS Grid layout */
+  .partners-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+
+  .partner-card-container {
+    height: 280px;
+    perspective: 1000px;
+    cursor: pointer;
+  }
+
+  .partner-card {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+  }
+
+  .partner-card-container:hover .partner-card {
+    transform: rotateY(180deg);
+  }
+
+  /* Touch-friendly: tap to flip on mobile */
+  .partner-card-container.is-flipped .partner-card {
+    transform: rotateY(180deg);
+  }
+
+  .partner-card-front,
+  .partner-card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem;
+    background: var(--background-color);
+    border: 1px solid color-mix(in srgb, var(--secondary-text-color) 15%, transparent);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .partner-card-front {
+    justify-content: center;
+    align-items: center;
+  }
+
+  .partner-card-back {
+    transform: rotateY(180deg);
+    justify-content: space-between;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    color: var(--primary-text-color);
+    border: none;
+  }
+
+  .partner-logo-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+    max-height: 160px;
+    padding: 0.5rem;
+  }
+
+  .partner-logo-container img {
+    max-height: 140px;
+    max-width: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .partner-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--secondary-text-color);
+    text-align: center;
+    margin-top: 0.5rem;
+  }
+
+  .partner-back-description {
+    color: var(--primary-text-color);
+    text-align: center;
+    line-height: 1.5;
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+    flex-grow: 1;
+    overflow-y: auto;
+  }
+
+  .partner-back-description a {
+    color: rgb(251, 192, 45);
+    text-decoration: underline;
+    font-weight: 600;
+  }
+
+  .partner-back-description a:hover {
+    color: #ffffff;
+  }
+
+  .click-more-btn {
+    background-color: var(--accent-color);
+    color: var(--secondary-text-color);
+    border: none;
+    padding: 0.5rem 1.25rem;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: transform 0.3s ease, background-color 0.3s ease;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .click-more-btn:hover {
+    background-color: var(--accent-hover);
+    transform: scale(1.05);
+  }
+
+  .no-partners {
+    text-align: center;
+    padding: 4rem 0;
+    color: color-mix(in srgb, var(--secondary-text-color) 60%, white);
+    font-size: 18px;
+  }
+
+  /* Tablet: 3 columns */
+  @media screen and (max-width: 1023px) {
+    .partners-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem;
+    }
+    .partner-card-container {
+      height: 260px;
+    }
+  }
+
+  /* Small tablet / large phone: 2 columns */
+  @media screen and (max-width: 768px) {
+    .partners-section {
+      padding: 3rem 1rem;
+      padding-top: 7rem;
+    }
+    .partners-hero + .partners-section {
+      padding-top: 3rem;
+    }
+    .partners-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+    .partner-card-container {
+      height: 240px;
+    }
+    .partner-card-front,
+    .partner-card-back {
+      padding: 1rem;
+      border-radius: 8px;
+    }
+    .partner-logo-container {
+      max-height: 120px;
+    }
+    .partner-logo-container img {
+      max-height: 110px;
+    }
+    .partner-name {
+      font-size: 0.9rem;
+    }
+    .partner-back-description {
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
+    .click-more-btn {
+      padding: 0.4rem 1rem;
+      font-size: 0.8rem;
+    }
+  }
+
+  /* Phone: 1 column, taller cards */
+  @media screen and (max-width: 480px) {
+    .partners-section {
+      padding: 2.5rem 0.75rem;
+      padding-top: 6rem;
+    }
+    .partners-hero + .partners-section {
+      padding-top: 2.5rem;
+    }
+    .partners-grid {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      max-width: 320px;
+      margin: 0 auto;
+    }
+    .partner-card-container {
+      height: 250px;
+    }
+    .partner-logo-container {
+      max-height: 140px;
+    }
+    .partner-logo-container img {
+      max-height: 130px;
+    }
+    .partner-name {
+      font-size: 0.95rem;
+    }
+    .partner-back-description {
+      font-size: 0.85rem;
+    }
+  }
+
+  /* Navbar transparency when hero scrolls behind it */
+  #navbar { transition: background-color 0.3s ease; }
+
+  #navbar.partners-nav-transparent {
+    background-color: color-mix(in srgb, var(--navbar-bg) 70%, transparent) !important;
+  }
+</style>
+
+<script>
+  (function () {
+    /* Navbar transparency on scroll */
+    const navbar = document.getElementById('navbar');
+    const hero = document.querySelector('.partners-hero');
+    if (navbar && hero) {
+      function updateNavbar() {
+        const heroRect = hero.getBoundingClientRect();
+        const navH = navbar.offsetHeight;
+        if (heroRect.top < navH) {
+          navbar.classList.add('partners-nav-transparent');
+        } else {
+          navbar.classList.remove('partners-nav-transparent');
+        }
+      }
+      updateNavbar();
+      window.addEventListener('scroll', updateNavbar, { passive: true });
+    }
+
+    /* Touch-to-flip and click-to-navigate for cards */
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+    document.querySelectorAll('.partner-card-container').forEach(function (card) {
+      const url = card.getAttribute('data-url');
+
+      if (isTouchDevice) {
+        card.addEventListener('click', function (e) {
+          if (!card.classList.contains('is-flipped')) {
+            /* First tap: flip the card */
+            document.querySelectorAll('.partner-card-container.is-flipped').forEach(function (c) {
+              if (c !== card) c.classList.remove('is-flipped');
+            });
+            card.classList.add('is-flipped');
+            e.preventDefault();
+          } else if (url) {
+            /* Second tap: navigate to URL */
+            window.open(url, '_blank');
+          }
+        });
+      } else {
+        /* Desktop: click navigates directly */
+        card.addEventListener('click', function () {
+          if (url) window.open(url, '_blank');
+        });
+      }
+    });
+  })();
+</script>
+
+{% endblock %}
