@@ -16,6 +16,8 @@ volumes:
   eafw_jobs_data:
   eafw_jobs_logs:
   eafw_backups:
+  eafw_caddy_data:
+  eafw_caddy_config:
 
 services:
   # ============================================================
@@ -337,3 +339,19 @@ services:
     depends_on:
       - geomanager_web
       - geomanager_mapviewer
+
+  # ============================================================
+  # Caddy (HTTPS reverse proxy with auto Let's Encrypt)
+  # ============================================================
+  geomanager_caddy:
+    container_name: ${CADDY_CNTR_NAME:-eafw-caddy}
+    image: caddy:2-alpine
+    restart: ${RESTART_POLICY:-unless-stopped}
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${HTTPS_PORT:-8443}:443
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:z
+      - eafw_caddy_data:/data
+      - eafw_caddy_config:/config
+    depends_on:
+      - geomanager_nginx

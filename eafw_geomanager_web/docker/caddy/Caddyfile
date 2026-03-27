@@ -1,0 +1,7 @@
+{
+	https_port 443
+}
+
+floodwatch.icpac.net {
+	reverse_proxy geomanager_nginx:80
+}
