@@ -185,7 +185,7 @@ services:
     depends_on:
       - geomanager_pgbouncer
     expose:
-      - "80"
+      - "8080"
     volumes:
       - ${MS_RASTERDATA_VOLUME:-./data/mapfiles/data}:/opt/rasterdata:ro,z
     environment:
@@ -223,12 +223,12 @@ services:
     depends_on:
       - geomanager_mapserver
     expose:
-      - "80"
+      - "8080"
     volumes:
       - eafw_mapcache_tiles:/opt/tiles
     environment:
       - SERVICE_URL=${MC_SERVICE_URL:-http://localhost:9078/mapcache/}
-      - SOURCE_URL=${MC_SOURCE_URL:-http://geomanager_mapserver/mapserver/?}
+      - SOURCE_URL=${MC_SOURCE_URL:-http://geomanager_mapserver:8080/mapserver/?}
       - MAPCACHE_CONFIG_FILE=${MC_CONFIG_FILE:-/opt/mapcache/mapcache.xml}
       - WEB_GRID_EXTENTS=${WEB_GRID_EXTENTS:--73588 -3821469 8228258 5153993}
       - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
