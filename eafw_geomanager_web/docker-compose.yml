@@ -131,6 +131,8 @@ services:
       - GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-geomanagerweb.settings.production}
       - DJANGO_ALLOW_ASYNC_UNSAFE=${ALLOW_ASYNC_UNSAFE:-true}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-True}
+      - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE:-True}
     depends_on:
       geomanager_db:
         condition: service_healthy
