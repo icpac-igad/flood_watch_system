@@ -89,17 +89,34 @@ class LinkGroupBlock(blocks.StructBlock):
         label = _("Link Group")
 
 
-class MemberStateBlock(blocks.StructBlock):
-    """A block for displaying a member state with its flag."""
+IGAD_COUNTRY_CHOICES = [
+    ("bi", _("Burundi")),
+    ("dj", _("Djibouti")),
+    ("er", _("Eritrea")),
+    ("et", _("Ethiopia")),
+    ("ke", _("Kenya")),
+    ("rw", _("Rwanda")),
+    ("so", _("Somalia")),
+    ("ss", _("South Sudan")),
+    ("sd", _("Sudan")),
+    ("tz", _("Tanzania")),
+    ("ug", _("Uganda")),
+]
 
+
+class MemberStateBlock(blocks.StructBlock):
+    """A block for displaying a member state with its flag (auto-populated from country code)."""
+
+    country_code = blocks.ChoiceBlock(
+        choices=IGAD_COUNTRY_CHOICES,
+        label=_("Country"),
+        help_text=_("Select the member state — flag will load automatically"),
+    )
     name = blocks.CharBlock(
         max_length=100,
-        label=_("Country Name"),
-        help_text=_("Name of the member state"),
-    )
-    flag = ImageChooserBlock(
-        label=_("Flag Image"),
-        help_text=_("Flag image for the member state"),
+        label=_("Display Name"),
+        required=False,
+        help_text=_("Override display name (leave blank to use country name)"),
     )
 
     class Meta:

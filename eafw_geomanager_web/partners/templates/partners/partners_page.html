@@ -24,8 +24,30 @@
 </div>
 {% endif %}
 
+{# ── Member States Section ── #}
+{% with homepage=page.get_parent.specific %}
+{% if homepage.show_member_states and homepage.member_states %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/css/flag-icons.min.css">
+<section class="partners-section" style="padding-bottom:1rem">
+    <div class="container">
+        <h2 class="has-text-centered" style="font-size:1.8rem;font-weight:700;margin-bottom:2rem;color:var(--secondary-text-color)">IGAD Member States</h2>
+        <div class="partners-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1.5rem;max-width:900px;margin:0 auto">
+            {% for state in homepage.member_states %}
+            <div style="text-align:center">
+                <span class="fi fi-{{ state.value.country_code }} fis" style="display:inline-block;width:100px;height:67px;background-size:cover;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.12);border:1px solid rgba(0,0,0,.08)"></span>
+                <div style="margin-top:.5rem;font-size:.9rem;font-weight:500;color:var(--secondary-text-color)">{{ state.value.name }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+{% endwith %}
+
+{# ── Partners Section ── #}
 <section class="partners-section">
     <div class="container">
+        <h2 class="has-text-centered" style="font-size:1.8rem;font-weight:700;margin-bottom:2rem;color:var(--secondary-text-color)">Our Partners</h2>
         {% if page.partners %}
             <div class="partners-grid">
                 {% for partner in page.partners %}
