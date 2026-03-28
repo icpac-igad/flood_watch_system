@@ -17,6 +17,7 @@ from home.views import (
     google_flood_dates,
     wrf_daily_rainfall_dates,
     wrf_extreme_rainfall_dates,
+    geoglows_forecast_proxy,
 )
 
 ADMIN_URL_PATH = getattr(settings, "ADMIN_URL_PATH", None)
@@ -40,6 +41,8 @@ urlpatterns = [
     path("api/flood/situation-summary", situation_summary, name="situation_summary"),
     path("api/flood/country-summary", country_summary, name="country_summary"),
     path("api/flood/forecast-timeseries/<int:point_id>", forecast_timeseries, name="forecast_timeseries"),
+    path("api/flood/geoglows-forecast/<int:river_id>", geoglows_forecast_proxy, name="geoglows_forecast"),
+    path("api/flood/geoglows-forecast/<int:river_id>/", geoglows_forecast_proxy, name="geoglows_forecast_slash"),
     # geomanager urls
     path("", include("geomanager.urls"), name="geomanager"),
 ]

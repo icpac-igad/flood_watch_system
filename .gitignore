@@ -35,6 +35,7 @@ Thumbs.db
 backups/*.dump
 backups/*.sql
 backups/*.gz
+backups/geoglows/
 
 # Local overrides
 docker-compose.override.yml

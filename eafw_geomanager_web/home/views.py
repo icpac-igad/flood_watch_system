@@ -3,6 +3,7 @@ Flood situation API views — served from Django CMS.
 Adapted from eafw_api multimodal router (Hillary Koros, ICPAC).
 """
 import json
+import urllib.request
 from datetime import date as date_cls
 from django.db import connection
 from django.http import Http404, HttpResponse, JsonResponse
@@ -577,3 +578,36 @@ def forecast_timeseries(request, point_id):
         "timeseries": timeseries,
         "count": len(timeseries),
     })
+
+
+@require_GET
+@cache_page(3600)
+def geoglows_forecast_proxy(request, river_id):
+    """Proxy GEOGloWS v2 forecast API to avoid CORS issues.
+    Caches for 1 hour since forecasts update daily."""
+    try:
+        url = f"https://geoglows.ecmwf.int/api/v2/forecast/{river_id}?format=json"
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+
+        # Also fetch return periods from our DB
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT rp_2yr, rp_5yr, rp_10yr, rp_25yr, rp_50yr, rp_100yr "
+                "FROM gha.geoglows_rivers WHERE river_id = %s",
+                [river_id]
+            )
+            row = cursor.fetchone()
+
+        if row:
+            data["return_periods"] = {
+                "rp_2yr": row[0], "rp_5yr": row[1], "rp_10yr": row[2],
+                "rp_25yr": row[3], "rp_50yr": row[4], "rp_100yr": row[5],
+            }
+
+        return JsonResponse(data)
+    except urllib.error.HTTPError as e:
+        return JsonResponse({"error": f"GEOGloWS API error: {e.code}"}, status=502)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

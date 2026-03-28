@@ -4,6 +4,7 @@ import { formatNumber } from "@/utils/format";
 
 import Button from "@/components/ui/button";
 import MultiModelChart from "../multimodel-chart";
+import GeoglowsChart from "../geoglows-chart";
 
 import "./styles.scss";
 
@@ -119,6 +120,33 @@ const DataTable = ({
     };
   }, [data, selected]);
 
+  const { hasGeoglowsData, geoglowsData } = useMemo(() => {
+    if (!Array.isArray(data)) {
+      return { hasGeoglowsData: false, geoglowsData: {} };
+    }
+
+    const findField = (columns) =>
+      data.find((entry) => columns.includes(entry?.column));
+
+    const riverIdField = findField(["river_id"]);
+    const countryField = findField(["country"]);
+    const streamOrderField = findField(["stream_order"]);
+
+    const layerName = selected?.layer?.name || selected?.layer?.label || "";
+    const isGeoglowsLayer =
+      layerName.toLowerCase().includes("geoglows") ||
+      layerName.toLowerCase().includes("river forecast");
+
+    return {
+      hasGeoglowsData: !!(riverIdField?.value && isGeoglowsLayer),
+      geoglowsData: {
+        riverId: riverIdField?.value,
+        country: countryField?.value,
+        streamOrder: streamOrderField?.value,
+      },
+    };
+  }, [data, selected]);
+
   if (hasMultiModelData) {
     return (
       <div className="c-data-table">
@@ -128,6 +156,18 @@ const DataTable = ({
           layerName={multiModelData.layerName}
           selectedDate={selectedDate}
           thresholds={multiModelData.thresholds}
+        />
+      </div>
+    );
+  }
+
+  if (hasGeoglowsData) {
+    return (
+      <div className="c-data-table">
+        <GeoglowsChart
+          riverId={geoglowsData.riverId}
+          country={geoglowsData.country}
+          streamOrder={geoglowsData.streamOrder}
         />
       </div>
     );

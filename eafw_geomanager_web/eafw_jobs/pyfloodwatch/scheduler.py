@@ -109,6 +109,21 @@ def run_google_flood_sync_job():
         logger.exception(f"Error in Google Flood sync: {e}")
 
 
+def run_geoglows_sync_job():
+    """Run GEOGloWS v2 River Forecast sync from S3 Zarr."""
+    logger.info(f"[{datetime.now()}] Running GEOGloWS River Forecast sync")
+
+    try:
+        from .geoglows_sync import run_geoglows_sync
+        success = run_geoglows_sync()
+        if success:
+            logger.info("GEOGloWS sync completed successfully")
+        else:
+            logger.warning("GEOGloWS sync skipped or failed")
+    except Exception as e:
+        logger.exception(f"Error in GEOGloWS sync: {e}")
+
+
 def run_db_backup():
     """Run daily database backup via pg_dump"""
     logger.info(f"[{datetime.now()}] Running database backup")
@@ -233,6 +248,16 @@ def start_scheduler():
         CronTrigger(hour='0,6,12,18', minute=20),
         id='google_flood_sync',
         name='Google Flood Forecast Sync',
+        replace_existing=True
+    )
+
+    # Schedule GEOGloWS River Forecast sync - daily at 09:00 EAT
+    # GEOGloWS forecasts are typically available by ~06:00 UTC (09:00 EAT)
+    scheduler.add_job(
+        run_geoglows_sync_job,
+        CronTrigger(hour=9, minute=0),
+        id='geoglows_sync',
+        name='GEOGloWS River Forecast Sync',
         replace_existing=True
     )
 
