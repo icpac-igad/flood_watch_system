@@ -86,6 +86,21 @@ export const fetchConfig = createThunkAction(
 
       dispatch(setConfig(appConfig));
 
+      // Auto-apply project scope from URL (e.g., ?scope=whca)
+      // This must run BEFORE layers load so boundary tiles get filtered
+      if (scopeKey) {
+        const SCOPE_COUNTRIES = {
+          whca: 'SD,SS,UG,ET,RW',
+        };
+        dispatch(setParamInteractions({
+          scope: scopeKey,
+          project_countries: SCOPE_COUNTRIES[scopeKey] || '',
+        }));
+        if (bounds?.length) {
+          dispatch(setInitialBbox(bounds));
+        }
+      }
+
       // Auto-select the default basemap on load
       const defaultBasemap = basemaps.find((b) => b.default);
       if (defaultBasemap) {

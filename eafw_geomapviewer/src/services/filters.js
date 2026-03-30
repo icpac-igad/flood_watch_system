@@ -40,6 +40,7 @@ const ProjectFilterPanelContainerComponent = ({
   const [selectedProject, setSelectedProject] = useState(urlScope);
   const initializedRef = React.useRef(false);
 
+
   const applyProjectScope = (value) => {
     setSelectedProject(value);
     clearParamInteractions();
