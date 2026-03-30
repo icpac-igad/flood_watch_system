@@ -16,6 +16,7 @@ volumes:
   eafw_jobs_data:
   eafw_jobs_logs:
   eafw_backups:
+  eafw_cogs:
   eafw_caddy_data:
   eafw_caddy_config:
 
@@ -192,6 +193,7 @@ services:
       - "8080"
     volumes:
       - ${MS_RASTERDATA_VOLUME:-./data/mapfiles/data}:/opt/rasterdata:ro,z
+      - eafw_cogs:/opt/cogs:ro
     environment:
       - MS_DEBUGLEVEL=${MS_DEBUGLEVEL:-2}
       - MS_ERRORFILE=${MS_ERRORFILE:-stderr}
@@ -321,6 +323,7 @@ services:
     volumes:
       - eafw_jobs_data:/opt/data
       - eafw_jobs_logs:/opt/logs
+      - eafw_cogs:/data/cogs
       - eafw_backups:/backups
       - ${GOOGLE_CREDENTIALS_FILE:-./eafw_jobs/credentials}:/opt/credentials:z
 

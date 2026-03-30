@@ -1,0 +1,58 @@
+# WRF Total Rainfall Raster Classifications (mm)
+# For COG-based raster layers — uses [pixel] instead of column name
+
+CLASS
+    NAME "0-1 mm"
+    EXPRESSION ([pixel] > 0 AND [pixel] <= 1)
+    STYLE
+        COLOR 217 217 217
+    END
+END
+
+CLASS
+    NAME "1-10 mm"
+    EXPRESSION ([pixel] > 1 AND [pixel] <= 10)
+    STYLE
+        COLOR 255 176 0
+    END
+END
+
+CLASS
+    NAME "10-30 mm"
+    EXPRESSION ([pixel] > 10 AND [pixel] <= 30)
+    STYLE
+        COLOR 255 242 51
+    END
+END
+
+CLASS
+    NAME "30-50 mm"
+    EXPRESSION ([pixel] > 30 AND [pixel] <= 50)
+    STYLE
+        COLOR 157 255 88
+    END
+END
+
+CLASS
+    NAME "50-100 mm"
+    EXPRESSION ([pixel] > 50 AND [pixel] <= 100)
+    STYLE
+        COLOR 50 230 70
+    END
+END
+
+CLASS
+    NAME "100-200 mm"
+    EXPRESSION ([pixel] > 100 AND [pixel] <= 200)
+    STYLE
+        COLOR 27 157 55
+    END
+END
+
+CLASS
+    NAME ">200 mm"
+    EXPRESSION ([pixel] > 200)
+    STYLE
+        COLOR 27 157 55
+    END
+END
