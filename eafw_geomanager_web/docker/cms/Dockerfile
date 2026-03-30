@@ -26,8 +26,10 @@ COPY geomanager_pkg ${APP_HOME}/geomanager_pkg
 COPY . ${APP_HOME}
 WORKDIR ${APP_HOME}
 
-# No SSH needed - geomanager is local
-RUN uv lock && \
+# Mount SSH agent for private git deps (hazard-georeport)
+RUN --mount=type=ssh \
+    mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts && \
+    uv lock && \
     uv sync --all-extras --no-cache --no-install-project && \
     uv add gunicorn uvicorn
 

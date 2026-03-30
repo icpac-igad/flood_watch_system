@@ -23,6 +23,7 @@ from .blocks import (
     SocialLinkBlock,
     MemberStateBlock,
     CTAButtonBlock,
+    PartnerGroupBlock,
 )
 from .constants import GOOGLE_TRANSLATE_LANGUAGES
 
@@ -308,7 +309,7 @@ class BannerImage(Orderable):
 class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
     template = "home/home_page.html"
     parent_page_type = ["wagtailcore.Page"]
-    subpage_types = ["contact.ContactPage", "partners.PartnersPage"]
+    subpage_types = ["contact.ContactPage", "partners.PartnersPage", "home.ProjectPage"]
     max_count = 1
 
     banner_title = models.CharField(max_length=255, verbose_name=_("Banner Title"))
@@ -433,6 +434,88 @@ class HomePage(MetadataPageMixin, WagtailCacheMixin, Page):
         partners_page = PartnersPage.objects.live().first()
         context["partners_page"] = partners_page
 
+        return context
+
+
+class ProjectPage(MetadataPageMixin, Page):
+    template = "home/project_page.html"
+    parent_page_types = ["home.HomePage"]
+    subpage_types = []
+
+    # Hero
+    hero_image = models.ForeignKey(
+        "wagtailimages.Image", null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+        verbose_name=_("Hero Background Image"),
+    )
+    hero_title = models.CharField(max_length=255, verbose_name=_("Hero Title"))
+    hero_subtitle = models.CharField(max_length=255, blank=True, verbose_name=_("Hero Subtitle"))
+    project_logo = models.ForeignKey(
+        "wagtailimages.Image", null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+        verbose_name=_("Project Logo"),
+    )
+    description = RichTextField(
+        blank=True, verbose_name=_("Project Description"),
+        help_text=_("Full project description displayed below the hero"),
+    )
+
+    # Scope
+    scope_key = models.CharField(
+        max_length=50, blank=True, verbose_name=_("Scope Key"),
+        help_text=_("Passed as ?scope= to mapviewer/reports for filtering (e.g., 'whca')"),
+    )
+
+    # Partners
+    partner_groups = StreamField(
+        [("partner_group", PartnerGroupBlock())],
+        blank=True, use_json_field=True, verbose_name=_("Partner Groups"),
+    )
+
+    # Member countries
+    member_countries_title = models.CharField(max_length=255, default="Member Countries", blank=True)
+    member_countries = StreamField(
+        [("member_state", MemberStateBlock())],
+        blank=True, use_json_field=True, verbose_name=_("Member Countries"),
+    )
+
+    # CTA
+    cta_buttons = StreamField(
+        [("cta_button", CTAButtonBlock())],
+        blank=True, use_json_field=True, verbose_name=_("Call to Action Buttons"),
+    )
+
+    # Contact & links
+    contact_email = models.EmailField(blank=True, verbose_name=_("Contact Email"))
+    project_url = models.URLField(blank=True, verbose_name=_("Project Website URL"))
+    project_url_label = models.CharField(max_length=255, blank=True, default="More information here")
+
+    content_panels = Page.content_panels + [
+        MultiFieldPanel([
+            FieldPanel("hero_image"),
+            FieldPanel("project_logo"),
+            FieldPanel("hero_title"),
+            FieldPanel("hero_subtitle"),
+        ], heading=_("Hero Section")),
+        FieldPanel("description"),
+        FieldPanel("scope_key"),
+        FieldPanel("partner_groups"),
+        MultiFieldPanel([
+            FieldPanel("member_countries_title"),
+            FieldPanel("member_countries"),
+        ], heading=_("Member Countries")),
+        FieldPanel("cta_buttons"),
+        MultiFieldPanel([
+            FieldPanel("contact_email"),
+            FieldPanel("project_url"),
+            FieldPanel("project_url_label"),
+        ], heading=_("Contact & Links")),
+    ]
+
+    def get_context(self, request, *args, **kwargs):
+        context = super().get_context(request, *args, **kwargs)
+        navbar = Navbar.objects.live().first()
+        context["navbar"] = navbar
+        footer = Footer.objects.live().first()
+        context["footer"] = footer
         return context
 
 

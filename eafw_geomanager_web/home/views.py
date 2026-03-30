@@ -287,23 +287,18 @@ def admin_boundary_tiles(request, z, x, y):
         admin_level = 2
 
     with connection.cursor() as c:
-        if scope == "whca":
-            c.execute(
-                "SELECT gha.admin_whca(%s, %s, %s, %s, %s, %s, %s)",
-                [z, x, y, admin_level, country_name, region_name, district_name],
-            )
-        elif project_countries:
+        if project_countries:
             c.execute(
                 "SELECT gha.admin_by_project(%s, %s, %s, %s, %s, %s, %s, %s)",
                 [z, x, y, admin_level, project_countries, country_name, region_name, district_name],
             )
-        elif country_name or region_name or district_name:
-            c.execute(
-                "SELECT gha.admin_clipped(%s, %s, %s, %s, %s, %s, %s)",
-                [z, x, y, admin_level, country_name, region_name, district_name],
-            )
         else:
-            c.execute("SELECT gha.admin_by_zoom(%s, %s, %s, %s)", [z, x, y, country_name])
+            # admin_clipped handles scope='whca' internally (uses whca_admin* tables)
+            # and falls back to full gha.admin* tables for scope='all'.
+            c.execute(
+                "SELECT gha.admin_clipped(%s, %s, %s, %s, %s, %s, %s, %s)",
+                [z, x, y, admin_level, country_name, region_name, district_name, scope or "all"],
+            )
         row = c.fetchone()
 
     tile = row[0] if row else None
@@ -611,3 +606,108 @@ def geoglows_forecast_proxy(request, river_id):
         return JsonResponse({"error": f"GEOGloWS API error: {e.code}"}, status=502)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+# ── /api/flood/admin-bounds ─────────────────────────────────────────────────
+@require_GET
+@cache_page(3600)
+def admin_bounds(request):
+    """Return bounding box and GeoJSON for selected area of interest.
+    Supports: admin-boundary (GHA), whca-region, hydro-basin, cluster."""
+    area_type = request.GET.get("type", "admin-boundary")
+    country = request.GET.get("country", "")
+    admin1 = request.GET.get("admin1", "All")
+
+    sql = None
+    params = []
+
+    if area_type == "whca-region":
+        if country and country != "All":
+            if admin1 and admin1 != "All":
+                sql = """SELECT ST_XMin(ST_Envelope(geom)), ST_YMin(ST_Envelope(geom)),
+                    ST_XMax(ST_Envelope(geom)), ST_YMax(ST_Envelope(geom)),
+                    ST_AsGeoJSON(geom)
+                    FROM gha.whca_admin1 WHERE country = %s AND name_1 = %s LIMIT 1"""
+                params = [country, admin1]
+            else:
+                sql = """SELECT ST_XMin(ST_Envelope(geom)), ST_YMin(ST_Envelope(geom)),
+                    ST_XMax(ST_Envelope(geom)), ST_YMax(ST_Envelope(geom)),
+                    ST_AsGeoJSON(geom)
+                    FROM gha.whca_admin0 WHERE country = %s LIMIT 1"""
+                params = [country]
+        else:
+            sql = """WITH whca_geoms AS (
+                SELECT ST_MakeValid(geom) as geom FROM gha.whca_admin0
+            )
+            SELECT
+                ST_XMin(ST_Extent(geom)), ST_YMin(ST_Extent(geom)),
+                ST_XMax(ST_Extent(geom)), ST_YMax(ST_Extent(geom)),
+                ST_AsGeoJSON(ST_Collect(geom))
+            FROM whca_geoms"""
+
+    elif area_type == "hydro-basin":
+        # TODO: when hydro basin geometries are available
+        pass
+
+    elif area_type == "cluster":
+        cluster_name = request.GET.get("cluster", "")
+        if cluster_name:
+            # Get countries in this cluster from DB config
+            from georeport.dashboard.models import Cluster
+            try:
+                cluster = Cluster.objects.get(name=cluster_name)
+                country_list = cluster.countries or []
+                if country_list:
+                    placeholders = ','.join(['%s'] * len(country_list))
+                    sql = f"""SELECT ST_XMin(e), ST_YMin(e), ST_XMax(e), ST_YMax(e), ST_AsGeoJSON(ST_Simplify(g, 0.05))
+                        FROM (SELECT ST_Extent(geom) as e, ST_Union(geom) as g
+                        FROM gha.admin0 WHERE country IN ({placeholders})) t"""
+                    params = country_list
+            except Cluster.DoesNotExist:
+                pass
+
+    else:  # admin-boundary (default)
+        if not country:
+            sql = """WITH admin_geoms AS (
+                SELECT ST_Simplify(ST_MakeValid(geom), 0.05) as geom FROM gha.admin0
+            )
+            SELECT
+                ST_XMin(ST_Extent(geom)), ST_YMin(ST_Extent(geom)),
+                ST_XMax(ST_Extent(geom)), ST_YMax(ST_Extent(geom)),
+                ST_AsGeoJSON(ST_Collect(geom))
+            FROM admin_geoms"""
+
+        elif admin1 and admin1 != "All":
+            sql = """SELECT ST_XMin(ST_Envelope(geom)), ST_YMin(ST_Envelope(geom)),
+                ST_XMax(ST_Envelope(geom)), ST_YMax(ST_Envelope(geom)),
+                ST_AsGeoJSON(geom)
+                FROM gha.admin1 WHERE country = %s AND name_1 = %s LIMIT 1"""
+            params = [country, admin1]
+        else:
+            sql = """SELECT ST_XMin(ST_Envelope(geom)), ST_YMin(ST_Envelope(geom)),
+                ST_XMax(ST_Envelope(geom)), ST_YMax(ST_Envelope(geom)),
+                ST_AsGeoJSON(geom)
+                FROM gha.admin0 WHERE country = %s LIMIT 1"""
+            params = [country]
+
+    if not sql:
+        sql = """WITH admin_geoms AS (
+            SELECT ST_Simplify(ST_MakeValid(geom), 0.05) as geom FROM gha.admin0
+        )
+        SELECT
+            ST_XMin(ST_Extent(geom)), ST_YMin(ST_Extent(geom)),
+            ST_XMax(ST_Extent(geom)), ST_YMax(ST_Extent(geom)),
+            ST_AsGeoJSON(ST_Collect(geom))
+        FROM admin_geoms"""
+
+    with connection.cursor() as c:
+        c.execute(sql, params)
+        row = c.fetchone()
+
+    if not row:
+        return JsonResponse({"error": "Not found"}, status=404)
+
+    return JsonResponse({
+        "bounds": [row[0], row[1], row[2], row[3]],
+        "geojson": json.loads(row[4]) if row[4] else None,
+    })

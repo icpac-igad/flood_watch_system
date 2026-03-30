@@ -36,11 +36,13 @@ dependencies = [
     "wagtail==6.3.2",
     "geomanager",
     "django-recaptcha==4.1.0",
+    "hazard-georeport",
 ]
 
 [tool.uv.sources]
 # Local path - fully local build
 geomanager = { path = "./geomanager_pkg", editable = true }
+hazard-georeport = { git = "ssh://git@github.com/icpac-igad/georeport.git", branch = "eafw" }
 # SSH - use when SSH agent forwarding works
 # geomanager = { git = "ssh://git@github.com/icpac-igad/geomanager.git", branch = "main" }
 

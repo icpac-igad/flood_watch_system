@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% load static wagtailcore_tags wagtailimages_tags %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/css/flag-icons.min.css">
+<style>
+  /* ── Hero ── */
+  .project-hero {
+    position: relative;
+    background: linear-gradient(135deg, #034930 0%, #02331f 100%);
+    color: #fff;
+    text-align: center;
+    padding: 6rem 2rem 3rem;
+    overflow: hidden;
+  }
+  .project-hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 1;
+  }
+  .project-hero.has-bg { background-size: cover; background-position: center; }
+  .project-hero > * { position: relative; z-index: 2; }
+  .project-hero .project-logo {
+    max-width: 120px; margin: 0 auto 1.5rem;
+    border-radius: 12px; background: #fff; padding: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+  .project-hero h1 { font-size: 2.2rem; font-weight: 700; margin-bottom: 0.5rem; text-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  .project-hero .subtitle { font-size: 1.1rem; opacity: 0.85; font-weight: 300; }
+
+  /* ── Description ── */
+  .project-description {
+    max-width: 900px; margin: 2rem auto; padding: 0 2rem;
+    font-size: 1.05rem; line-height: 1.7; color: #444; text-align: center;
+  }
+
+  /* ── Member States Slider (same as homepage) ── */
+  .project-members {
+    padding: 2rem 0;
+    background-color: color-mix(in srgb, var(--background-color, #f8f9fc) 98%, black);
+  }
+  .project-members h2 {
+    font-size: 1.3rem; font-weight: 600;
+    color: #034930;
+    text-align: center; margin-bottom: 1rem;
+  }
+  .member-states-slider-wrapper {
+    margin: 1rem auto; max-width: 800px;
+  }
+  .member-states-slider {
+    display: flex; gap: 2.5rem;
+    justify-content: center; flex-wrap: wrap;
+  }
+  .member-state-slide {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    cursor: default;
+    animation: flag-float 3s ease-in-out infinite !important;
+  }
+  .member-state-slide:nth-child(2) { animation-delay: 0.4s !important; }
+  .member-state-slide:nth-child(3) { animation-delay: 0.8s !important; }
+  .member-state-slide:nth-child(4) { animation-delay: 1.2s !important; }
+  .member-state-slide:nth-child(5) { animation-delay: 1.6s !important; }
+  .member-state-flag {
+    font-size: 4rem; border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  .member-state-slide:hover .member-state-flag {
+    transform: scale(1.15) !important; box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  }
+  @keyframes flag-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  /* Partner card float animation */
+  .partner-slide {
+    animation: partner-float 4s ease-in-out infinite !important;
+  }
+  .partner-slide:nth-child(1) { animation-delay: 0s !important; }
+  .partner-slide:nth-child(2) { animation-delay: 0.5s !important; }
+  .partner-slide:nth-child(3) { animation-delay: 1.0s !important; }
+  .partner-slide:nth-child(4) { animation-delay: 1.5s !important; }
+  .partner-slide:nth-child(5) { animation-delay: 2.0s !important; }
+  .partner-slide:nth-child(6) { animation-delay: 2.5s !important; }
+  .partner-slide:nth-child(7) { animation-delay: 3.0s !important; }
+  .partner-slide:nth-child(8) { animation-delay: 3.5s !important; }
+  @keyframes partner-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+
+  /* ── Partners Slider (same as homepage, reverse direction) ── */
+  .project-partners {
+    padding: 2rem 0;
+    background: #f8f9fc;
+  }
+  .project-partners h2 {
+    font-size: 1.2rem; font-weight: 600;
+    color: var(--secondary-text-color, #034930);
+    text-align: center; margin-bottom: 1rem;
+  }
+  .partner-group-title {
+    font-size: 1.1rem; font-weight: 600; text-align: center;
+    color: #034930; margin: 1.5rem 0 0.5rem;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .partner-group-title i { color: #034930; }
+  .partner-group-desc { font-size: 0.85rem; color: #666; text-align: center; margin-bottom: 0.8rem; }
+  .partners-slider-wrapper {
+    margin: 1rem auto; max-width: 900px;
+  }
+  .partners-slider {
+    display: flex; gap: 2rem;
+    justify-content: center; flex-wrap: wrap;
+  }
+  .partner-slide {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    padding: 0.8rem; background: #fff; border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    height: 80px; min-width: 140px;
+  }
+  .partner-slide:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .partner-logo-img { max-width: 120px; max-height: 60px; object-fit: contain; }
+
+  /* ── CTA ── */
+  .project-cta {
+    text-align: center; padding: 2rem 2rem 2.5rem;
+  }
+  .project-cta a {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 32px; background: #034930; color: #fff;
+    border-radius: 30px; font-size: 1rem; font-weight: 600;
+    text-decoration: none; transition: background 0.2s, transform 0.2s;
+    box-shadow: 0 4px 16px rgba(3,73,48,0.3);
+  }
+  .project-cta a:hover { background: #02331f; transform: translateY(-2px); }
+
+  /* ── Contact ── */
+  .project-contact {
+    text-align: center; padding: 1rem 2rem 2rem;
+    font-size: 0.9rem; color: #666;
+  }
+  .project-contact a { color: #034930; font-weight: 500; }
+
+  /* ── Watermark ── */
+  .project-watermark {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.03; pointer-events: none; z-index: 0;
+    font-size: 12rem; font-weight: 900; color: #034930;
+    letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="project-watermark">WATER</div>
+
+<!-- Hero Section -->
+<section class="project-hero {% if page.hero_image %}has-bg{% endif %}"
+  {% if page.hero_image %}
+    {% image page.hero_image fill-1600x600 as hero_bg %}
+    style="background-image: url('{{ hero_bg.url }}');"
+  {% endif %}>
+
+  {% if page.project_logo %}
+    {% image page.project_logo max-120x120 as proj_logo %}
+    <img src="{{ proj_logo.url }}" alt="{{ page.title }}" class="project-logo">
+  {% endif %}
+
+  <h1>{{ page.hero_title }}</h1>
+  {% if page.hero_subtitle %}
+    <p class="subtitle">{{ page.hero_subtitle }}</p>
+  {% endif %}
+</section>
+
+<!-- Description -->
+{% if page.description %}
+<div class="project-description">
+  {{ page.description|richtext }}
+</div>
+{% endif %}
+
+<!-- Member Countries -->
+{% if page.member_countries %}
+<section class="project-members">
+  <h2><i class="fas fa-globe-africa" style="color:#034930"></i> {{ page.member_countries_title }}</h2>
+  <div class="member-states-slider-wrapper">
+    <div class="member-states-slider">
+      {% for block in page.member_countries %}
+      <div class="member-state-slide">
+        <span class="fi fi-{{ block.value.country_code }} fis member-state-flag"></span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- Partner Groups -->
+{% if page.partner_groups %}
+<section class="project-partners">
+  {% for group in page.partner_groups %}
+    <div class="partner-group-title">
+      {% if group.value.icon %}<i class="fas {{ group.value.icon }}" style="color:#034930"></i>{% endif %}
+      {{ group.value.title }}
+    </div>
+    {% if group.value.description %}<p class="partner-group-desc">{{ group.value.description }}</p>{% endif %}
+    <div class="partners-slider-wrapper">
+      <div class="partners-slider">
+        {% for partner in group.value.partners %}
+          <div class="partner-slide">
+            {% if partner.logo %}
+              {% image partner.logo original as p_logo %}
+              {% if partner.url %}
+                <a href="{{ partner.url }}" target="_blank" title="{{ partner.name }}">
+                  <img src="{{ p_logo.url }}" alt="{{ partner.name }}" class="partner-logo-img">
+                </a>
+              {% else %}
+                <img src="{{ p_logo.url }}" alt="{{ partner.name }}" class="partner-logo-img">
+              {% endif %}
+            {% else %}
+              <span style="font-size:0.9rem;font-weight:600;color:#034930;">{{ partner.name }}</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- CTA Buttons -->
+{% if page.cta_buttons %}
+<section class="project-cta">
+  {% for block in page.cta_buttons %}
+    <a href="{{ block.value.url }}">&#9654; {{ block.value.title }}</a>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- Contact & Links -->
+{% if page.contact_email or page.project_url %}
+<section class="project-contact">
+  {% if page.project_url %}
+    <p><a href="{{ page.project_url }}" target="_blank">{{ page.project_url_label }} &rarr;</a></p>
+  {% endif %}
+  {% if page.contact_email %}
+    <p>For any issues or additional information: <a href="mailto:{{ page.contact_email }}">{{ page.contact_email }}</a> | <a href="mailto:hillary.koros@igad.int">hillary.koros@igad.int</a></p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

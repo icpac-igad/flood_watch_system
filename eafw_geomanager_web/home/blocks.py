@@ -118,6 +118,12 @@ class MemberStateBlock(blocks.StructBlock):
         required=False,
         help_text=_("Override display name (leave blank to use country name)"),
     )
+    is_project_country = blocks.BooleanBlock(
+        required=False,
+        default=False,
+        label=_("Project Country"),
+        help_text=_("Tick if this country is part of the current project (e.g. WHCA)"),
+    )
 
     class Meta:
         icon = "globe"
@@ -141,6 +147,27 @@ class CTAButtonBlock(blocks.StructBlock):
     class Meta:
         icon = "link"
         label = _("CTA Button")
+
+
+class PartnerBlock(blocks.StructBlock):
+    name = blocks.CharBlock(max_length=100, label=_("Partner Name"))
+    logo = ImageChooserBlock(required=False, label=_("Partner Logo"))
+    url = blocks.URLBlock(required=False, label=_("Website URL"))
+
+    class Meta:
+        icon = "group"
+        label = _("Partner")
+
+
+class PartnerGroupBlock(blocks.StructBlock):
+    title = blocks.CharBlock(max_length=100, label=_("Group Title"))
+    icon = blocks.CharBlock(max_length=50, required=False, default="fa-handshake", label=_("Icon CSS class"))
+    description = blocks.CharBlock(max_length=255, required=False, label=_("Description"))
+    partners = blocks.ListBlock(PartnerBlock(), label=_("Partners"))
+
+    class Meta:
+        icon = "group"
+        label = _("Partner Group")
 
 
 class SocialLinkBlock(blocks.StructBlock):

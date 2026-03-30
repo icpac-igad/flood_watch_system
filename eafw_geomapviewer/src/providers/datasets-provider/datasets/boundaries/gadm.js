@@ -8,6 +8,12 @@
  * Source-layer: gha.admin_clipped
  * Properties: country, region (admin1+), district (admin2+)
  */
+// Read scope from URL for project-scoped boundary filtering
+const urlScope = typeof window !== "undefined"
+  ? new URLSearchParams(window.location.search).get("scope") || ""
+  : "";
+const scopeParam = urlScope ? `?scope=${encodeURIComponent(urlScope)}` : "";
+
 const datasets = [
   {
     id: "political-boundaries",
@@ -30,7 +36,7 @@ const datasets = [
           type: "vector",
           source: {
             tiles: [
-              "/pg/tileserv/gha.admin_by_zoom/{z}/{x}/{y}.pbf",
+              `/pg/tileserv/gha.admin_by_zoom/{z}/{x}/{y}.pbf${scopeParam}`,
             ],
             type: "vector",
           },

@@ -33,14 +33,12 @@ const ProjectFilterPanelContainerComponent = ({
   setParamInteractions,
   clearParamInteractions,
 }) => {
-  const [selectedProject, setSelectedProject] = useState('all');
-
-  useEffect(() => {
-    clearParamInteractions();
-    if (configBounds?.length) {
-      setMapSettings({ canBound: true, bbox: configBounds });
-    }
-  }, [clearParamInteractions, configBounds, setMapSettings]);
+  // Auto-select scope from URL query param (e.g., ?scope=whca)
+  const urlScope = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('scope') || 'all'
+    : 'all';
+  const [selectedProject, setSelectedProject] = useState(urlScope);
+  const initializedRef = React.useRef(false);
 
   const applyProjectScope = (value) => {
     setSelectedProject(value);
@@ -59,6 +57,22 @@ const ProjectFilterPanelContainerComponent = ({
       setMapSettings({ canBound: true, bbox: configBounds });
     }
   };
+
+  // Apply URL scope on first render
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      if (urlScope !== 'all') {
+        // Small delay to ensure redux is ready
+        setTimeout(() => applyProjectScope(urlScope), 500);
+      } else {
+        clearParamInteractions();
+        if (configBounds?.length) {
+          setMapSettings({ canBound: true, bbox: configBounds });
+        }
+      }
+    }
+  }, [configBounds]);
 
   return (
     <div className="filter-panel-container">

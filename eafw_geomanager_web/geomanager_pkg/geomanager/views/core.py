@@ -82,7 +82,40 @@ def get_mapviewer_config(request):
 
         response.update({"logo": logo})
 
-    if abm_settings.countries_list:
+    # Project scope filtering — override countries/bounds when ?scope= is passed
+    scope = (request.GET.get("scope") or "").strip().lower()
+    scope_applied = False
+
+    if scope:
+        try:
+            from home.models import ProjectPage
+            project = ProjectPage.objects.live().filter(scope_key=scope).first()
+            if project and project.scope_key:
+                from django.db import connection
+                # Get countries and bounds from PostGIS for this scope
+                scope_table = f"gha.{scope}_admin0" if scope != "whca" else "gha.whca_admin0"
+                with connection.cursor() as cur:
+                    cur.execute(f"""
+                        SELECT array_agg(country ORDER BY country),
+                               ST_XMin(ST_Extent(geom)), ST_YMin(ST_Extent(geom)),
+                               ST_XMax(ST_Extent(geom)), ST_YMax(ST_Extent(geom))
+                        FROM {scope_table}
+                    """)
+                    row = cur.fetchone()
+                if row and row[0]:
+                    response.update({
+                        "scopeKey": scope,
+                        "scopeTitle": project.hero_title or project.title,
+                        "countries": row[0],
+                        "bounds": [row[1], row[2], row[3], row[4]],
+                        "boundaryTileParams": f"scope={scope}",
+                        "boundaryDataSource": abm_settings.data_source if abm_settings.countries_list else "gadm41",
+                    })
+                    scope_applied = True
+        except Exception:
+            pass
+
+    if not scope_applied and abm_settings.countries_list:
         response.update(
             {
                 "countries": abm_settings.countries_list,

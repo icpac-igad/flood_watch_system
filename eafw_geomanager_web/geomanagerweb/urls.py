@@ -10,6 +10,7 @@ from wagtailcache.cache import cache_page
 from .api import api_router
 from home.views import (
     admin_boundary_tiles,
+    admin_bounds,
     situation_summary,
     country_summary,
     forecast_timeseries,
@@ -38,11 +39,14 @@ urlpatterns = [
     path("api/v1/wrf/daily-rainfall/dates/", wrf_daily_rainfall_dates, name="wrf_daily_rainfall_dates_slash"),
     path("api/v1/wrf/extreme-rainfall/dates", wrf_extreme_rainfall_dates, name="wrf_extreme_rainfall_dates"),
     path("api/v1/wrf/extreme-rainfall/dates/", wrf_extreme_rainfall_dates, name="wrf_extreme_rainfall_dates_slash"),
+    path("api/flood/admin-bounds", admin_bounds, name="admin_bounds"),
     path("api/flood/situation-summary", situation_summary, name="situation_summary"),
     path("api/flood/country-summary", country_summary, name="country_summary"),
     path("api/flood/forecast-timeseries/<int:point_id>", forecast_timeseries, name="forecast_timeseries"),
     path("api/flood/geoglows-forecast/<int:river_id>", geoglows_forecast_proxy, name="geoglows_forecast"),
     path("api/flood/geoglows-forecast/<int:river_id>/", geoglows_forecast_proxy, name="geoglows_forecast_slash"),
+    # georeport dashboard
+    path("reports/", include("georeport.urls")),
     # geomanager urls
     path("", include("geomanager.urls"), name="geomanager"),
 ]
