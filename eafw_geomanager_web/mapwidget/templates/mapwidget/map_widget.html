@@ -1,5 +1,5 @@
 {% load static mapwidget_tags wagtailimages_tags wagtailiconchooser_tags %}
-{% if map_widget.show_map_widget and datasets %}
+{% if map_widget.show_map_widget and dataset_entries %}
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css">
 <style>
   .map-widget-section { background-color: var(--background-color); }
@@ -475,13 +475,9 @@
 
       <!-- Dataset picker — floats inside map, top-left -->
       <div class="map-dataset-panel">
-        {% for ds in datasets %}
+        {% for ds in dataset_entries %}
         <button
           class="map-dataset-btn {% if ds.default_active %}is-active{% endif %}"
-          data-layers='{{ ds.layers|jsonify }}'
-          data-available-times='{{ ds.available_times|jsonify }}'
-          data-date-meta='{{ ds.date_meta|jsonify }}'
-          data-latest-time="{{ ds.latest_time|default:'' }}"
           data-title="{{ ds.title }}"
           data-dataset-id="{{ ds.dataset_id }}">
           <span class="mdb-icon">
@@ -505,7 +501,7 @@
         {% endfor %}
       </div>
 
-      <!-- Legend — bottom right -->
+      <!-- Legend �� bottom right -->
       <div id="map-widget-legend">
         <div id="legend-title"></div>
         <div id="legend-items"></div>
@@ -572,59 +568,58 @@
 
 <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
 <script>
-(function () {
-  var defaultBasemapConfig = {{ default_basemap|jsonify|safe }};
-  var mapStyleUrl = {{ basemap_style_url|jsonify|safe }};
-  var mapviewerDefaultStyle = {{ mapviewer_default_style|jsonify|safe }};
+(function initWidget() {
+  /* ── Constants ── */
+  var BOUNDARY_DATASET_ID = '{{ map_widget.boundary_dataset_id }}';
+  var WHCA_CC = ['SD', 'SS', 'UG', 'ET', 'RW'];
+  var SCOPE_BOUNDS = { all: null, whca: [[21.84, -2.84], [47.96, 23.14]] };
+
+  /* Featured dataset IDs from CMS widget config */
+  var FEATURED_IDS = {{ dataset_entries|jsonify|safe }};
+
+  /* ── State ── */
+  if (typeof window.currentScope === 'undefined') window.currentScope = 'all';
+  var currentScope = window.currentScope;
   var initialBounds = null;
   var initialCenter = [36.84, 5.73];
   var initialZoom = window.innerWidth <= 480 ? 2.2 : 3.3;
+  var activeLayers = [];
+  var activeSources = [];
+  var callGen = 0;
+  var firstBoundaryLayerId = null;
+  var tileParams = '';
+  var projectCountriesParam = '';
+  var activeDatasetBtn = null;
+  var availableTimesByDataset = {};
+  var dateMetaByDataset = {};
+  var pendingTimesByDataset = {};
+  var selectedTimeByDataset = {};
+  /* API data keyed by dataset ID — populated on load */
+  var apiDatasets = {};
+  var boundaryLayerIds = [];
 
-  function getFallbackBasemapStyle() {
-    return {
-      version: 8,
-      sources: {
-        'carto-light': {
-          type: 'raster',
-          tiles: ['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'],
-          tileSize: 256,
-          attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
-        },
+  /* ── Fallback basemap ── */
+  var FALLBACK_STYLE = {
+    version: 8,
+    sources: {
+      'carto-light': {
+        type: 'raster',
+        tiles: ['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '&copy; CartoDB &copy; OpenStreetMap contributors',
       },
-      layers: [{ id: 'basemap', type: 'raster', source: 'carto-light' }],
-    };
-  }
+    },
+    layers: [{ id: 'basemap', type: 'raster', source: 'carto-light' }],
+  };
 
-  function getInitialMapStyle() {
-    if (mapviewerDefaultStyle) return mapviewerDefaultStyle;
-    if (defaultBasemapConfig && defaultBasemapConfig.url) {
-      return {
-        version: 8,
-        sources: {
-          'homepage-default-basemap': {
-            type: 'raster',
-            tiles: [defaultBasemapConfig.url],
-            tileSize: 256,
-          },
-        },
-        layers: [{ id: 'homepage-default-basemap', type: 'raster', source: 'homepage-default-basemap' }],
-      };
-    }
-    if (mapStyleUrl) return mapStyleUrl;
-    return getFallbackBasemapStyle();
-  }
+  /* Map is created inside initWidget() after config fetch */
+  var map = null;
+  var defaultBasemapConfig = null;
 
-  var map = new maplibregl.Map({
-    container: 'homepage-map',
-    style: getInitialMapStyle(),
-    center: initialCenter,
-    zoom: initialZoom,
-    attributionControl: false,
-  });
-
+  /* ── Controls ── */
   function ResetViewControl() {}
-  ResetViewControl.prototype.onAdd = function (map) {
-    this._map = map;
+  ResetViewControl.prototype.onAdd = function (m) {
+    this._map = m;
     this._container = document.createElement('div');
     this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
     var btn = document.createElement('button');
@@ -634,11 +629,8 @@
     btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
     var self = this;
     btn.addEventListener('click', function () {
-      if (initialBounds) {
-        self._map.fitBounds(initialBounds, { padding: 50, duration: 600 });
-      } else {
-        self._map.flyTo({ center: initialCenter, zoom: initialZoom, duration: 600 });
-      }
+      if (initialBounds) self._map.fitBounds(initialBounds, { padding: 50, duration: 600 });
+      else self._map.flyTo({ center: initialCenter, zoom: initialZoom, duration: 600 });
     });
     this._container.appendChild(btn);
     return this._container;
@@ -648,317 +640,96 @@
     this._map = undefined;
   };
 
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-  map.addControl(new ResetViewControl(), 'top-right');
-
-  /* ── Scope state (shared with homepage JS via window.currentScope) ── */
-  if (typeof window.currentScope === 'undefined') window.currentScope = 'all';
-  var currentScope = window.currentScope;
-
-  var SCOPE_BOUNDS = {
-    all: null,
-    whca: [[21.84, -2.84], [47.96, 23.14]]
-  };
-  var WHCA_CC = ['SD', 'SS', 'UG', 'ET', 'RW'];
-
-  /* Scope toggle buttons inside map widget */
-  document.querySelectorAll('.scope-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var scope = btn.dataset.scope;
-      if (scope === currentScope) return;
-      currentScope = scope;
-      window.currentScope = scope;
-      document.querySelectorAll('.scope-btn').forEach(function(b) {
-        b.classList.toggle('is-active', b.dataset.scope === scope);
-      });
-      /* Zoom to scope bounds */
-      var bounds = SCOPE_BOUNDS[scope];
-      if (bounds) {
-        map.fitBounds(bounds, { padding: 40, duration: 600 });
-      } else if (initialBounds) {
-        map.fitBounds(initialBounds, { padding: 50, duration: 600 });
-      } else {
-        map.flyTo({ center: initialCenter, zoom: initialZoom, duration: 600 });
-      }
-      /* Reload boundary layers for scope */
-      removeBoundaryLayers();
-      loadBoundaryLayers();
-      /* Re-click active dataset to reload tiles with scope filter */
-      var ab = activeDatasetBtn || document.querySelector('.map-dataset-btn.is-active');
-      if (ab) ab.click();
-      /* Notify homepage JS */
-      window.dispatchEvent(new CustomEvent('minimap-scope-change', { detail: { scope: scope } }));
-    });
-  });
-
-  var activeLayers = [];
-  var activeSources = [];
-  var callGen = 0;
-  var firstBoundaryLayerId = null;
-  var tileParams = '';
-  var projectCountriesParam = '';
-  var summaryMap = {};
-  var activeDatasetBtn = null;
-  var availableTimesByDataset = {};
-  var dateMetaByDataset = {};
-  var pendingTimesByDataset = {};
-  var selectedTimeByDataset = {};
-
-  function setStyleGroupVisibility(groupKeyword, activeGroupName) {
-    var style = map.getStyle();
-    if (!style || !style.layers) return;
-
-    var metadataGroups = (style.metadata || {})['mapbox:groups'] || {};
-    var targetGroupIds = Object.keys(metadataGroups).filter(function (groupId) {
-      var groupName = String((metadataGroups[groupId] || {}).name || '').toLowerCase();
-      return groupName.indexOf(groupKeyword) !== -1;
-    });
-
-    if (!targetGroupIds.length || !activeGroupName) return;
-
-    style.layers.forEach(function (layer) {
-      var groupId = layer.metadata && layer.metadata['mapbox:group'];
-      if (!groupId || targetGroupIds.indexOf(groupId) === -1 || !map.getLayer(layer.id)) return;
-
-      var groupName = String((metadataGroups[groupId] || {}).name || '');
-      map.setLayoutProperty(layer.id, 'visibility', groupName === activeGroupName ? 'visible' : 'none');
-    });
+  function addMapControls() {
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    map.addControl(new ResetViewControl(), 'top-right');
   }
 
-  function applyDefaultBasemapStyleSelection() {
-    if (!mapStyleUrl || !defaultBasemapConfig || defaultBasemapConfig.url) return;
-    try {
-      setStyleGroupVisibility('basemap', defaultBasemapConfig.basemap_group || '');
-      setStyleGroupVisibility('labels', defaultBasemapConfig.labels_group || '');
-    } catch (e) {
-      console.warn('map-widget: failed to apply default basemap selection', e);
-    }
+  /* ── Utility ── */
+  function setQueryParam(url, key, value) {
+    var pattern = new RegExp('([?&])' + key + '=[^&]*', 'g');
+    var cleaned = String(url || '').replace(pattern, '$1').replace(/[?&]{2,}/g, '&').replace(/\?&/, '?').replace(/[?&]$/, '');
+    var sep = cleaned.indexOf('?') === -1 ? '?' : '&';
+    return cleaned + sep + key + '=' + value;
   }
 
   function normalizeTimeValue(value) {
     var raw = String(value || '').trim();
-    if (!raw) return '';
     return raw.length >= 10 ? raw.slice(0, 10) : raw;
   }
 
   function normalizeAvailableTimes(values) {
     var seen = {};
-    return (values || [])
-      .map(normalizeTimeValue)
-      .filter(function (value) {
-        if (!value || seen[value]) return false;
-        seen[value] = true;
-        return true;
-      })
-      .sort(function (a, b) { return new Date(a) - new Date(b); });
+    return (values || []).map(normalizeTimeValue).filter(function (v) {
+      if (!v || seen[v]) return false;
+      seen[v] = true;
+      return true;
+    }).sort(function (a, b) { return new Date(a) - new Date(b); });
   }
 
-  function getLayersFromButton(btn) {
-    try {
-      return JSON.parse(btn.dataset.layers || '[]');
-    } catch (e) {
-      return [];
-    }
+  function formatPillDate(d) {
+    if (!d) return '';
+    var dt = new Date(d + 'T00:00:00');
+    if (isNaN(dt)) return d;
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
   }
 
-  function getAvailableTimesFromButton(btn) {
-    try {
-      return normalizeAvailableTimes(JSON.parse(btn.dataset.availableTimes || '[]'));
-    } catch (e) {
-      return [];
-    }
+  /* ── Basemap style group toggle (same logic as mapviewer) ── */
+  function setStyleGroupVisibility(groupKeyword, activeGroupName) {
+    var style = map.getStyle();
+    if (!style || !style.layers) return;
+    var groups = (style.metadata || {})['mapbox:groups'] || {};
+    var targetIds = Object.keys(groups).filter(function (id) {
+      return String((groups[id] || {}).name || '').toLowerCase().indexOf(groupKeyword) !== -1;
+    });
+    if (!targetIds.length || !activeGroupName) return;
+    style.layers.forEach(function (layer) {
+      var gid = layer.metadata && layer.metadata['mapbox:group'];
+      if (!gid || targetIds.indexOf(gid) === -1 || !map.getLayer(layer.id)) return;
+      var gname = String((groups[gid] || {}).name || '');
+      map.setLayoutProperty(layer.id, 'visibility', gname === activeGroupName ? 'visible' : 'none');
+    });
   }
 
-  function getDateMetaFromButton(btn) {
-    try {
-      var parsed = JSON.parse(btn.dataset.dateMeta || '{}');
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  function getTimeLayer(layersData) {
-    return (layersData || []).find(function (layerDef) {
-      return !!layerDef.tile_json_url;
-    }) || null;
-  }
-
-  function syncSelectedTime(btn, availableTimes) {
-    var datasetId = btn.dataset.datasetId;
-    var latestTime = normalizeTimeValue(btn.dataset.latestTime || '');
-    var selectedTime = normalizeTimeValue(selectedTimeByDataset[datasetId] || '');
-
-    if (availableTimes && availableTimes.length) {
-      if (selectedTime && availableTimes.indexOf(selectedTime) !== -1) {
-        selectedTimeByDataset[datasetId] = selectedTime;
-        return selectedTime;
-      }
-      if (latestTime && availableTimes.indexOf(latestTime) !== -1) {
-        selectedTimeByDataset[datasetId] = latestTime;
-        return latestTime;
-      }
-      selectedTime = availableTimes[availableTimes.length - 1];
-      selectedTimeByDataset[datasetId] = selectedTime;
-      return selectedTime;
-    }
-
-    selectedTime = latestTime || selectedTime;
-    selectedTimeByDataset[datasetId] = selectedTime;
-    return selectedTime;
-  }
-
-  function fetchAvailableTimes(btn, layersData) {
-    var datasetId = btn.dataset.datasetId;
-    var buttonTimes = getAvailableTimesFromButton(btn);
-    var buttonDateMeta = getDateMetaFromButton(btn);
-
-    if (!dateMetaByDataset[datasetId] && Object.keys(buttonDateMeta).length) {
-      dateMetaByDataset[datasetId] = buttonDateMeta;
-    }
-
-    if (buttonTimes.length) {
-      availableTimesByDataset[datasetId] = buttonTimes;
-      return Promise.resolve(buttonTimes);
-    }
-
-    if (Object.prototype.hasOwnProperty.call(availableTimesByDataset, datasetId)) {
-      return Promise.resolve(availableTimesByDataset[datasetId]);
-    }
-    if (pendingTimesByDataset[datasetId]) {
-      return pendingTimesByDataset[datasetId];
-    }
-
-    var timeLayer = getTimeLayer(layersData);
-    if (!timeLayer || !timeLayer.tile_json_url) {
-      availableTimesByDataset[datasetId] = [];
-      return Promise.resolve([]);
-    }
-
-    pendingTimesByDataset[datasetId] = fetch(timeLayer.tile_json_url)
-      .then(function (r) { return r.ok ? r.json() : {}; })
-      .then(function (payload) {
-        var responseKey = timeLayer.timestamps_response_object_key || 'timestamps';
-        var times = payload && payload[responseKey];
-        var payloadDateMeta = payload && (payload.date_meta || payload.dateMeta || payload.ranges);
-        if (!Array.isArray(times)) {
-          times = payload && payload.timestamps;
-        }
-        if (!Array.isArray(times)) {
-          times = payload && payload.dates;
-        }
-        if (payloadDateMeta && typeof payloadDateMeta === 'object') {
-          dateMetaByDataset[datasetId] = payloadDateMeta;
-        }
-        var normalized = normalizeAvailableTimes(times);
-        availableTimesByDataset[datasetId] = normalized;
-        return normalized;
-      })
-      .catch(function () {
-        availableTimesByDataset[datasetId] = [];
-        return [];
-      })
-      .finally(function () {
-        delete pendingTimesByDataset[datasetId];
+  /* ── Scope toggle ── */
+  document.querySelectorAll('.scope-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var scope = btn.dataset.scope;
+      if (scope === currentScope) return;
+      currentScope = scope;
+      window.currentScope = scope;
+      document.querySelectorAll('.scope-btn').forEach(function (b) {
+        b.classList.toggle('is-active', b.dataset.scope === scope);
       });
-
-    return pendingTimesByDataset[datasetId];
-  }
-
-  function removeActiveLayers() {
-    activeLayers.forEach(function (id) {
-      if (map.getLayer(id)) map.removeLayer(id);
+      if (!map) return;
+      var bounds = SCOPE_BOUNDS[scope];
+      if (bounds) map.fitBounds(bounds, { padding: 40, duration: 600 });
+      else if (initialBounds) map.fitBounds(initialBounds, { padding: 50, duration: 600 });
+      else map.flyTo({ center: initialCenter, zoom: initialZoom, duration: 600 });
+      removeBoundaryLayers();
+      loadBoundaryLayers();
+      var ab = activeDatasetBtn || document.querySelector('.map-dataset-btn.is-active');
+      if (ab) activateBtn(ab);
+      window.dispatchEvent(new CustomEvent('minimap-scope-change', { detail: { scope: scope } }));
     });
-    activeSources.forEach(function (id) {
-      if (map.getSource(id)) map.removeSource(id);
-    });
-    activeLayers = [];
-    activeSources = [];
-  }
+  });
 
-  function removeQueryParam(url, key) {
-    var pattern = new RegExp('([?&])' + key + '=[^&]*', 'g');
-    var normalized = String(url || '').replace(pattern, '$1');
-    normalized = normalized.replace(/[?&]{2,}/g, '&');
-    normalized = normalized.replace(/\?&/, '?');
-    normalized = normalized.replace(/[?&]$/, '');
-    return normalized;
-  }
-
-  function setQueryParam(url, key, value) {
-    var normalized = removeQueryParam(url, key);
-    var separator = normalized.indexOf('?') === -1 ? '?' : '&';
-    return normalized + separator + key + '=' + value;
-  }
-
-  function detectBoundaryAdminLevel(url, renderLayers) {
-    var candidates = [];
-    if (url) candidates.push(String(url));
-    (renderLayers || []).forEach(function (layer) {
-      if (layer && layer['source-layer']) candidates.push(String(layer['source-layer']));
-    });
-    for (var i = 0; i < candidates.length; i++) {
-      var match = candidates[i].match(/admin(?:_by_zoom|_whca|_clipped)?(?:[^0-9]|^)([012])(?:[^0-9]|$)|admin([012])/);
-      if (match) {
-        return match[1] || match[2] || '0';
-      }
-      if (candidates[i].indexOf('admin0') !== -1) return '0';
-      if (candidates[i].indexOf('admin1') !== -1) return '1';
-      if (candidates[i].indexOf('admin2') !== -1) return '2';
-    }
-    return '0';
-  }
-
-  function buildWhcaBoundaryUrl(url, adminLevel) {
-    var normalized = String(url || '');
-    if (!normalized) {
-      return '/pg/tileserv/gha.admin_whca/{z}/{x}/{y}.pbf?admin_level=' + (adminLevel || '0');
-    }
-
-    normalized = normalized.replace(
-      /\/pg\/tileserv\/gha\.admin_by_zoom\/\{z\}\/\{x\}\/\{y\}\.pbf(?:\?.*)?$/,
-      '/pg/tileserv/gha.admin_whca/{z}/{x}/{y}.pbf'
-    );
-
-    if (normalized.indexOf('/pg/tileserv/gha.admin_whca/') === -1) {
-      normalized = normalized.replace(
-        /\/pg\/tileserv\/[^/?]+(?:\/\{z\}\/\{x\}\/\{y\}\.pbf)?(?:\?.*)?$/,
-        '/pg/tileserv/gha.admin_whca/{z}/{x}/{y}.pbf'
-      );
-    }
-
-    return setQueryParam(normalized, 'admin_level', adminLevel || '0');
-  }
-
+  /* ── Scope-aware tile URL builder ── */
   function appendTileParams(url) {
-    var normalizedUrl = String(url || '');
-    if (tileParams) {
-      normalizedUrl += (normalizedUrl.indexOf('?') === -1 ? '?' : '&') + tileParams;
-    }
-    var isWrfRaster = url && url.indexOf('LAYERS=wrf_') !== -1;
-    var isForecastVector = url && (
-      url.indexOf('/pg/tileserv/gha.multimodal_points_raw/') !== -1 ||
-      url.indexOf('/pg/tileserv/gha.forecast_points_clustered/') !== -1 ||
-      url.indexOf('/pg/tileserv/gha.google_flood_points_clustered/') !== -1
-    );
+    var out = String(url || '');
+    if (tileParams) out += (out.indexOf('?') === -1 ? '?' : '&') + tileParams;
     if (currentScope === 'whca') {
-      /* WHCA: mapcache forwards scope to mapserver which applies admin mask */
-      normalizedUrl = setQueryParam(normalizedUrl, 'scope', 'whca');
-    } else if (projectCountriesParam && !isWrfRaster) {
-      normalizedUrl = setQueryParam(
-        normalizedUrl,
-        'project_countries',
-        encodeURIComponent(projectCountriesParam)
-      );
+      out = setQueryParam(out, 'scope', 'whca');
+    } else if (projectCountriesParam && url && url.indexOf('LAYERS=wrf_') === -1) {
+      out = setQueryParam(out, 'project_countries', encodeURIComponent(projectCountriesParam));
     }
-    return normalizedUrl;
+    return out;
   }
 
-  var BOUNDARY_DATASET_ID = '{{ map_widget.boundary_dataset_id }}';
-  var boundaryLayerIds = [];
-
+  /* ── Boundary layers — fetches config from /api/datasets/ ── */
   function removeBoundaryLayers() {
-    boundaryLayerIds.forEach(function(id) { if (map.getLayer(id)) map.removeLayer(id); });
+    boundaryLayerIds.forEach(function (id) { if (map.getLayer(id)) map.removeLayer(id); });
     boundaryLayerIds = [];
     if (map.getSource('bnd-src')) map.removeSource('bnd-src');
     firstBoundaryLayerId = null;
@@ -966,64 +737,126 @@
 
   function loadBoundaryLayers() {
     if (!BOUNDARY_DATASET_ID) return;
-    fetch('/api/datasets/')
-      .then(function (r) { return r.json(); })
-      .then(function (datasets) {
-        var bnd = datasets.find(function (d) { return d.id === BOUNDARY_DATASET_ID; });
-        if (!bnd || !bnd.layers || !bnd.layers.length) return;
 
-        var layerConfig = bnd.layers[0].layerConfig;
-        if (!layerConfig || !layerConfig.source || !layerConfig.source.tiles) return;
+    var bnd = apiDatasets[BOUNDARY_DATASET_ID];
+    if (!bnd || !bnd.layers || !bnd.layers.length) return;
 
-        var tilesUrl = layerConfig.source.tiles[0];
-        if (!tilesUrl) return;
-        var renderLayers = (layerConfig.render && layerConfig.render.layers) || [];
+    var layerConfig = bnd.layers[0].layerConfig;
+    if (!layerConfig || !layerConfig.source || !layerConfig.source.tiles) return;
 
-        /* Scope filtering: just append &scope=whca — admin_clipped handles it server-side */
-        if (currentScope === 'whca') {
-          tilesUrl = setQueryParam(tilesUrl, 'scope', 'whca');
-        }
+    var tilesUrl = layerConfig.source.tiles[0];
+    if (!tilesUrl) return;
+    var renderLayers = (layerConfig.render && layerConfig.render.layers) || [];
 
-        map.addSource('bnd-src', { type: 'vector', tiles: [tilesUrl] });
-        var fallbackSourceLayerMatch = String(tilesUrl).match(/\/pg\/tileserv\/([^/?]+)\//);
-        var fallbackSourceLayer = fallbackSourceLayerMatch ? fallbackSourceLayerMatch[1] : 'default';
-        var boundaryLayers = renderLayers.length ? renderLayers : [
-          {
-            type: 'fill',
-            'source-layer': fallbackSourceLayer,
-            paint: { 'fill-color': '#ffffff', 'fill-opacity': 0 }
-          },
-          {
-            type: 'line',
-            'source-layer': fallbackSourceLayer,
-            paint: { 'line-color': '#000', 'line-width': 1.1, 'line-opacity': 0.95 }
-          }
-        ];
+    if (currentScope === 'whca') tilesUrl = setQueryParam(tilesUrl, 'scope', 'whca');
 
-        boundaryLayers.forEach(function(renderLayer, index) {
-          var boundaryLayer = Object.assign({}, renderLayer, {
-            id: 'bnd-' + index,
-            source: 'bnd-src'
-          });
-          if (!boundaryLayer['source-layer']) {
-            boundaryLayer['source-layer'] = fallbackSourceLayer;
-          }
-          map.addLayer(boundaryLayer);
-          boundaryLayerIds.push(boundaryLayer.id);
-          if (firstBoundaryLayerId === null) {
-            firstBoundaryLayerId = boundaryLayer.id;
-          }
-        });
-      })
-      .catch(function (e) {
-        console.warn('map-widget: failed to load boundary layers', e);
-      });
+    map.addSource('bnd-src', { type: 'vector', tiles: [tilesUrl] });
+
+    var fallbackSL = 'default';
+    var slMatch = String(tilesUrl).match(/\/pg\/tileserv\/([^/?]+)\//);
+    if (slMatch) fallbackSL = slMatch[1];
+
+    var layers = renderLayers.length ? renderLayers : [
+      { type: 'fill', 'source-layer': fallbackSL, paint: { 'fill-color': '#ffffff', 'fill-opacity': 0 } },
+      { type: 'line', 'source-layer': fallbackSL, paint: { 'line-color': '#000', 'line-width': 1.1, 'line-opacity': 0.95 } },
+    ];
+
+    layers.forEach(function (rl, i) {
+      var bl = Object.assign({}, rl, { id: 'bnd-' + i, source: 'bnd-src' });
+      if (!bl['source-layer']) bl['source-layer'] = fallbackSL;
+      map.addLayer(bl);
+      boundaryLayerIds.push(bl.id);
+      if (firstBoundaryLayerId === null) firstBoundaryLayerId = bl.id;
+    });
   }
 
+  /* ── Layer management (uses API layerConfig) ── */
+  function removeActiveLayers() {
+    activeLayers.forEach(function (id) { if (map.getLayer(id)) map.removeLayer(id); });
+    activeSources.forEach(function (id) { if (map.getSource(id)) map.removeSource(id); });
+    activeLayers = [];
+    activeSources = [];
+  }
+
+  function addLayers(apiLayers, selectedTime, datasetTitle) {
+    removeActiveLayers();
+    if (!apiLayers || !apiLayers.length) { renderLegend([], datasetTitle); return; }
+
+    callGen++;
+    var gen = callGen;
+    var before = firstBoundaryLayerId || undefined;
+
+    apiLayers.slice().reverse().forEach(function (layer, i) {
+      var lc = layer.layerConfig;
+      if (!lc || !lc.source || !lc.source.tiles) return;
+
+      var url = lc.source.tiles[0];
+      var sourceType = lc.source.type || 'raster';
+
+      /* Replace {time} placeholder with selected time */
+      if (selectedTime) {
+        url = url.replace(/\{time\}/g, selectedTime);
+        /* Also replace url_param placeholders from paramsSelectorConfig */
+        var psc = layer.paramsSelectorConfig || [];
+        psc.forEach(function (p) {
+          if (p.url_param) url = url.replace('{' + p.url_param + '}', selectedTime);
+        });
+      }
+      url = appendTileParams(url);
+
+      var srcId = 'mw-src-' + gen + '-' + i;
+      var lyrId = 'mw-lyr-' + gen + '-' + i;
+
+      try {
+        if (sourceType === 'vector') {
+          map.addSource(srcId, { type: 'vector', tiles: [url] });
+          var renderLayers = (lc.render && lc.render.layers) || [];
+
+          if (renderLayers.length) {
+            /* Use the API-provided render layers (same styles as mapviewer) */
+            renderLayers.forEach(function (rl, j) {
+              var mlLayer = Object.assign({}, rl, {
+                id: lyrId + '-' + j,
+                source: srcId,
+              });
+              /* Apply WHCA country filter on point layers */
+              if (currentScope === 'whca' && (rl.type === 'circle' || rl.type === 'symbol')) {
+                mlLayer.filter = ['in', 'country_code'].concat(WHCA_CC);
+              }
+              map.addLayer(mlLayer, before);
+              activeLayers.push(mlLayer.id);
+            });
+          } else {
+            /* Fallback for vector layers without render config */
+            var slMatch = url.match(/tileserv\/([^/]+)\//);
+            var sl = slMatch ? slMatch[1] : 'default';
+            map.addLayer({
+              id: lyrId, type: 'fill', source: srcId, 'source-layer': sl,
+              paint: { 'fill-color': '#034930', 'fill-opacity': 0.5 }
+            }, before);
+            activeLayers.push(lyrId);
+          }
+        } else {
+          /* Raster / WMS */
+          map.addSource(srcId, { type: 'raster', tiles: [url], tileSize: 256 });
+          map.addLayer({ id: lyrId, type: 'raster', source: srcId }, before);
+          activeLayers.push(lyrId);
+        }
+        activeSources.push(srcId);
+      } catch (e) {
+        console.warn('map-widget: failed to add layer', srcId, e);
+      }
+    });
+
+    renderLegend(apiLayers, datasetTitle);
+  }
+
+  /* ── Legend (reads legendConfig from API) ── */
   function renderOneLegend(legendConfig, layerTitle, container) {
     if (!legendConfig) return;
     var type = legendConfig.type;
-    var hasItems = Array.isArray(legendConfig.items) && legendConfig.items.length;
+    var items = legendConfig.items;
+    var hasItems = Array.isArray(items) && items.length;
     if (!hasItems && type !== 'image' && type !== 'gradient') return;
 
     if (layerTitle) {
@@ -1053,7 +886,7 @@
       gradRow.appendChild(maxLabel);
       container.appendChild(gradRow);
     } else if (hasItems) {
-      legendConfig.items.forEach(function (item) {
+      items.forEach(function (item) {
         var row = document.createElement('div');
         row.className = 'legend-item';
         var swatch = document.createElement('span');
@@ -1068,19 +901,19 @@
     }
   }
 
-  function renderLegend(layersData, datasetTitle) {
+  function renderLegend(apiLayers, datasetTitle) {
     var panel = document.getElementById('map-widget-legend');
     var titleEl = document.getElementById('legend-title');
     var itemsEl = document.getElementById('legend-items');
     itemsEl.innerHTML = '';
 
     var hasContent = false;
-    var showLayerTitles = layersData.filter(function (l) { return l.legend; }).length > 1;
+    var showLayerTitles = apiLayers.filter(function (l) { return l.legendConfig; }).length > 1;
 
-    layersData.forEach(function (layerDef) {
-      if (!layerDef.legend) return;
+    apiLayers.forEach(function (layer) {
+      if (!layer.legendConfig) return;
       var before = itemsEl.childElementCount;
-      renderOneLegend(layerDef.legend, showLayerTitles ? layerDef.title : null, itemsEl);
+      renderOneLegend(layer.legendConfig, showLayerTitles ? layer.name : null, itemsEl);
       if (itemsEl.childElementCount > before) hasContent = true;
     });
 
@@ -1092,112 +925,77 @@
     }
   }
 
-  function addLayers(layersData, latestTime, datasetTitle) {
-    removeActiveLayers();
-    if (!layersData || !layersData.length) { renderLegend([], datasetTitle); return; }
-
-    callGen++;
-    var gen = callGen;
-    var before = firstBoundaryLayerId || undefined;
-
-    layersData.slice().reverse().forEach(function (layerDef, i) {
-      var url = layerDef.tile_url;
-      var type = layerDef.layer_type;
-      if (!url) return;
-
-      if (latestTime) url = url.replace('{time}', latestTime);
-      url = appendTileParams(url);
-
-      var srcId = 'mw-src-' + gen + '-' + i;
-      var lyrId = 'mw-lyr-' + gen + '-' + i;
-
-      try {
-        if (type === 'vector') {
-          /* Detect source-layer from URL path (tileserv uses schema.function_name) */
-          var slMatch = url.match(/tileserv\/([^/]+)\//);
-          var sourceLayer = slMatch ? slMatch[1] : 'default';
-          /* Detect point layers */
-          var isPoints = url.indexOf('points_alerts') !== -1 || url.indexOf('control_points') !== -1 || url.indexOf('forecast_points') !== -1;
-          map.addSource(srcId, { type: 'vector', tiles: [url] });
-          if (isPoints) {
-            var isWhca = currentScope === 'whca';
-            var circleLayer = {
-              id: lyrId, type: 'circle', source: srcId, 'source-layer': sourceLayer,
-              paint: {
-                'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 3, 6, 5, 9, 7],
-                'circle-color': ['match', ['get', 'alert_level'],
-                  'emergency', '#d32f2f',
-                  'alarm', '#ff9800',
-                  'warning', '#fbc02d',
-                  'normal', '#b0b0b0',
-                  '#b0b0b0'],
-                'circle-opacity': 0.85,
-                'circle-stroke-width': 0.5,
-                'circle-stroke-color': '#fff'
-              }
-            };
-            if (isWhca) circleLayer.filter = ['in', 'country_code', 'SD', 'SS', 'UG', 'ET', 'RW'];
-            map.addLayer(circleLayer, before);
-          } else {
-            map.addLayer({ id: lyrId, type: 'fill', source: srcId, 'source-layer': sourceLayer, paint: { 'fill-color': '#034930', 'fill-opacity': 0.5 } }, before);
-          }
-        } else if (type === 'geojson') {
-          fetch(url)
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-              map.addSource(srcId, { type: 'geojson', data: data });
-              map.addLayer({ id: lyrId, type: 'fill', source: srcId, paint: { 'fill-color': '#034930', 'fill-opacity': 0.5 } }, before);
-            });
-        } else {
-          map.addSource(srcId, { type: 'raster', tiles: [url], tileSize: 256 });
-          map.addLayer({ id: lyrId, type: 'raster', source: srcId }, before);
-        }
-        activeSources.push(srcId);
-        activeLayers.push(lyrId);
-      } catch (e) {
-        console.warn('map-widget: failed to add layer', srcId, e);
-      }
-    });
-
-    renderLegend(layersData, datasetTitle);
+  /* ── Time management — fetches from tileJsonUrl (same as mapviewer) ── */
+  function getTimeLayer(apiLayers) {
+    return (apiLayers || []).find(function (l) { return l.tileJsonUrl; }) || null;
   }
 
-  function updateTimingPill(btn) {
-    var pill = document.getElementById('map-timing-pill');
-    var text = document.getElementById('map-timing-text');
-    var datasetId = btn.dataset.datasetId;
-    var layersData = getLayersFromButton(btn);
-    var availableTimes = availableTimesByDataset[datasetId] || [];
-    var selectedTime = syncSelectedTime(btn, availableTimes);
-    var summaryText = String(summaryMap[datasetId] || '').trim();
-    var latestTime = normalizeTimeValue(btn.dataset.latestTime || '');
-    var initializationTime = selectedTime || latestTime;
-    var dateMeta = dateMetaByDataset[datasetId] || getDateMetaFromButton(btn);
-    var activeDateMeta = initializationTime && dateMeta && typeof dateMeta === 'object'
-      ? (dateMeta[initializationTime] || null)
-      : null;
+  function syncSelectedTime(datasetId, latestDate, availableTimes) {
+    var selected = normalizeTimeValue(selectedTimeByDataset[datasetId] || '');
+    var latest = normalizeTimeValue(latestDate || '');
 
-    function formatPillDate(d) {
-      if (!d) return '';
-      var dt = new Date(d + 'T00:00:00');
-      if (isNaN(dt)) return d;
-      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      return dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
+    if (availableTimes && availableTimes.length) {
+      if (selected && availableTimes.indexOf(selected) !== -1) return selected;
+      if (latest && availableTimes.indexOf(latest) !== -1) {
+        selectedTimeByDataset[datasetId] = latest;
+        return latest;
+      }
+      var last = availableTimes[availableTimes.length - 1];
+      selectedTimeByDataset[datasetId] = last;
+      return last;
+    }
+    selectedTimeByDataset[datasetId] = latest || selected;
+    return latest || selected;
+  }
+
+  function fetchAvailableTimes(datasetId, apiLayers) {
+    if (availableTimesByDataset[datasetId]) return Promise.resolve(availableTimesByDataset[datasetId]);
+    if (pendingTimesByDataset[datasetId]) return pendingTimesByDataset[datasetId];
+
+    var timeLayer = getTimeLayer(apiLayers);
+    if (!timeLayer || !timeLayer.tileJsonUrl) {
+      availableTimesByDataset[datasetId] = [];
+      return Promise.resolve([]);
     }
 
-    var effectiveDisplayTime = normalizeTimeValue(
-      (activeDateMeta && (activeDateMeta.initialized || activeDateMeta.latest || activeDateMeta.latest_date)) || ''
-    ) || initializationTime || latestTime;
+    pendingTimesByDataset[datasetId] = fetch(timeLayer.tileJsonUrl)
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (payload) {
+        var key = timeLayer.timestampsResponseObjectKey || 'timestamps';
+        var times = payload[key] || payload.timestamps || payload.dates || [];
+        var dm = payload.date_meta || payload.dateMeta || payload.ranges;
+        if (dm && typeof dm === 'object') dateMetaByDataset[datasetId] = dm;
+        var normalized = normalizeAvailableTimes(times);
+        availableTimesByDataset[datasetId] = normalized;
+        return normalized;
+      })
+      .catch(function () { availableTimesByDataset[datasetId] = []; return []; })
+      .finally(function () { delete pendingTimesByDataset[datasetId]; });
+
+    return pendingTimesByDataset[datasetId];
+  }
+
+  /* ── Timing pill ── */
+  function updateTimingPill(datasetId, latestDate) {
+    var pill = document.getElementById('map-timing-pill');
+    var text = document.getElementById('map-timing-text');
+    var times = availableTimesByDataset[datasetId] || [];
+    var selected = syncSelectedTime(datasetId, latestDate, times);
+    var dateMeta = dateMetaByDataset[datasetId] || {};
+    var meta = selected && dateMeta[selected] || null;
+
+    var initDate = normalizeTimeValue(
+      (meta && (meta.initialized || meta.latest_date)) || ''
+    ) || selected || normalizeTimeValue(latestDate || '');
+    var latestForecast = normalizeTimeValue(
+      (meta && (meta.latest || meta.latest_forecast_date)) || ''
+    ) || initDate;
+
     var label = '';
-    if (effectiveDisplayTime) {
-      label = 'Latest: ' + formatPillDate(effectiveDisplayTime) +
-        ' | Initialized: ' + formatPillDate(effectiveDisplayTime);
-    } else if (summaryText && /(initialized|\bto\b)/i.test(summaryText)) {
-      label = summaryText;
-    } else if (latestTime) {
-      label = 'Latest: ' + formatPillDate(latestTime);
-    } else if (summaryText) {
-      label = summaryText;
+    if (initDate && latestForecast && latestForecast !== initDate) {
+      label = 'Latest: ' + formatPillDate(latestForecast) + ' | Initialized: ' + formatPillDate(initDate);
+    } else if (initDate) {
+      label = 'Latest: ' + formatPillDate(initDate) + ' | Initialized: ' + formatPillDate(initDate);
     }
 
     if (label) {
@@ -1212,83 +1010,168 @@
     }
   }
 
-  function stepActiveDatasetTime(direction) {
-    var btn = activeDatasetBtn || document.querySelector('.map-dataset-btn.is-active');
-    if (!btn) return;
-
-    var layersData = getLayersFromButton(btn);
-    fetchAvailableTimes(btn, layersData).then(function (availableTimes) {
-      var currentTime = syncSelectedTime(btn, availableTimes);
-      var currentIndex = availableTimes.indexOf(currentTime);
-      if (currentIndex === -1) return;
-
-      var nextIndex = currentIndex + direction;
-      if (nextIndex < 0 || nextIndex >= availableTimes.length) return;
-
-      selectedTimeByDataset[btn.dataset.datasetId] = availableTimes[nextIndex];
-      updateTimingPill(btn);
-      addLayers(layersData, availableTimes[nextIndex], btn.dataset.title || '');
-    });
+  /* ── Flood state sync with homepage ── */
+  function isFloodForecastDataset(apiDataset) {
+    var name = String(apiDataset.name || '').toLowerCase();
+    return name.indexOf('multi model') !== -1 || name.indexOf('multimodal') !== -1;
   }
 
-  function loadDatasetSummaries() {
-    fetch('/api/datasets/')
-      .then(function (r) { return r.json(); })
-      .then(function (datasets) {
-        datasets.forEach(function (d) {
-          if (d.id && d.summary) summaryMap[d.id] = d.summary;
-        });
-        var activeBtn = document.querySelector('.map-dataset-btn.is-active');
-        if (activeBtn) updateTimingPill(activeBtn);
-      })
-      .catch(function () {});
-  }
-
-  function isFloodForecastDataset(btn, layersData) {
-    var title = String((btn && btn.dataset && btn.dataset.title) || '').toLowerCase();
-    if (title.indexOf('multi model') !== -1) return true;
-    var timeLayer = getTimeLayer(layersData);
-    var tileJsonUrl = String((timeLayer && timeLayer.tile_json_url) || '');
-    return tileJsonUrl.indexOf('/api/flood/forecast-dates') !== -1;
-  }
-
-  function syncHomepageFloodState(btn, layersData) {
-    if (!btn || !isFloodForecastDataset(btn, layersData)) return;
-    var datasetId = btn.dataset.datasetId;
-    var selectedTime = syncSelectedTime(btn, availableTimesByDataset[datasetId] || []);
-    var effectiveDate = normalizeTimeValue(selectedTime || btn.dataset.latestTime || '');
+  function syncHomepageFloodState(btn, apiDataset) {
+    if (!apiDataset || !isFloodForecastDataset(apiDataset)) return;
+    var id = apiDataset.id;
+    var selected = syncSelectedTime(id, apiDataset.latest_date, availableTimesByDataset[id] || []);
     window.dispatchEvent(new CustomEvent('minimap-flood-state-change', {
-      detail: {
-        scope: currentScope,
-        datasetId: datasetId,
-        title: btn.dataset.title || '',
-        date: effectiveDate
-      }
+      detail: { scope: currentScope, datasetId: id, title: btn.dataset.title || '', date: selected }
     }));
   }
 
+  /* ── Activate a dataset button ── */
   function activateBtn(btn) {
-    document.querySelectorAll('.map-dataset-btn').forEach(function (b) {
-      b.classList.remove('is-active');
-    });
+    document.querySelectorAll('.map-dataset-btn').forEach(function (b) { b.classList.remove('is-active'); });
     btn.classList.add('is-active');
     activeDatasetBtn = btn;
-    updateTimingPill(btn);
-    var layersData = getLayersFromButton(btn);
-    var selectedTime = syncSelectedTime(btn, availableTimesByDataset[btn.dataset.datasetId] || []);
-    addLayers(layersData, selectedTime || '', btn.dataset.title || '');
-    syncHomepageFloodState(btn, layersData);
-    fetchAvailableTimes(btn, layersData).then(function (availableTimes) {
-      var resolvedTime = syncSelectedTime(btn, availableTimes);
+
+    var datasetId = btn.dataset.datasetId;
+    var ds = apiDatasets[datasetId];
+    console.log('map-widget activateBtn:', datasetId, ds ? ds.name : 'NOT FOUND', 'layers:', ds ? ds.layers.length : 0);
+    if (!ds || !ds.layers) { removeActiveLayers(); renderLegend([], ''); return; }
+
+    var apiLayers = ds.layers;
+    var latestDate = ds.latest_date || '';
+    var selectedTime = syncSelectedTime(datasetId, latestDate, availableTimesByDataset[datasetId] || []);
+
+    addLayers(apiLayers, selectedTime, btn.dataset.title || ds.name || '');
+    updateTimingPill(datasetId, latestDate);
+    syncHomepageFloodState(btn, ds);
+
+    /* Fetch timestamps from API (same endpoint mapviewer uses) and re-render if time changes */
+    fetchAvailableTimes(datasetId, apiLayers).then(function (times) {
+      var resolvedTime = syncSelectedTime(datasetId, latestDate, times);
       if (activeDatasetBtn === btn && resolvedTime !== selectedTime) {
-        addLayers(layersData, resolvedTime || '', btn.dataset.title || '');
+        addLayers(apiLayers, resolvedTime, btn.dataset.title || ds.name || '');
       }
       if (activeDatasetBtn === btn) {
-        updateTimingPill(btn);
-        syncHomepageFloodState(btn, layersData);
+        updateTimingPill(datasetId, latestDate);
+        syncHomepageFloodState(btn, ds);
       }
     });
   }
+
+  /* ── Bootstrap: fetch config + datasets FIRST, then create map with correct basemap ── */
+  Promise.all([
+    fetch('/api/mapviewer-config').then(function (r) { return r.json(); }).catch(function () { return {}; }),
+    fetch('/api/datasets/').then(function (r) { return r.json(); }).catch(function () { return []; }),
+  ]).then(function (results) {
+    var config = results[0];
+    var datasets = results[1];
+
+    /* ── Determine basemap style from config (same source as mapviewer) ── */
+    var basemaps = config.basemaps || [];
+    defaultBasemapConfig = basemaps.find(function (b) { return b['default']; }) || basemaps[0] || null;
+
+    var mapStyle = FALLBACK_STYLE;
+    if (defaultBasemapConfig && defaultBasemapConfig.mapStyle) {
+      mapStyle = defaultBasemapConfig.mapStyle;
+    } else if (defaultBasemapConfig && defaultBasemapConfig.url) {
+      mapStyle = {
+        version: 8,
+        sources: { 'cfg-basemap': { type: 'raster', tiles: [defaultBasemapConfig.url], tileSize: 256 } },
+        layers: [{ id: 'cfg-basemap', type: 'raster', source: 'cfg-basemap' }],
+      };
+    }
+
+    /* Bounds from config */
+    var b = config.bounds;
+    if (b && b.length >= 4) {
+      initialBounds = [[b[0], b[1]], [b[2], b[3]]];
+    }
+
+    /* Project countries */
+    var countries = config.countries || [];
+    if (countries.length) {
+      var seen = {};
+      projectCountriesParam = countries
+        .map(function (c) { return (c && c.name ? String(c.name).trim() : ''); })
+        .filter(function (n) { if (!n || seen[n]) return false; seen[n] = true; return true; })
+        .join(',');
+    }
+
+    /* Tile params from fixed filter config */
+    var filterTypes = config.filterTypes || [];
+    var adminFilter = filterTypes.find(function (f) { return f.value === 'admin'; });
+    if (adminFilter && adminFilter.levels && adminFilter.levels.length) {
+      var lv = adminFilter.levels[0];
+      if (lv.fixed_code) {
+        var code = lv.fixed_code;
+        var project = adminFilter.fixed_project_name || '';
+        var admin = lv.admin_level || '0';
+        var border = lv.border_level || '0';
+        tileParams = [
+          'unit_id=' + encodeURIComponent(code),
+          'admin_level=' + encodeURIComponent(admin),
+          'project_name=' + encodeURIComponent(project),
+          'border_level=' + encodeURIComponent(border),
+          'MASK_UNIT_ID=' + encodeURIComponent(code),
+          'MASK_AREA=' + encodeURIComponent(project),
+          'MASK_ADMIN_LEVEL=' + encodeURIComponent(admin),
+        ].join('&');
+      }
+    }
+
+    /* Index all datasets by ID */
+    datasets.forEach(function (d) { if (d.id) apiDatasets[d.id] = d; });
+
+    /* Create map with the correct basemap style from config */
+    map = new maplibregl.Map({
+      container: 'homepage-map',
+      style: mapStyle,
+      center: initialCenter,
+      zoom: initialZoom,
+      attributionControl: false,
+    });
+
+    addMapControls();
+
+    map.on('error', function (e) {
+      console.error('map-widget map error:', e.error || e);
+    });
+
+    map.on('load', function () {
+      document.getElementById('map-widget-loading').style.display = 'none';
+      console.log('map-widget: map loaded, style:', typeof mapStyle === 'string' ? mapStyle : 'object');
+      console.log('map-widget: datasets indexed:', Object.keys(apiDatasets).length);
+      /* Apply basemap/label group visibility (same as mapviewer).
+         Only toggle if the configured basemap group has actual tile data.
+         The default style ships with raster OSM visible — toggling to
+         basemap-light would hide it and show an empty vector source. */
+      if (defaultBasemapConfig && defaultBasemapConfig.basemapGroup) {
+        try {
+          var testLayer = map.getStyle().layers.find(function (l) {
+            var gid = (l.metadata || {})['mapbox:group'] || '';
+            var groups = (map.getStyle().metadata || {})['mapbox:groups'] || {};
+            var gname = (groups[gid] || {}).name || '';
+            return gname === defaultBasemapConfig.basemapGroup && l.type !== 'background';
+          });
+          /* Only toggle if we found a non-background layer in the target group
+             and its source has loaded tiles (not just an empty vector source) */
+          if (testLayer && testLayer.source) {
+            var src = map.getSource(testLayer.source);
+            if (src && src.type === 'raster') {
+              setStyleGroupVisibility('basemap', defaultBasemapConfig.basemapGroup);
+              if (defaultBasemapConfig.labelsGroup) setStyleGroupVisibility('labels', defaultBasemapConfig.labelsGroup);
+            }
+          }
+        } catch (e) {
+          console.warn('map-widget: skipped basemap group toggle', e);
+        }
+      }
+      if (initialBounds) map.fitBounds(initialBounds, { padding: 50, duration: 0 });
+      initMapLayers();
+    });
+  }).catch(function (err) {
+    console.error('map-widget: bootstrap failed', err);
+    document.getElementById('map-widget-loading').style.display = 'none';
+  });
 
   function initMapLayers() {
     loadBoundaryLayers();
@@ -1296,88 +1179,10 @@
     if (defaultBtn) activateBtn(defaultBtn);
   }
 
-  map.on('load', function () {
-    document.getElementById('map-widget-loading').style.display = 'none';
-    applyDefaultBasemapStyleSelection();
-
-    fetch('/api/mapviewer-config')
-      .then(function (r) { return r.json(); })
-      .then(function (config) {
-        // Fit map to bounds if available
-        var b = config.bounds;
-        var countries = config.countries || [];
-        if (b && b.length >= 4) {
-          initialBounds = [[b[0], b[1]], [b[2], b[3]]];
-          map.fitBounds(initialBounds, { padding: 50, duration: 0 });
-        }
-
-        if (countries.length) {
-          var seenCountries = {};
-          projectCountriesParam = countries
-            .map(function (country) { return (country && country.name ? String(country.name).trim() : ''); })
-            .filter(function (name) {
-              if (!name || seenCountries[name]) return false;
-              seenCountries[name] = true;
-              return true;
-            })
-            .join(',');
-        }
-
-        // Build tile params from fixed_code filter
-        var filterTypes = config.filterTypes || [];
-        var adminFilter = filterTypes.find(function (f) { return f.value === 'admin'; });
-        if (adminFilter && adminFilter.levels && adminFilter.levels.length) {
-          var lv = adminFilter.levels[0];
-          if (lv.fixed_code) {
-            var code = lv.fixed_code;
-            var project = adminFilter.fixed_project_name || '';
-            var admin = lv.admin_level || '0';
-            var border = lv.border_level || '0';
-            tileParams = [
-              'unit_id=' + encodeURIComponent(code),
-              'admin_level=' + encodeURIComponent(admin),
-              'project_name=' + encodeURIComponent(project),
-              'border_level=' + encodeURIComponent(border),
-              'MASK_UNIT_ID=' + encodeURIComponent(code),
-              'MASK_AREA=' + encodeURIComponent(project),
-              'MASK_ADMIN_LEVEL=' + encodeURIComponent(admin),
-            ].join('&');
-
-            // Fetch bbox from boundary API if no bounds in config
-            if (!b && adminFilter.boundary_api_url) {
-              var bboxUrl = adminFilter.boundary_api_url +
-                '?admin_level=' + encodeURIComponent(admin) +
-                '&with_bbox=true';
-              fetch(bboxUrl)
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                  var match = (data || []).find(function (item) { return item.code === code; });
-                  if (match && match.bbox) {
-                    var bb = match.bbox;
-                    initialBounds = [[bb.left, bb.bottom], [bb.right, bb.top]];
-                    map.fitBounds(initialBounds, { padding: 50, duration: 0 });
-                  } else {
-                    console.warn('map-widget: no bbox found for code', code);
-                  }
-                })
-                .catch(function (e) { console.error('map-widget: bbox fetch failed', e); });
-            }
-          }
-        }
-        initMapLayers();
-        loadDatasetSummaries();
-      })
-      .catch(function () {
-        initMapLayers();
-        loadDatasetSummaries();
-      });
-  });
-
+  /* Button click handlers */
   document.querySelectorAll('.map-dataset-btn').forEach(function (btn) {
     btn.addEventListener('click', function () { activateBtn(btn); });
   });
-
-  /* Date pill arrows removed — show latest date only */
 })();
 </script>
 {% endif %}

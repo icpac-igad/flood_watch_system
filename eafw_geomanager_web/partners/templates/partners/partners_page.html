@@ -30,12 +30,26 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.2.3/css/flag-icons.min.css">
 <section class="partners-section" style="padding-bottom:1rem">
     <div class="container">
-        <h2 class="has-text-centered" style="font-size:1.8rem;font-weight:700;margin-bottom:2rem;color:var(--secondary-text-color)">IGAD Member States</h2>
-        <div class="partners-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1.5rem;max-width:900px;margin:0 auto">
+        <h2 class="has-text-centered" style="font-size:1.8rem;font-weight:700;margin-bottom:2rem;color:var(--secondary-text-color)">Member States</h2>
+        <div class="partners-grid">
             {% for state in homepage.member_states %}
-            <div style="text-align:center">
-                <span class="fi fi-{{ state.value.country_code }} fis" style="display:inline-block;width:100px;height:67px;background-size:cover;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.12);border:1px solid rgba(0,0,0,.08)"></span>
-                <div style="margin-top:.5rem;font-size:.9rem;font-weight:500;color:var(--secondary-text-color)">{{ state.value.name }}</div>
+            <div class="partner-card-container">
+                <div class="partner-card">
+                    <!-- Front: flag -->
+                    <div class="partner-card-front">
+                        <div class="partner-logo-container">
+                            <span class="fi fi-{{ state.value.country_code }} fis" style="display:inline-block;width:140px;height:93px;background-size:cover;border-radius:4px"></span>
+                        </div>
+                        <p class="partner-name">{{ state.value.name }}</p>
+                    </div>
+                    <!-- Back: country info -->
+                    <div class="partner-card-back">
+                        <div>
+                            <h2 class="partner-name" style="color:var(--primary-text-color);margin-bottom:.75rem">{{ state.value.name }}</h2>
+                            <div class="partner-back-description">Member State</div>
+                        </div>
+                    </div>
+                </div>
             </div>
             {% endfor %}
         </div>
