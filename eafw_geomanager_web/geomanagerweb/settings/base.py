@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "partners",
     "mapwidget",
     "geomanager",
+    "georeport.dashboard",
     "daphne",
     "channels",
     "base",
