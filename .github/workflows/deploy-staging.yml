@@ -95,6 +95,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-cms:latest
             ${{ env.IMAGE_PREFIX }}/eafw-cms:${{ github.sha }}
+          build-args: |
+            GH_TOKEN=${{ secrets.GH_PAT }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -181,7 +183,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./eafw_geomanager_web
-          file: docker/mapcache/Dockerfile
+          file: ./eafw_geomanager_web/docker/mapcache/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapcache:latest

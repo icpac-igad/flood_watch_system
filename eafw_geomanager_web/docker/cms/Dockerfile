@@ -26,12 +26,19 @@ COPY geomanager_pkg ${APP_HOME}/geomanager_pkg
 COPY . ${APP_HOME}
 WORKDIR ${APP_HOME}
 
-# Mount SSH agent for private git deps (hazard-georeport)
+# Private git deps: use GH_TOKEN (CI) or SSH agent (local)
+ARG GH_TOKEN=""
 RUN --mount=type=ssh \
-    mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts && \
+    if [ -n "$GH_TOKEN" ]; then \
+      git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; \
+      git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "git@github.com:"; \
+    else \
+      mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts; \
+    fi && \
     uv lock && \
     uv sync --all-extras --no-cache --no-install-project && \
-    uv add gunicorn uvicorn
+    uv add gunicorn uvicorn && \
+    git config --global --unset-all url."https://${GH_TOKEN}@github.com/".insteadOf 2>/dev/null || true
 
 # use osgeo gdal ubuntu small 3.10 image.
 ARG GDAL_VERSION=3.10.0
