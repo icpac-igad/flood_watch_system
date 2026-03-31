@@ -1,23 +1,26 @@
 from urllib.parse import urlsplit, urlunsplit
 
 
-def _tileserv_base_url(tiles_url):
+def _api_base_url(tiles_url):
+    """Derive the site prefix from any known tile URL pattern."""
     parsed = urlsplit(tiles_url or "")
     path = parsed.path or str(tiles_url or "")
 
-    if "/pg/tileserv" in path:
-        base_path = path.split("/pg/tileserv", 1)[0] + "/pg/tileserv"
-        return urlunsplit((parsed.scheme, parsed.netloc, base_path, "", ""))
+    for marker in ("/pg/tileserv", "/api/admin-boundary/tiles", "/api/adm0-boundary/tiles"):
+        if marker in path:
+            prefix = path.split(marker, 1)[0]
+            return urlunsplit((parsed.scheme, parsed.netloc, prefix, "", ""))
 
-    if "/api/admin-boundary/tiles" in path or "/api/adm0-boundary/tiles" in path:
-        prefix = path.split("/api/", 1)[0]
-        return urlunsplit((parsed.scheme, parsed.netloc, f"{prefix}/pg/tileserv", "", ""))
-
-    return urlunsplit((parsed.scheme, parsed.netloc, "/pg/tileserv", "", ""))
+    return urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
 
 
-def _build_tileserv_tiles_url(base_url, collection_id):
-    return f"{base_url}/{collection_id}" + "/{z}/{x}/{y}.pbf"
+def _build_boundary_tiles_url(base_url, admin_level):
+    """Build URL pointing to the Django admin-boundary endpoint with a fixed admin_level.
+
+    This endpoint understands scope=whca and other filter params, unlike raw
+    pg_tileserv which ignores unknown query parameters.
+    """
+    return f"{base_url}/api/admin-boundary/tiles/{{z}}/{{x}}/{{y}}?admin_level={admin_level}"
 
 
 def _boundary_render_layers(source_layer, level):
@@ -56,7 +59,7 @@ def _boundary_interaction_output(level):
     if level >= 1:
         base_output.append(
             {
-                "column": "name_1",
+                "column": "region",
                 "property": "Region",
                 "type": "string",
             }
@@ -65,7 +68,7 @@ def _boundary_interaction_output(level):
     if level >= 2:
         base_output.append(
             {
-                "column": "name_2",
+                "column": "district",
                 "property": "Sub Region",
                 "type": "string",
             }
@@ -120,15 +123,20 @@ def _build_boundary_dataset(
 
 
 def create_boundary_dataset(tiles_url):
-    tileserv_base_url = _tileserv_base_url(tiles_url)
+    base_url = _api_base_url(tiles_url)
+    # Use the Django admin-boundary endpoint which understands scope=whca and
+    # other filter params.  Raw pg_tileserv table URLs ignore those params,
+    # so the WHCA project filter had no effect on boundary layers.
+    # The source-layer in the MVT is always "gha.admin_clipped".
+    source_layer = "gha.admin_clipped"
     return [
         _build_boundary_dataset(
             "political-boundaries",
             "political-boundaries",
             "Country Boundaries",
             "GHoA country boundaries",
-            _build_tileserv_tiles_url(tileserv_base_url, "gha.admin0"),
-            "gha.admin0",
+            _build_boundary_tiles_url(base_url, 0),
+            source_layer,
             0,
             default=True,
         ),
@@ -137,8 +145,8 @@ def create_boundary_dataset(tiles_url):
             "political-boundaries-admin1",
             "Region Boundaries",
             "GHoA region boundaries",
-            _build_tileserv_tiles_url(tileserv_base_url, "gha.admin1"),
-            "gha.admin1",
+            _build_boundary_tiles_url(base_url, 1),
+            source_layer,
             1,
         ),
         _build_boundary_dataset(
@@ -146,8 +154,8 @@ def create_boundary_dataset(tiles_url):
             "political-boundaries-admin2",
             "District Boundaries",
             "GHoA district boundaries",
-            _build_tileserv_tiles_url(tileserv_base_url, "gha.admin2"),
-            "gha.admin2",
+            _build_boundary_tiles_url(base_url, 2),
+            source_layer,
             2,
         ),
     ]

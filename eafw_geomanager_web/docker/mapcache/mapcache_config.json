@@ -177,12 +177,12 @@
     "grids": {
       "WGS84": {
         "restricted_extent": "${WGS84_GRID_EXTENTS}",
-        "minzoom": "4",
+        "minzoom": "0",
         "maxzoom": "14"
       },
       "GoogleMapsCompatible": {
         "restricted_extent": "${WEB_GRID_EXTENTS}",
-        "minzoom": "4",
+        "minzoom": "0",
         "maxzoom": "14"
       }
     },
@@ -233,7 +233,7 @@
     {
       "name": "daily_hmc_alert",
       "source": "daily_hmc_alert_source",
-      "format_ref": "png_fast",
+      "format_ref": "png_rgba",
       "metatile": "2 2",
       "metadata": {
         "title": "Daily HMC Flood Alert Tiles"

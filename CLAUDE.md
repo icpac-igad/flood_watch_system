@@ -93,6 +93,11 @@ ssh staging "cd ~/flood_watch_system/eafw_geomanager_web && docker compose up -d
 docker compose build geomanager_web && docker compose up -d geomanager_web
 
 # MapViewer (React component changes — slow, ~5 min)
+# IMPORTANT: Next.js build cache can serve stale JS. If source changes don't appear
+# in the deployed app, prune the build cache first:
+#   docker builder prune -af
+#   docker compose build --no-cache geomanager_mapviewer && docker compose up -d geomanager_mapviewer
+# Normal rebuild (when cache is clean):
 docker compose build geomanager_mapviewer && docker compose up -d geomanager_mapviewer
 
 # MapServer/MapCache (nginx config changes)
@@ -241,6 +246,7 @@ The jobs service (`eafw-jobs`) runs these scheduled syncs:
 - **Git**: single repo, `eafw` branch for staging, `main` for production
 - **Separate services**: keep eafw_jobs as separate container from CMS for fault isolation
 - **Vector tile URLs**: always absolute (include host:port) — mapviewer web worker can't resolve relative URLs
+- **No hardcoding**: Follow a modular structure throughout. Configuration comes from DB, environment variables, or API — never hardcode values (URLs, country lists, thresholds, etc.) directly in templates or components. Use Wagtail StreamFields, Django settings, or DB-driven config so changes can be made without code deploys
 
 ## Troubleshooting
 
@@ -275,6 +281,16 @@ curl -s -o /dev/null -w "%{http_code} %{size_download}b" "http://localhost:9068/
 
 # 3. Restart tileserv after adding new tables/functions
 docker restart eafw-tileserv
+```
+
+### MapViewer source changes not appearing
+```bash
+# Next.js Docker build cache can serve stale JS bundles even after source edits.
+# Verify: check if your change is in the deployed JS
+docker exec eafw-mapviewer sh -c "grep -c 'yourSearchTerm' /home/app/.next/static/chunks/*.js"
+# Fix: prune build cache and rebuild from scratch
+docker builder prune -af
+cd eafw_geomanager_web && docker compose build --no-cache geomanager_mapviewer && docker compose up -d geomanager_mapviewer
 ```
 
 ### Migrations conflict (column already exists)

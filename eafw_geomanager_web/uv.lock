@@ -1268,7 +1268,7 @@ wheels = [
 [[package]]
 name = "hazard-georeport"
 version = "0.1.0"
-source = { git = "ssh://git@github.com/icpac-igad/georeport.git?branch=eafw#9267a04518ac8783180a7c69d364caa511dd37d2" }
+source = { git = "ssh://git@github.com/icpac-igad/georeport.git?branch=eafw#bae9250c163f1e0dd682534a6bf8622a637f97a1" }
 dependencies = [
     { name = "django" },
     { name = "django-cors-headers" },
