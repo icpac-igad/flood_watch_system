@@ -7,7 +7,7 @@ import ReactGA from "react-ga4";
 const isServer = typeof window !== "undefined";
 
 export const initAnalytics = () => {
-  if (isServer) {
+  if (isServer && process.env.ANALYTICS_PROPERTY_ID && !process.env.ANALYTICS_PROPERTY_ID.startsWith("G-XXX")) {
     window.ANALYTICS_INITIALIZED = true;
     ReactGA.initialize(process.env.ANALYTICS_PROPERTY_ID);
   }
