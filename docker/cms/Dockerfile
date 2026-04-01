@@ -19,16 +19,19 @@ ENV PATH=/root/.local/bin:${APP_HOME}/.venv/bin:${PATH}
 RUN mkdir -p ${APP_HOME} && \
     uv venv ${APP_HOME}/.venv
 
-# Copy the web project (geomanager + georeport installed from git via uv)
-# Build context is repo root (.), so copy the CMS subdirectory
-COPY ./eafw_geomanager_web ${APP_HOME}
+# Clone geomanager-web from eafw branch (all code from git, no local COPY)
+ARG GH_TOKEN=""
+ARG GH_BRANCH=eafw
+RUN if [ -n "$GH_TOKEN" ]; then \
+      git clone -b ${GH_BRANCH} --depth 1 https://${GH_TOKEN}@github.com/icpac-igad/geomanager-web.git ${APP_HOME}; \
+    else \
+      git clone -b ${GH_BRANCH} --depth 1 https://github.com/icpac-igad/geomanager-web.git ${APP_HOME}; \
+    fi
+
 WORKDIR ${APP_HOME}
 
-# Private git deps: use GH_TOKEN (CI) or SSH agent (local)
-ARG GH_TOKEN=""
-ARG CACHEBUST=1
+# Install all dependencies from git (geomanager + georeport from eafw branches)
 RUN --mount=type=ssh \
-    echo "Cache bust: $CACHEBUST" && \
     if [ -n "$GH_TOKEN" ]; then \
       git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; \
       git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "git@github.com:"; \
@@ -42,7 +45,7 @@ RUN --mount=type=ssh \
 
 # use osgeo gdal ubuntu small 3.10 image.
 ARG GDAL_VERSION=3.10.0
-FROM ghcr.io/osgeo/gdal:ubuntu-small-${GDAL_VERSION} AS runnner
+FROM ghcr.io/osgeo/gdal:ubuntu-small-${GDAL_VERSION} AS runner
 
 # install dependencies
 RUN apt-get update && apt-get install -y \
@@ -81,13 +84,11 @@ ENV PATH=${APP_HOME}/.venv/bin:${PATH}
 ENV GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
 RUN mkdir -p $GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR
 
-# copy entrypoint.sh
-COPY ./docker/cms/docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
+# entrypoint script (from cloned repo)
+RUN cp docker/cms/docker-entrypoint.sh . && chmod +x docker-entrypoint.sh
 
 # create tmp dir for handling large django uploads
 RUN mkdir -p tmp
 
 # Port used by this container to serve HTTP.
 EXPOSE 8000
-# force rebuild Tue Mar 31 08:31:44 PM EAT 2026
