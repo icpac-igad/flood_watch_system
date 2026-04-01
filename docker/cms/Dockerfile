@@ -24,11 +24,11 @@ RUN mkdir -p ${APP_HOME} && \
 COPY ./eafw_geomanager_web ${APP_HOME}
 WORKDIR ${APP_HOME}
 
-# Cache buster — changes every CI build to force fresh uv sync
-ARG CACHEBUST=1
 # Private git deps: use GH_TOKEN (CI) or SSH agent (local)
 ARG GH_TOKEN=""
+ARG CACHEBUST=1
 RUN --mount=type=ssh \
+    echo "Cache bust: $CACHEBUST" && \
     if [ -n "$GH_TOKEN" ]; then \
       git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; \
       git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "git@github.com:"; \
