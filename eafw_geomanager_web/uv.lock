@@ -1124,8 +1124,8 @@ wheels = [
 
 [[package]]
 name = "geomanager"
-version = "0.8.0"
-source = { editable = "geomanager_pkg" }
+version = "0.8.1"
+source = { git = "ssh://git@github.com/icpac-igad/geomanager.git?branch=eafw#c43821a3b812756a68312a301e8b52f752046e0b" }
 dependencies = [
     { name = "adm-boundary-manager" },
     { name = "cairosvg" },
@@ -1166,45 +1166,6 @@ dependencies = [
     { name = "xarray" },
 ]
 
-[package.metadata]
-requires-dist = [
-    { name = "adm-boundary-manager", specifier = ">=0.2.5" },
-    { name = "cairosvg", specifier = ">=2.8.2" },
-    { name = "cftime", specifier = ">=1.6.4.post1" },
-    { name = "django", specifier = "==4.2.16" },
-    { name = "django-allauth", specifier = ">=65.11.2" },
-    { name = "django-environ", specifier = ">=0.12.0" },
-    { name = "django-extensions", specifier = "==4.1" },
-    { name = "django-filter", specifier = ">=24.3" },
-    { name = "django-json-widget", specifier = ">=2.0.3" },
-    { name = "django-large-image", specifier = ">=0.10.1" },
-    { name = "django-nextjs", specifier = ">=3.3.0" },
-    { name = "djangorestframework-simplejwt", specifier = ">=5.5.1" },
-    { name = "large-image-source-pil", specifier = ">=1.33.2" },
-    { name = "large-image-source-rasterio", specifier = ">=1.33.2" },
-    { name = "matplotlib", specifier = ">=3.10.6" },
-    { name = "mdformat", specifier = ">=0.7.22" },
-    { name = "mercantile", specifier = ">=1.2.1" },
-    { name = "netcdf4", specifier = ">=1.7.2" },
-    { name = "pre-commit", specifier = ">=4.3.0" },
-    { name = "psycopg2-binary", specifier = ">=2.9.10" },
-    { name = "rasterio", specifier = ">=1.4.3" },
-    { name = "rio-cogeo", specifier = ">=5.4.2" },
-    { name = "rioxarray", specifier = ">=0.19.0" },
-    { name = "ruff", specifier = ">=0.13.3" },
-    { name = "shapely", specifier = ">=2.1.2" },
-    { name = "validate-pyproject", specifier = ">=0.24.1" },
-    { name = "wagtail", specifier = "==6.3.2" },
-    { name = "wagtail-adminsortable", git = "https://github.com/wmo-raf/wagtail-admin-sortable.git?rev=master" },
-    { name = "wagtail-cache", specifier = ">=3.0.0" },
-    { name = "wagtail-color-panel", specifier = ">=1.4.1" },
-    { name = "wagtail-font-awesome-svg", specifier = ">=2.0" },
-    { name = "wagtail-humanitarian-icons", specifier = ">=2.0.0" },
-    { name = "wagtail-icon-chooser", specifier = ">=0.3.1" },
-    { name = "wagtail-modeladmin", specifier = ">=2.1.0" },
-    { name = "xarray", specifier = ">=2025.9.1" },
-]
-
 [[package]]
 name = "geomanager-web"
 version = "0.7.4"
@@ -1238,7 +1199,7 @@ requires-dist = [
     { name = "django-deep-translator", specifier = "==1.5.1" },
     { name = "django-environ", specifier = "==0.12.0" },
     { name = "django-recaptcha", specifier = "==4.1.0" },
-    { name = "geomanager", editable = "geomanager_pkg" },
+    { name = "geomanager", git = "ssh://git@github.com/icpac-igad/geomanager.git?branch=eafw" },
     { name = "hazard-georeport", git = "ssh://git@github.com/icpac-igad/georeport.git?branch=eafw" },
     { name = "psycopg2-binary", specifier = "==2.9.10" },
     { name = "pymemcache", specifier = "==4.0.0" },

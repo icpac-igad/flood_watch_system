@@ -40,11 +40,8 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-# Local path - fully local build
-geomanager = { path = "./geomanager_pkg", editable = true }
+geomanager = { git = "ssh://git@github.com/icpac-igad/geomanager.git", branch = "eafw" }
 hazard-georeport = { git = "ssh://git@github.com/icpac-igad/georeport.git", branch = "eafw" }
-# SSH - use when SSH agent forwarding works
-# geomanager = { git = "ssh://git@github.com/icpac-igad/geomanager.git", branch = "main" }
 
 
 [tool.ruff]

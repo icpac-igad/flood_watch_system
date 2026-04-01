@@ -19,10 +19,7 @@ ENV PATH=/root/.local/bin:${APP_HOME}/.venv/bin:${PATH}
 RUN mkdir -p ${APP_HOME} && \
     uv venv ${APP_HOME}/.venv
 
-# Copy local geomanager package first (referenced as ./geomanager_pkg in pyproject.toml)
-COPY geomanager_pkg ${APP_HOME}/geomanager_pkg
-
-# Copy the web project
+# Copy the web project (geomanager + georeport installed from git via uv)
 COPY . ${APP_HOME}
 WORKDIR ${APP_HOME}
 
