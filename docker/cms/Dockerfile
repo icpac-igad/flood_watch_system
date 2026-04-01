@@ -24,6 +24,8 @@ RUN mkdir -p ${APP_HOME} && \
 COPY ./eafw_geomanager_web ${APP_HOME}
 WORKDIR ${APP_HOME}
 
+# Cache buster — changes every CI build to force fresh uv sync
+ARG CACHEBUST=1
 # Private git deps: use GH_TOKEN (CI) or SSH agent (local)
 ARG GH_TOKEN=""
 RUN --mount=type=ssh \

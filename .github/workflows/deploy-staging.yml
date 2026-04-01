@@ -97,8 +97,8 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/eafw-cms:${{ github.sha }}
           build-args: |
             GH_TOKEN=${{ secrets.GH_PAT }}
+            CACHEBUST=${{ github.run_id }}
           no-cache: true
-          cache-to: type=gha,mode=max
 
   build-mapviewer:
     name: Build Mapviewer
@@ -132,8 +132,6 @@ jobs:
             ADMIN_BOUNDARY_API=/pg/tileserv/
             ANALYTICS_PROPERTY_ID=${{ secrets.STAGING_ANALYTICS_PROPERTY_ID }}
             NEXT_TELEMETRY_DISABLED=1
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   build-mapserver:
     name: Build Mapserver
@@ -160,8 +158,6 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapserver:latest
             ${{ env.IMAGE_PREFIX }}/eafw-mapserver:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   build-mapcache:
     name: Build Mapcache
@@ -188,8 +184,6 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapcache:latest
             ${{ env.IMAGE_PREFIX }}/eafw-mapcache:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   build-jobs:
     name: Build Jobs
@@ -216,8 +210,6 @@ jobs:
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-jobs:latest
             ${{ env.IMAGE_PREFIX }}/eafw-jobs:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   deploy:
     name: Deploy to Staging
