@@ -30,13 +30,12 @@ RUN uv venv ${APP_HOME}/.venv
 # Configure git for private repos then install ALL deps
 # No --mount=type=ssh — pure HTTPS with token (avoids BuildKit cache issues)
 RUN if [ -n "$GH_TOKEN" ]; then \
-      git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; \
-      git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "git@github.com:"; \
+      git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "https://github.com/"; \
     fi && \
     uv lock && \
     uv sync --all-extras --no-cache --no-install-project && \
     uv add gunicorn uvicorn && \
-    git config --global --remove-section url."https://${GH_TOKEN}@github.com/" 2>/dev/null || true
+    git config --global --unset-all url."https://${GH_TOKEN}@github.com/".insteadOf 2>/dev/null || true
 
 # --------- runner ---------
 ARG GDAL_VERSION=3.10.0
