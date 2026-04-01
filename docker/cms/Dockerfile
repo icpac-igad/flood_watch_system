@@ -16,9 +16,6 @@ RUN apt-get update && apt-get install -y \
 ARG APP_HOME=/home/app
 ENV PATH=/root/.local/bin:${APP_HOME}/.venv/bin:${PATH}
 
-RUN mkdir -p ${APP_HOME} && \
-    uv venv ${APP_HOME}/.venv
-
 # Clone geomanager-web from eafw branch (all code from git, no local COPY)
 ARG GH_TOKEN=""
 ARG GH_BRANCH=eafw
@@ -26,7 +23,8 @@ RUN if [ -n "$GH_TOKEN" ]; then \
       git clone -b ${GH_BRANCH} --depth 1 https://${GH_TOKEN}@github.com/icpac-igad/geomanager-web.git ${APP_HOME}; \
     else \
       git clone -b ${GH_BRANCH} --depth 1 https://github.com/icpac-igad/geomanager-web.git ${APP_HOME}; \
-    fi
+    fi && \
+    uv venv ${APP_HOME}/.venv
 
 WORKDIR ${APP_HOME}
 
