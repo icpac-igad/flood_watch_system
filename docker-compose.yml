@@ -1,0 +1,362 @@
+# EAFW FloodWatch - Docker Compose
+# Core: db, pgbouncer, memcached, cms, mapviewer, nginx
+# Extra: jobs, mapserver, mapcache, tileserv
+
+networks:
+  default:
+    name: eafw_network
+
+volumes:
+  eafw_pgdata:
+  eafw_static:
+  eafw_media:
+  eafw_mapviewer_static:
+  eafw_geomanager_data:
+  eafw_mapcache_tiles:
+  eafw_jobs_data:
+  eafw_jobs_logs:
+  eafw_backups:
+  eafw_cogs:
+  eafw_caddy_data:
+  eafw_caddy_config:
+
+services:
+  # ============================================================
+  # Database
+  # ============================================================
+  geomanager_db:
+    container_name: ${DB_CNTR_NAME:-eafw-pgdb}
+    command: postgres -c 'max_connections=${PG_MAX_CONNECTIONS:-120}'
+    image: postgis/postgis:${PG_VERSION:-16-3.4}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    environment:
+      - POSTGRES_USER=${CMS_DB_USER}
+      - POSTGRES_DB=${CMS_DB_NAME}
+      - POSTGRES_PASSWORD=${CMS_DB_PASSWORD}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${DB_HOST_PORT:-5441}:5432
+    volumes:
+      - eafw_pgdata:/var/lib/postgresql/data/
+      - eafw_backups:/backups
+      - ./db-init:/docker-entrypoint-initdb.d/:z
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CMS_DB_USER:-geomanager}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  geomanager_pgbouncer:
+    image: edoburu/pgbouncer:${PGB_VERSION:-v1.23.1-p3}
+    container_name: ${PGBOUNCER_CNTR_NAME:-eafw-pgbouncer}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    shm_size: "4gb"
+    depends_on:
+      geomanager_db:
+        condition: service_healthy
+    expose:
+      - "${PGB_LISTEN_PORT:-6432}"
+    environment:
+      - LISTEN_PORT=${PGB_LISTEN_PORT:-6432}
+      - DB_HOST=${PG_HOST:-geomanager_db}
+      - DB_PORT=${PG_PORT:-5432}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_USER=${CMS_DB_USER}
+      - DB_PASSWORD=${CMS_DB_PASSWORD}
+      - AUTH_USER=${CMS_DB_USER}
+      - AUTH_TYPE=${PG_AUTH_METHOD:-scram-sha-256}
+      - AUTH_DBNAME=${CMS_DB_NAME}
+      - ADMIN_USERS=${CMS_DB_USER}
+      - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN:-1024}
+      - POOL_MODE=${PGB_POOL_MODE:-session}
+      - DEFAULT_POOL_SIZE=${PGB_DEFAULT_POOL_SIZE:-120}
+      - SERVER_IDLE_TIMEOUT=${PGB_SERVER_IDLE_TIMEOUT:-600}
+      - CLIENT_IDLE_TIMEOUT=${PGB_CLIENT_IDLE_TIMEOUT:-1500}
+      - IDLE_TRANSACTION_TIMEOUT=${PGB_IDLE_TRANSACTION_TIMEOUT:-1200}
+      - VERBOSE=${PGB_VERBOSE:-1}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits,search_path
+
+  # ============================================================
+  # Caching
+  # ============================================================
+  geomanager_memcached:
+    image: memcached:${MEMCACHED_VERSION:-1.6-alpine}
+    container_name: ${MEMCACHED_CNTR_NAME:-eafw-memcached}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    expose:
+      - "11211"
+    entrypoint:
+      - memcached
+      - -m 1024
+      - -I 10m
+
+  # ============================================================
+  # CMS (Django / Wagtail + GeoManager)
+  # ============================================================
+  geomanager_web:
+    platform: linux/x86_64
+    container_name: ${WEB_CNTR_NAME:-eafw-cms}
+    image: ${WEB_IMAGE_NAME:-icpac/eafw-cms:local}
+    pull_policy: ${PULL_POLICY:-never}
+    build:
+      context: ./eafw_geomanager_web
+      dockerfile: ./docker/cms/Dockerfile
+    restart: ${RESTART_POLICY:-unless-stopped}
+    command: >
+      sh -c "/wait
+      && ./docker-entrypoint.sh
+      && /home/app/.venv/bin/gunicorn geomanagerweb.asgi
+      --bind 0.0.0.0:8000 --workers=${CMS_NUM_OF_WORKERS:-2} --worker-class=uvicorn.workers.UvicornWorker"
+    expose:
+      - "8000"
+    environment:
+      - WAIT_HOSTS=geomanager_db:5432,geomanager_memcached:11211
+      - WAIT_TIMEOUT=${WEB_WAIT_TIME:-120}
+      - DEBUG=${CMS_DEBUG:-False}
+      - WAGTAIL_SITE_NAME=${CMS_SITE_NAME:-localhost}
+      - ADMIN_URL_PATH=${ADMIN_URL_PATH:-cms-admin}
+      - TIME_ZONE=${TIME_ZONE:-Africa/Nairobi}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-127.0.0.1,localhost}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS:-}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      - DATABASE_URL=postgis://${CMS_DB_USER}:${CMS_DB_PASSWORD}@${PGB_HOST:-geomanager_pgbouncer}:${PGB_PORT:-6432}/${CMS_DB_NAME}
+      - MEMCACHED_URI=${MEMCACHED_URI:-geomanager_memcached:11211}
+      - MAPVIEWER_SERVER_URL=${MAPVIEWER_SERVER_URL:-http://geomanager_mapviewer:3000}
+      - WAGTAILADMIN_BASE_URL=${CMS_BASE_URL:-http://localhost:9078}
+      - CMS_BASE_URL=${CMS_BASE_URL:-http://localhost:9078}
+      - LANGUAGE_CODE=${CMS_DEFAULT_LANGUAGE_CODE:-en}
+      - FORCE_SCRIPT_NAME=${FORCE_SCRIPT_NAME:-}
+      - GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-geomanagerweb.settings.production}
+      - DJANGO_ALLOW_ASYNC_UNSAFE=${ALLOW_ASYNC_UNSAFE:-true}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-True}
+      - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE:-True}
+    depends_on:
+      geomanager_db:
+        condition: service_healthy
+    volumes:
+      - eafw_static:/home/app/static
+      - eafw_media:/home/app/media
+      - eafw_geomanager_data:/geomanager/data
+      - ./docker/volumes/cms/.cache:/root/.cache:z
+      - ${CMS_LOG_FILE:-./logs/cms-web.log}:/home/app/cms-web-app.log:z
+
+  # ============================================================
+  # MapViewer (Next.js)
+  # ============================================================
+  geomanager_mapviewer:
+    platform: linux/x86_64
+    container_name: ${MAPVIEWER_CNTR_NAME:-eafw-mapviewer}
+    image: ${MAPVIEWER_IMAGE_NAME:-icpac/eafw-mapviewer:local}
+    pull_policy: ${PULL_POLICY:-never}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    build:
+      context: ./eafw_geomanager_web./eafw_geomapviewer
+      dockerfile: ./docker/mapviewer/Dockerfile
+      args:
+        - CMS_API=${MAPVIEWER_CMS_API:-/api}
+        - BASE_PATH=${MAPVIEWER_BASE_PATH:-/}
+        - ASSET_PREFIX=${MAPVIEWER_ASSET_PREFIX:-}
+        - ANALYTICS_PROPERTY_ID=${ANALYTICS_PROPERTY_ID:-}
+        - BITLY_TOKEN=${BITLY_TOKEN:-}
+        - GOOGLE_CUSTOM_SEARCH_CX=${GOOGLE_CUSTOM_SEARCH_CX:-}
+        - GOOGLE_SEARCH_API_KEY=${GOOGLE_SEARCH_API_KEY:-}
+        - ADMIN_BOUNDARY_API=${ADMIN_BOUNDARY_API:-}
+        - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - eafw_mapviewer_static:/app/nginx/.next/static
+      - ./docker/volumes/mapviewer/.cache:/root/.cache:z
+    expose:
+      - "3000"
+
+  # ============================================================
+  # MapServer (WMS/WFS)
+  # ============================================================
+  geomanager_mapserver:
+    build:
+      context: ./eafw_geomanager_web
+      dockerfile: ../docker/mapserver/Dockerfile
+      args:
+        - MAPFILES_DIR=${MS_MAPFILES_DIR:-/opt/mapfiles}
+        - PROJ_DATA=${PROJ_DATA_DIR:-/usr/local/share/proj/}
+        - GDAL_DATA=${GDAL_DATA_DIR:-/usr/share/gdal}
+    container_name: ${MAPSERVER_CNTR_NAME:-eafw-mapserver}
+    image: ${MAPSERVER_IMAGE_NAME:-icpac/eafw-mapserver:local}
+    pull_policy: ${PULL_POLICY:-never}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    depends_on:
+      - geomanager_pgbouncer
+    expose:
+      - "8080"
+    volumes:
+      - ${MS_RASTERDATA_VOLUME:-./data/mapfiles/data}:/opt/rasterdata:ro,z
+      - eafw_cogs:/opt/cogs:ro
+    environment:
+      - MS_DEBUGLEVEL=${MS_DEBUGLEVEL:-2}
+      - MS_ERRORFILE=${MS_ERRORFILE:-stderr}
+      - MAPFILES_DIR=${MS_MAPFILES_DIR:-/opt/mapfiles}
+      - MS_MAPFILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.map
+      - MAPSERVER_CONFIG_FILE=${MS_MAPFILES_DIR:-/opt/mapfiles}/mapserver.conf
+      - MAX_PROCESSES=${MS_MAX_PROCESSES:-10}
+      - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
+      - MS_SERVICE_URL=${MS_SERVICE_URL:-http://localhost:9078/mapserver/}
+      - DB_HOST=${PGB_HOST:-geomanager_pgbouncer}
+      - DB_MAP_USER=${CMS_DB_USER}
+      - DB_MAP_USER_PASSWORD=${CMS_DB_PASSWORD}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_PORT=${PGB_PORT:-6432}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+
+  # ============================================================
+  # MapCache (Tile Caching)
+  # ============================================================
+  geomanager_mapcache:
+    build:
+      context: ./eafw_geomanager_web
+      dockerfile: ../docker/mapcache/Dockerfile
+      args:
+        - HOME_DIR=${APP_HOME_DIR:-/opt/mapcache}
+        - USER_ID=${APP_USER_ID:-1024}
+        - MAPCACHE_BRANCH=${MAPCACHE_BRANCH:-main}
+        - NGINX_VERISON=${NGINX_VERISON:-1.24.0}
+    image: ${MAPCACHE_IMAGE_NAME:-icpac/eafw-mapcache:local}
+    pull_policy: ${PULL_POLICY:-never}
+    container_name: ${MAPCACHE_CNTR_NAME:-eafw-mapcache}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    depends_on:
+      - geomanager_mapserver
+    expose:
+      - "8080"
+    volumes:
+      - eafw_mapcache_tiles:/opt/tiles
+    environment:
+      - SERVICE_URL=${MC_SERVICE_URL:-http://localhost:9078/mapcache/}
+      - SOURCE_URL=${MC_SOURCE_URL:-http://geomanager_mapserver:8080/mapserver/?}
+      - MAPCACHE_CONFIG_FILE=${MC_CONFIG_FILE:-/opt/mapcache/mapcache.xml}
+      - WEB_GRID_EXTENTS=${WEB_GRID_EXTENTS:--73588 -3821469 8228258 5153993}
+      - WGS84_GRID_EXTENTS=${WGS84_GRID_EXTENTS:-21 -12 52 23}
+      - TILES_DIR=${APP_TILES_DIR:-/opt/tiles}
+      - MAX_PROCESSES=${MC_MAX_PROCESSES:-10}
+      - TILESET_EXPIRE_SEC=${MC_TILESET_EXPIRE_SEC:-3600}
+      - THREADED_FETCHING=${MC_THREADED_FETCHING:-true}
+      - NUM_THREADS=${MC_THREADS:-10}
+      - ERROR_REPORTING=${MC_ERROR_REPORTING:-empty_img}
+      - LOG_LEVEL=${MC_LOG_LEVEL:-debug}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+
+  # ============================================================
+  # pg_tileserv (Vector Tiles)
+  # ============================================================
+  geomanager_tileserv:
+    container_name: ${TILESERV_CNTR_NAME:-eafw-tileserv}
+    image: pramsey/pg_tileserv:${TILESERV_VERSION:-latest}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    depends_on:
+      - geomanager_pgbouncer
+    environment:
+      - DATABASE_URL=postgresql://${CMS_DB_USER}:${CMS_DB_PASSWORD}@geomanager_pgbouncer:${PGB_LISTEN_PORT:-6432}/${CMS_DB_NAME}
+      - TS_BASEPATH=/pg/tileserv
+      - TS_DEBUG=${TILESERV_DEBUG:-false}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    expose:
+      - "7800"
+
+  # ============================================================
+  # Jobs (FloodWatch data sync)
+  # ============================================================
+  geomanager_jobs:
+    platform: linux/x86_64
+    container_name: ${JOBS_CNTR_NAME:-eafw-jobs}
+    image: ${JOBS_IMAGE_NAME:-icpac/eafw-jobs:local}
+    pull_policy: ${PULL_POLICY:-never}
+    build:
+      context: ./eafw_geomanager_web
+      dockerfile: ../docker/jobs/Dockerfile
+    restart: ${RESTART_POLICY:-unless-stopped}
+    depends_on:
+      geomanager_db:
+        condition: service_healthy
+    environment:
+      - DB_HOST=${DB_JOBS_HOST:-geomanager_db}
+      - DB_PORT=${DB_JOBS_PORT:-5432}
+      - DB_NAME=${CMS_DB_NAME}
+      - DB_USER=${CMS_DB_USER}
+      - DB_PASSWORD=${CMS_DB_PASSWORD}
+      - FLOODPROOFS_SFTP_HOST=${FLOODPROOFS_SFTP_HOST:-}
+      - FLOODPROOFS_SFTP_PORT=${FLOODPROOFS_SFTP_PORT:-22}
+      - FLOODPROOFS_SFTP_USER=${FLOODPROOFS_SFTP_USER:-}
+      - FLOODPROOFS_SFTP_PASSWORD=${FLOODPROOFS_SFTP_PASSWORD:-}
+      - FLOODPROOFS_REMOTE_DIR=${FLOODPROOFS_REMOTE_DIR:-/home/floodproofs/merged_forecasts}
+      - DRIVE_FOLDER_ID=${DRIVE_FOLDER_ID:-}
+      - GOOGLE_CREDENTIALS_FILE=/opt/credentials/google-credentials.json
+      - SYNC_SOURCE=${SYNC_SOURCE:-drive}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-21600}
+      - SYNC_DAYS=${SYNC_DAYS:-7}
+      - FLOODS_API_KEY=${FLOODS_API_KEY:-}
+      - GOOGLE_FLOOD_REGION_CODES=${GOOGLE_FLOOD_REGION_CODES:-ET,KE,UG,SD,SS,RW,SO,DJ,ER,TZ,BI}
+      - GOOGLE_FLOOD_PAGE_SIZE=${GOOGLE_FLOOD_PAGE_SIZE:-20000}
+      - GOOGLE_FLOOD_STATUS_CHUNK_SIZE=${GOOGLE_FLOOD_STATUS_CHUNK_SIZE:-500}
+      - GOOGLE_FLOOD_MODEL_CHUNK_SIZE=${GOOGLE_FLOOD_MODEL_CHUNK_SIZE:-200}
+      - GOOGLE_FLOOD_FORECAST_CHUNK_SIZE=${GOOGLE_FLOOD_FORECAST_CHUNK_SIZE:-200}
+      - GOOGLE_FLOOD_ISSUED_LOOKBACK_DAYS=${GOOGLE_FLOOD_ISSUED_LOOKBACK_DAYS:-7}
+      - GOOGLE_FLOOD_INCLUDE_NON_QUALITY_VERIFIED=${GOOGLE_FLOOD_INCLUDE_NON_QUALITY_VERIFIED:-true}
+      - GOOGLE_FLOOD_INCLUDE_GAUGES_WITHOUT_HYDRO_MODEL=${GOOGLE_FLOOD_INCLUDE_GAUGES_WITHOUT_HYDRO_MODEL:-true}
+      - GOOGLE_FLOOD_REQUEST_TIMEOUT_SECONDS=${GOOGLE_FLOOD_REQUEST_TIMEOUT_SECONDS:-120}
+      - GOOGLE_FLOOD_MAX_RETRIES=${GOOGLE_FLOOD_MAX_RETRIES:-4}
+      - GOOGLE_FLOOD_BASE_BACKOFF_SECONDS=${GOOGLE_FLOOD_BASE_BACKOFF_SECONDS:-1.0}
+      - WRF_FTP_HOST=${WRF_FTP_HOST:-}
+      - WRF_FTP_PORT=${WRF_FTP_PORT:-21}
+      - WRF_FTP_USER=${WRF_FTP_USER:-}
+      - WRF_FTP_PASSWORD=${WRF_FTP_PASSWORD:-}
+      - WRF_REMOTE_DIR=${WRF_REMOTE_DIR:-/SharedData/wrf/weekly}
+      - EMAIL_NOTIFICATIONS_ENABLED=${EMAIL_NOTIFICATIONS_ENABLED:-true}
+      - SMTP_HOST=${SMTP_HOST:-${SMTP_EMAIL_HOST:-smtp.gmail.com}}
+      - SMTP_PORT=${SMTP_PORT:-${SMTP_EMAIL_PORT:-587}}
+      - SMTP_USER=${SMTP_USER:-${SMTP_EMAIL_HOST_USER:-}}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-${SMTP_EMAIL_HOST_PASSWORD:-}}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - EMAIL_TO=${EMAIL_TO:-}
+      - TZ=${TIME_ZONE:-Africa/Nairobi}
+    volumes:
+      - eafw_jobs_data:/opt/data
+      - eafw_jobs_logs:/opt/logs
+      - eafw_cogs:/data/cogs
+      - eafw_backups:/backups
+      - ${GOOGLE_CREDENTIALS_FILE:-./eafw_jobs/credentials}:/opt/credentials:z
+
+  # ============================================================
+  # Nginx (Reverse Proxy)
+  # ============================================================
+  geomanager_nginx:
+    container_name: ${NGINX_CNTR_NAME:-eafw-nginx}
+    image: nginx:${NGINX_VERSION:-1.27-alpine}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    volumes:
+      - eafw_static:/wagtail_static:ro
+      - eafw_media:/wagtail_media:ro
+      - eafw_mapviewer_static:/mapviewer/static:ro
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:z
+    ports:
+      - ${HOST_IP:-127.0.0.1}:${CMS_HOST_PORT:-9078}:80
+    depends_on:
+      - geomanager_web
+      - geomanager_mapviewer
+
+  # ============================================================
+  # Caddy (HTTPS reverse proxy with auto Let's Encrypt)
+  # ============================================================
+  geomanager_caddy:
+    container_name: ${CADDY_CNTR_NAME:-eafw-caddy}
+    image: caddy:2-alpine
+    restart: ${RESTART_POLICY:-unless-stopped}
+    ports:
+      - ${HOST_IP:-0.0.0.0}:${HTTPS_PORT:-8443}:443
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:z
+      - eafw_caddy_data:/data
+      - eafw_caddy_config:/config
+    depends_on:
+      - geomanager_nginx

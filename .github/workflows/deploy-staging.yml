@@ -40,7 +40,7 @@ jobs:
           CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
           echo "Changed files: $CHANGED"
 
-          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/|^eafw_geomanager/"; then
+          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/|^docker/cms/"; then
             echo "cms=true" >> $GITHUB_OUTPUT
           else
             echo "cms=false" >> $GITHUB_OUTPUT
@@ -52,19 +52,19 @@ jobs:
             echo "mapviewer=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/docker/mapserver/"; then
+          if echo "$CHANGED" | grep -qE "^docker/mapserver/|^config/mapfiles/"; then
             echo "mapserver=true" >> $GITHUB_OUTPUT
           else
             echo "mapserver=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/docker/mapcache/"; then
+          if echo "$CHANGED" | grep -qE "^docker/mapcache/|^config/mapcache/"; then
             echo "mapcache=true" >> $GITHUB_OUTPUT
           else
             echo "mapcache=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/docker/jobs/|^eafw_geomanager_web/eafw_jobs/"; then
+          if echo "$CHANGED" | grep -qE "^docker/jobs/|^eafw_jobs/"; then
             echo "jobs=true" >> $GITHUB_OUTPUT
           else
             echo "jobs=false" >> $GITHUB_OUTPUT
@@ -89,8 +89,8 @@ jobs:
       - name: Build and push CMS
         uses: docker/build-push-action@v5
         with:
-          context: ./eafw_geomanager_web
-          file: ./eafw_geomanager_web/docker/cms/Dockerfile
+          context: .
+          file: ./docker/cms/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-cms:latest
@@ -154,8 +154,8 @@ jobs:
       - name: Build and push Mapserver
         uses: docker/build-push-action@v5
         with:
-          context: ./eafw_geomanager_web
-          file: ./eafw_geomanager_web/docker/mapserver/Dockerfile
+          context: .
+          file: ./docker/mapserver/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapserver:latest
@@ -182,8 +182,8 @@ jobs:
       - name: Build and push Mapcache
         uses: docker/build-push-action@v5
         with:
-          context: ./eafw_geomanager_web
-          file: ./eafw_geomanager_web/docker/mapcache/Dockerfile
+          context: .
+          file: ./docker/mapcache/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-mapcache:latest
@@ -210,8 +210,8 @@ jobs:
       - name: Build and push Jobs
         uses: docker/build-push-action@v5
         with:
-          context: ./eafw_geomanager_web
-          file: ./eafw_geomanager_web/docker/jobs/Dockerfile
+          context: .
+          file: ./docker/jobs/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/eafw-jobs:latest
@@ -277,11 +277,11 @@ jobs:
             echo "Git SHA: $(git rev-parse --short HEAD)"
 
             # Work from the compose directory
-            cd $REPO_DIR/eafw_geomanager_web
+            cd $REPO_DIR
 
             # Smart .env — create from template only on first deploy
             if [ ! -f .env ]; then
-              cp ../staging.env.example .env
+              cp .env.example .env
               echo "FIRST DEPLOY: created .env from template"
             fi
 
