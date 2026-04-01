@@ -97,7 +97,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/eafw-cms:${{ github.sha }}
           build-args: |
             GH_TOKEN=${{ secrets.GH_PAT }}
-          cache-from: type=gha
+          no-cache: true
           cache-to: type=gha,mode=max
 
   build-mapviewer:
