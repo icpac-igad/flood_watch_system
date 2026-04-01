@@ -20,7 +20,8 @@ RUN mkdir -p ${APP_HOME} && \
     uv venv ${APP_HOME}/.venv
 
 # Copy the web project (geomanager + georeport installed from git via uv)
-COPY . ${APP_HOME}
+# Build context is repo root (.), so copy the CMS subdirectory
+COPY ./eafw_geomanager_web ${APP_HOME}
 WORKDIR ${APP_HOME}
 
 # Private git deps: use GH_TOKEN (CI) or SSH agent (local)
@@ -79,7 +80,7 @@ ENV GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR=/geomanager/data
 RUN mkdir -p $GEOMANAGER_AUTO_INGEST_RASTER_DATA_DIR
 
 # copy entrypoint.sh
-COPY ../docker/cms/docker-entrypoint.sh ./
+COPY ./docker/cms/docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
 # create tmp dir for handling large django uploads

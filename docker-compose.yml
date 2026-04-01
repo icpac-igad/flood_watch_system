@@ -101,7 +101,7 @@ services:
     image: ${WEB_IMAGE_NAME:-icpac/eafw-cms:local}
     pull_policy: ${PULL_POLICY:-never}
     build:
-      context: ./eafw_geomanager_web
+      context: .
       dockerfile: ./docker/cms/Dockerfile
     restart: ${RESTART_POLICY:-unless-stopped}
     command: >
@@ -154,8 +154,8 @@ services:
     pull_policy: ${PULL_POLICY:-never}
     restart: ${RESTART_POLICY:-unless-stopped}
     build:
-      context: ./eafw_geomanager_web./eafw_geomapviewer
-      dockerfile: ./docker/mapviewer/Dockerfile
+      context: ./eafw_geomapviewer
+      dockerfile: ../docker/mapviewer/Dockerfile
       args:
         - CMS_API=${MAPVIEWER_CMS_API:-/api}
         - BASE_PATH=${MAPVIEWER_BASE_PATH:-/}
@@ -177,8 +177,8 @@ services:
   # ============================================================
   geomanager_mapserver:
     build:
-      context: ./eafw_geomanager_web
-      dockerfile: ../docker/mapserver/Dockerfile
+      context: .
+      dockerfile: ./docker/mapserver/Dockerfile
       args:
         - MAPFILES_DIR=${MS_MAPFILES_DIR:-/opt/mapfiles}
         - PROJ_DATA=${PROJ_DATA_DIR:-/usr/local/share/proj/}
@@ -215,8 +215,8 @@ services:
   # ============================================================
   geomanager_mapcache:
     build:
-      context: ./eafw_geomanager_web
-      dockerfile: ../docker/mapcache/Dockerfile
+      context: .
+      dockerfile: ./docker/mapcache/Dockerfile
       args:
         - HOME_DIR=${APP_HOME_DIR:-/opt/mapcache}
         - USER_ID=${APP_USER_ID:-1024}
@@ -273,8 +273,8 @@ services:
     image: ${JOBS_IMAGE_NAME:-icpac/eafw-jobs:local}
     pull_policy: ${PULL_POLICY:-never}
     build:
-      context: ./eafw_geomanager_web
-      dockerfile: ../docker/jobs/Dockerfile
+      context: .
+      dockerfile: ./docker/jobs/Dockerfile
     restart: ${RESTART_POLICY:-unless-stopped}
     depends_on:
       geomanager_db:
