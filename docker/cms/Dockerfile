@@ -28,18 +28,18 @@ RUN if [ -n "$GH_TOKEN" ]; then \
 
 WORKDIR ${APP_HOME}
 
-# Install all dependencies from git (geomanager + georeport from eafw branches)
-RUN --mount=type=ssh \
-    if [ -n "$GH_TOKEN" ]; then \
+# Install all dependencies (geomanager + georeport from eafw branches)
+# CI: uses GH_TOKEN for HTTPS. Local: uses --ssh default for SSH agent.
+RUN if [ -n "$GH_TOKEN" ]; then \
       git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"; \
       git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "git@github.com:"; \
-    else \
-      mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts; \
     fi && \
     uv lock && \
     uv sync --all-extras --no-cache --no-install-project && \
     uv add gunicorn uvicorn && \
-    git config --global --unset-all url."https://${GH_TOKEN}@github.com/".insteadOf 2>/dev/null || true
+    if [ -n "$GH_TOKEN" ]; then \
+      git config --global --unset-all url."https://${GH_TOKEN}@github.com/".insteadOf 2>/dev/null || true; \
+    fi
 
 # use osgeo gdal ubuntu small 3.10 image.
 ARG GDAL_VERSION=3.10.0
