@@ -134,12 +134,23 @@ if ! $SKIP_BACKUP; then
 fi
 
 # ── Ensure infrastructure is running (DB + pgbouncer) ───────────
-# These should always be up. Start them if they're not, but never recreate them.
-for infra_svc in geomanager_db geomanager_pgbouncer; do
-  CNTR=$(docker compose ps -q "$infra_svc" 2>/dev/null || echo "")
-  if [ -z "$CNTR" ] || [ "$(docker inspect --format='{{.State.Status}}' "$CNTR" 2>/dev/null)" != "running" ]; then
-    info "Starting infrastructure: $infra_svc"
-    docker compose up -d --no-recreate "$infra_svc"
+# Check by container name (not compose service) to handle containers created
+# under a different COMPOSE_PROJECT_NAME.
+DB_CNTR=$(grep -E '^DB_CNTR_NAME=' .env | cut -d= -f2 | tr -d '"' || echo "eafw-pgdb")
+PGB_CNTR=$(grep -E '^PGBOUNCER_CNTR_NAME=' .env | cut -d= -f2 | tr -d '"' || echo "eafw-pgbouncer")
+
+for pair in "geomanager_db:$DB_CNTR" "geomanager_pgbouncer:$PGB_CNTR"; do
+  svc="${pair%%:*}"
+  cntr="${pair##*:}"
+  STATUS=$(docker inspect --format='{{.State.Status}}' "$cntr" 2>/dev/null || echo "none")
+  if [ "$STATUS" = "running" ]; then
+    info "Infrastructure already running: $cntr"
+  elif [ "$STATUS" != "none" ]; then
+    info "Starting stopped infrastructure: $cntr"
+    docker start "$cntr"
+  else
+    info "Creating infrastructure: $svc"
+    docker compose up -d "$svc"
   fi
 done
 
