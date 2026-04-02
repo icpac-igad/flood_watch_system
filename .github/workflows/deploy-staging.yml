@@ -1,6 +1,7 @@
 # EAFW FloodWatch - Build & Deploy to Staging
 # Triggers on push to eafw branch
 # Only builds images when their source files change
+# Deploy is modular: only pulls + restarts services that were rebuilt
 
 name: Build & Deploy to Staging
 
@@ -14,6 +15,10 @@ on:
         description: 'Force rebuild all images'
         type: boolean
         default: false
+      deploy_only:
+        description: 'Skip build, deploy existing images by SHA'
+        type: string
+        default: ''
 
 env:
   REGISTRY: ghcr.io
@@ -46,7 +51,7 @@ jobs:
             echo "cms=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_geomapviewer/|^eafw_geomanager_web/docker/mapviewer/"; then
+          if echo "$CHANGED" | grep -qE "^eafw_geomapviewer/|^docker/mapviewer/"; then
             echo "mapviewer=true" >> $GITHUB_OUTPUT
           else
             echo "mapviewer=false" >> $GITHUB_OUTPUT
@@ -218,6 +223,47 @@ jobs:
     if: always() && !cancelled()
     environment: staging
     steps:
+      - name: Determine which services to deploy
+        id: services
+        run: |
+          SERVICES=""
+          IMAGES=""
+          SHA="${{ github.sha }}"
+          PREFIX="${{ env.IMAGE_PREFIX }}"
+          FORCE="${{ github.event.inputs.force_build }}"
+
+          # A service needs deploy if it was rebuilt (job succeeded)
+          # or if force_build was requested
+          if [ "${{ needs.build-cms.result }}" = "success" ] || [ "$FORCE" = "true" ]; then
+            SERVICES="$SERVICES cms"
+            IMAGES="$IMAGES eafw-cms:$SHA"
+          fi
+          if [ "${{ needs.build-mapviewer.result }}" = "success" ] || [ "$FORCE" = "true" ]; then
+            SERVICES="$SERVICES mapviewer"
+            IMAGES="$IMAGES eafw-mapviewer:$SHA"
+          fi
+          if [ "${{ needs.build-mapserver.result }}" = "success" ] || [ "$FORCE" = "true" ]; then
+            SERVICES="$SERVICES mapserver"
+            IMAGES="$IMAGES eafw-mapserver:$SHA"
+          fi
+          if [ "${{ needs.build-mapcache.result }}" = "success" ] || [ "$FORCE" = "true" ]; then
+            SERVICES="$SERVICES mapcache"
+            IMAGES="$IMAGES eafw-mapcache:$SHA"
+          fi
+          if [ "${{ needs.build-jobs.result }}" = "success" ] || [ "$FORCE" = "true" ]; then
+            SERVICES="$SERVICES jobs"
+            IMAGES="$IMAGES eafw-jobs:$SHA"
+          fi
+
+          SERVICES=$(echo "$SERVICES" | xargs)
+          IMAGES=$(echo "$IMAGES" | xargs)
+
+          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          echo "images=$IMAGES" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "Will deploy: $SERVICES"
+          echo "Images: $IMAGES"
+
       - name: Deploy to staging server
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -234,34 +280,37 @@ jobs:
           SMTP_EMAIL_HOST: ${{ secrets.SMTP_EMAIL_HOST }}
           SMTP_EMAIL_HOST_USER: ${{ secrets.SMTP_EMAIL_HOST_USER }}
           SMTP_EMAIL_HOST_PASSWORD: ${{ secrets.SMTP_EMAIL_HOST_PASSWORD }}
+          DEPLOY_SERVICES: ${{ steps.services.outputs.services }}
+          DEPLOY_IMAGES: ${{ steps.services.outputs.images }}
+          DEPLOY_SHA: ${{ steps.services.outputs.sha }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: 22
           command_timeout: 60m
-          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,FLOODPROOFS_SFTP_HOST,FLOODPROOFS_SFTP_USER,FLOODPROOFS_SFTP_PASSWORD,WRF_FTP_HOST,WRF_FTP_USER,WRF_FTP_PASSWORD,FLOODS_API_KEY,SMTP_EMAIL_HOST,SMTP_EMAIL_HOST_USER,SMTP_EMAIL_HOST_PASSWORD
+          envs: GH_TOKEN,DB_PASSWORD,DJANGO_SECRET_KEY,FLOODPROOFS_SFTP_HOST,FLOODPROOFS_SFTP_USER,FLOODPROOFS_SFTP_PASSWORD,WRF_FTP_HOST,WRF_FTP_USER,WRF_FTP_PASSWORD,FLOODS_API_KEY,SMTP_EMAIL_HOST,SMTP_EMAIL_HOST_USER,SMTP_EMAIL_HOST_PASSWORD,DEPLOY_SERVICES,DEPLOY_IMAGES,DEPLOY_SHA
           script: |
             set -e
             cd ~
 
             echo "========================================="
             echo "  STAGING DEPLOYMENT"
-            echo "  $(date '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "  $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "  Services: ${DEPLOY_SERVICES:-none}"
+            echo "  SHA: ${DEPLOY_SHA}"
             echo "========================================="
 
-            # Login to GitHub Container Registry
+            # Login to GHCR
             echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
 
             # Safe repo update
             REPO_DIR=~/flood_watch_system
             if [ -d "$REPO_DIR/.git" ]; then
-              echo "Updating existing repo..."
               cd $REPO_DIR
               git fetch origin
               git reset --hard origin/eafw
             else
-              echo "Cloning repo..."
               git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git $REPO_DIR
               cd $REPO_DIR
             fi
@@ -274,7 +323,7 @@ jobs:
               echo "FIRST DEPLOY: created .env from template"
             fi
 
-            # Inject secrets into .env (only updates existing keys)
+            # Inject secrets
             sed -i "s|^CMS_DB_PASSWORD=.*|CMS_DB_PASSWORD=${DB_PASSWORD}|" .env
             sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${DJANGO_SECRET_KEY}|" .env
             sed -i "s|^FLOODPROOFS_SFTP_HOST=.*|FLOODPROOFS_SFTP_HOST=${FLOODPROOFS_SFTP_HOST}|" .env
@@ -289,7 +338,12 @@ jobs:
             sed -i "s|^SMTP_EMAIL_HOST_PASSWORD=.*|SMTP_EMAIL_HOST_PASSWORD=${SMTP_EMAIL_HOST_PASSWORD}|" .env
             sed -i "s|^CMS_DEBUG=.*|CMS_DEBUG=False|" .env
 
-            # Deploy using the safe deploy script
-            # This NEVER touches the database — only restarts app services
+            # If no services to deploy, just update repo and exit
+            if [ -z "${DEPLOY_SERVICES}" ]; then
+              echo "No services to deploy — repo updated, exiting"
+              exit 0
+            fi
+
+            # Deploy: pull by SHA, retag as latest, restart
             chmod +x scripts/deploy.sh
-            ./scripts/deploy.sh --full
+            ./scripts/deploy.sh ${DEPLOY_SERVICES}
