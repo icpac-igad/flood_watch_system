@@ -8,17 +8,29 @@ networks:
 
 volumes:
   eafw_pgdata:
+    name: eafw_pgdata
   eafw_static:
+    name: eafw_static
   eafw_media:
+    name: eafw_media
   eafw_mapviewer_static:
+    name: eafw_mapviewer_static
   eafw_geomanager_data:
+    name: eafw_geomanager_data
   eafw_mapcache_tiles:
+    name: eafw_mapcache_tiles
   eafw_jobs_data:
+    name: eafw_jobs_data
   eafw_jobs_logs:
+    name: eafw_jobs_logs
   eafw_backups:
+    name: eafw_backups
   eafw_cogs:
+    name: eafw_cogs
   eafw_caddy_data:
+    name: eafw_caddy_data
   eafw_caddy_config:
+    name: eafw_caddy_config
 
 services:
   # ============================================================

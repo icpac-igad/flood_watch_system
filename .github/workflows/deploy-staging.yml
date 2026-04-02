@@ -268,16 +268,13 @@ jobs:
 
             echo "Git SHA: $(git rev-parse --short HEAD)"
 
-            # Work from the compose directory
-            cd $REPO_DIR
-
             # Smart .env — create from template only on first deploy
             if [ ! -f .env ]; then
               cp .env.example .env
               echo "FIRST DEPLOY: created .env from template"
             fi
 
-            # Inject secrets
+            # Inject secrets into .env (only updates existing keys)
             sed -i "s|^CMS_DB_PASSWORD=.*|CMS_DB_PASSWORD=${DB_PASSWORD}|" .env
             sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${DJANGO_SECRET_KEY}|" .env
             sed -i "s|^FLOODPROOFS_SFTP_HOST=.*|FLOODPROOFS_SFTP_HOST=${FLOODPROOFS_SFTP_HOST}|" .env
@@ -292,60 +289,7 @@ jobs:
             sed -i "s|^SMTP_EMAIL_HOST_PASSWORD=.*|SMTP_EMAIL_HOST_PASSWORD=${SMTP_EMAIL_HOST_PASSWORD}|" .env
             sed -i "s|^CMS_DEBUG=.*|CMS_DEBUG=False|" .env
 
-            # Database backup
-            mkdir -p ~/eafw-backups
-            DB_STATUS=$(docker inspect --format='{{.State.Status}}' eafw-pgdb 2>/dev/null || echo "none")
-            if [ "$DB_STATUS" = "running" ]; then
-              echo "Backing up database..."
-              BACKUP="$HOME/eafw-backups/staging_db_$(date +%Y%m%d_%H%M%S).dump"
-              docker exec eafw-pgdb pg_dump -U ${CMS_DB_USER:-geomanager} -Fc ${CMS_DB_NAME:-geomanager_web} > "$BACKUP" || echo "WARN: backup failed"
-              ls -t ~/eafw-backups/staging_db_*.dump 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null
-            fi
-
-            # Stop old project containers (from previous monorepo layout)
-            if [ -f ~/flood_watch_system/docker-compose.staging.yml ]; then
-              docker compose -f ~/flood_watch_system/docker-compose.staging.yml --env-file ~/flood_watch_system/.env down 2>/dev/null || true
-            fi
-            # Also remove any leftover eafw containers by name
-            docker ps -a --format '{{.Names}}' | grep '^eafw-' | xargs -r docker rm -f 2>/dev/null || true
-
-            # Pull and deploy
-            docker compose pull --ignore-pull-failures
-            docker compose up -d
-
-            # Wait for DB
-            echo "Waiting for database..."
-            for i in $(seq 1 60); do
-              if docker exec eafw-pgdb pg_isready -U ${CMS_DB_USER:-geomanager} 2>/dev/null; then
-                echo "DB ready after $((i*5))s"
-                break
-              fi
-              sleep 5
-            done
-
-            # Wait for CMS and run migrations
-            echo "Waiting for CMS..."
-            for i in $(seq 1 30); do
-              if docker exec eafw-cms curl -sf http://localhost:8000/ >/dev/null 2>&1; then
-                echo "CMS ready"
-                docker exec eafw-cms /home/app/.venv/bin/python manage.py migrate --noinput 2>&1 || true
-                docker exec eafw-cms /home/app/.venv/bin/python manage.py collectstatic --clear --no-input 2>&1 || true
-                break
-              fi
-              sleep 5
-            done
-
-            # Reload nginx
-            docker exec eafw-nginx nginx -s reload 2>&1 || docker restart eafw-nginx
-
-            # Cleanup
-            docker image prune -f 2>/dev/null || true
-
-            # Health check
-            echo ""
-            echo "========================================="
-            echo "  DEPLOYMENT SUMMARY"
-            echo "========================================="
-            docker ps --format "table {{.Names}}\t{{.Status}}" | grep eafw
-            echo "========================================="
-            echo "Staging deploy successful!"
+            # Deploy using the safe deploy script
+            # This NEVER touches the database — only restarts app services
+            chmod +x scripts/deploy.sh
+            ./scripts/deploy.sh --full

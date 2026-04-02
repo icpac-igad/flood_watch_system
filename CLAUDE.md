@@ -72,39 +72,51 @@ Local development uses `eafw_clean_*` volumes (mapped via `docker-compose.overri
 
 ### Deploy to Staging
 
+**Automatic (CI)**: Push to `eafw` branch — GitHub Actions builds changed images, SSHs into staging, runs `scripts/deploy.sh --full`. DB is never touched.
+
+**Manual (SSH)**:
 ```bash
-# 1. Push code
-git add -A && git commit -m "description" && git push origin eafw
+ssh staging
+cd ~/flood_watch_system && git pull origin eafw --ff-only
 
-# 2. SSH and pull
-ssh staging "cd ~/flood_watch_system && git pull origin eafw --ff-only"
+# Deploy all app services (DB stays untouched)
+./scripts/deploy.sh --full
 
-# 3. Rebuild changed service
-ssh staging "cd ~/flood_watch_system/eafw_geomanager_web && docker compose build geomanager_web"
+# Deploy specific service only
+./scripts/deploy.sh cms
+./scripts/deploy.sh mapviewer
+./scripts/deploy.sh mapserver jobs
 
-# 4. Restart
-ssh staging "cd ~/flood_watch_system/eafw_geomanager_web && docker compose up -d geomanager_web"
+# First-time setup (initializes DB from db-init/ scripts)
+./scripts/deploy.sh --init
 ```
+
+### Key Deployment Rules
+
+1. **DB is never recreated during deploy** — `scripts/deploy.sh` only restarts app containers
+2. **Auto-backup** — DB is dumped to `~/eafw-backups/` before every deploy
+3. **Volume names are pinned** — `eafw_pgdata`, `eafw_media`, etc. are stable regardless of clone directory
+4. **COMPOSE_PROJECT_NAME=eafw** — must be in `.env` for consistent container/network naming
+5. **Never use `docker compose down`** on staging — use `docker compose stop <service>` or the deploy script
+6. **Never `docker rm -f` the DB container** — this is the #1 cause of data loss
 
 ### Rebuild Specific Services
 
 ```bash
 # CMS only (template/view changes)
-docker compose build geomanager_web && docker compose up -d geomanager_web
+./scripts/deploy.sh cms
 
 # MapViewer (React component changes — slow, ~5 min)
-# IMPORTANT: Next.js build cache can serve stale JS. If source changes don't appear
-# in the deployed app, prune the build cache first:
+# IMPORTANT: Next.js build cache can serve stale JS. If source changes don't appear:
 #   docker builder prune -af
-#   docker compose build --no-cache geomanager_mapviewer && docker compose up -d geomanager_mapviewer
-# Normal rebuild (when cache is clean):
-docker compose build geomanager_mapviewer && docker compose up -d geomanager_mapviewer
+#   docker compose build --no-cache geomanager_mapviewer
+#   ./scripts/deploy.sh mapviewer
 
-# MapServer/MapCache (nginx config changes)
-docker compose build geomanager_mapserver geomanager_mapcache && docker compose up -d geomanager_mapserver geomanager_mapcache
+# MapServer + MapCache
+./scripts/deploy.sh mapserver mapcache
 
 # Jobs (sync script changes)
-docker compose build geomanager_jobs && docker compose up -d geomanager_jobs
+./scripts/deploy.sh jobs
 ```
 
 ### Database Operations
