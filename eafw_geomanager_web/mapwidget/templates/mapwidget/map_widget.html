@@ -1118,8 +1118,11 @@
       }
     }
 
-    /* Index all datasets by ID */
-    datasets.forEach(function (d) { if (d.id) apiDatasets[d.id] = d; });
+    /* Index all datasets by ID (API returns nested arrays: [[ds1],[ds2],...]) */
+    datasets.forEach(function (d) {
+      var items = Array.isArray(d) ? d : [d];
+      items.forEach(function (item) { if (item && item.id) apiDatasets[item.id] = item; });
+    });
 
     /* Create map with the correct basemap style from config */
     map = new maplibregl.Map({
