@@ -154,6 +154,33 @@ for pair in "geomanager_db:$DB_CNTR" "geomanager_pgbouncer:$PGB_CNTR"; do
   fi
 done
 
+# ── Adopt orphaned app containers ───────────────────────────────
+# If containers exist but were created under a different COMPOSE_PROJECT_NAME,
+# compose can't manage them and will fail with "name already in use".
+# App containers are stateless (data lives in volumes), so safe to remove.
+# DB and pgbouncer are handled above — never touched here.
+PROTECTED_CONTAINERS="$DB_CNTR $PGB_CNTR"
+for svc in "${SERVICES[@]}"; do
+  # Get the expected container name from .env or docker-compose defaults
+  EXPECTED_CNTR=$(docker compose config --format json 2>/dev/null | python3 -c "
+import sys,json
+cfg=json.load(sys.stdin)
+svc=cfg.get('services',{}).get('$svc',{})
+print(svc.get('container_name',''))" 2>/dev/null || echo "")
+
+  [ -z "$EXPECTED_CNTR" ] && continue
+  echo "$PROTECTED_CONTAINERS" | grep -qw "$EXPECTED_CNTR" && continue
+
+  # Check if this container exists but isn't managed by current compose project
+  EXISTING_ID=$(docker inspect --format='{{.Id}}' "$EXPECTED_CNTR" 2>/dev/null || echo "")
+  COMPOSE_ID=$(docker compose ps -q "$svc" 2>/dev/null || echo "")
+
+  if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "$COMPOSE_ID" ]; then
+    info "Adopting orphaned container: $EXPECTED_CNTR (removing old, compose will recreate)"
+    docker rm -f "$EXPECTED_CNTR" 2>/dev/null || true
+  fi
+done
+
 # ── Pull new images ─────────────────────────────────────────────
 info "Pulling images for: ${SERVICES[*]}"
 docker compose pull "${SERVICES[@]}" 2>&1 || warn "Some pulls failed (may be local-only images)"
