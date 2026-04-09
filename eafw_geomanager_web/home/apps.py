@@ -6,3 +6,5 @@ class HomeConfig(AppConfig):
 
     def ready(self):
         import home.signals  # noqa
+        from home.patches import apply_all as apply_patches
+        apply_patches()
