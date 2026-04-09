@@ -793,16 +793,25 @@
       var url = lc.source.tiles[0];
       var sourceType = lc.source.type || 'raster';
 
-      /* Replace {time} placeholder with selected time */
+      /* Fix malformed query string: second ? should be & (API appends ?param= on URLs that already have ?) */
+      var qIdx = url.indexOf('?');
+      if (qIdx !== -1) {
+        url = url.substring(0, qIdx + 1) + url.substring(qIdx + 1).replace(/\?/g, '&');
+      }
+      /* Replace time placeholders with selected time.
+         API may use {{time}} (mapviewer convention) which after single-brace
+         replace leaves {value} — clean up stray wrapper braces afterwards. */
       if (selectedTime) {
         url = url.replace(/\{time\}/g, selectedTime);
-        /* Also replace url_param placeholders from paramsSelectorConfig */
         var psc = layer.paramsSelectorConfig || [];
         psc.forEach(function (p) {
           if (p.url_param) url = url.replace('{' + p.url_param + '}', selectedTime);
         });
+        /* Strip leftover braces from double-brace placeholders: {2026-01-01} → 2026-01-01 */
+        url = url.replace(/\{(\d{4}-\d{2}-\d{2})\}/g, '$1');
       }
       url = appendTileParams(url);
+      console.log('map-widget tile URL [scope=' + currentScope + ']:', url.substring(0, 200));
 
       var srcId = 'mw-src-' + gen + '-' + i;
       var lyrId = 'mw-lyr-' + gen + '-' + i;
@@ -819,9 +828,9 @@
                 id: lyrId + '-' + j,
                 source: srcId,
               });
-              /* Apply WHCA country filter on point layers */
+              /* Apply WHCA filter on point layers — show only curated whca_selected points */
               if (currentScope === 'whca' && (rl.type === 'circle' || rl.type === 'symbol')) {
-                mlLayer.filter = ['in', 'country_code'].concat(WHCA_CC);
+                mlLayer.filter = ['==', ['get', 'whca_selected'], true];
               }
               map.addLayer(mlLayer, before);
               activeLayers.push(mlLayer.id);
@@ -1070,9 +1079,7 @@
     defaultBasemapConfig = basemaps.find(function (b) { return b['default']; }) || basemaps[0] || null;
 
     var mapStyle = FALLBACK_STYLE;
-    if (defaultBasemapConfig && defaultBasemapConfig.mapStyle) {
-      mapStyle = defaultBasemapConfig.mapStyle;
-    } else if (defaultBasemapConfig && defaultBasemapConfig.url) {
+    if (defaultBasemapConfig && defaultBasemapConfig.url) {
       mapStyle = {
         version: 8,
         sources: { 'cfg-basemap': { type: 'raster', tiles: [defaultBasemapConfig.url], tileSize: 256 } },
@@ -1091,7 +1098,7 @@
     if (countries.length) {
       var seen = {};
       projectCountriesParam = countries
-        .map(function (c) { return (c && c.name ? String(c.name).trim() : ''); })
+        .map(function (c) { return (c && c.code ? String(c.code).trim() : ''); })
         .filter(function (n) { if (!n || seen[n]) return false; seen[n] = true; return true; })
         .join(',');
     }

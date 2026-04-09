@@ -305,12 +305,13 @@ jobs:
             echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
 
             # Safe repo update
-            REPO_DIR=~/flood_watch_system
+            REPO_DIR=~/projects/flood_watch_system
             if [ -d "$REPO_DIR/.git" ]; then
               cd $REPO_DIR
               git fetch origin
               git reset --hard origin/eafw
             else
+              mkdir -p ~/projects
               git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git $REPO_DIR
               cd $REPO_DIR
             fi

@@ -156,6 +156,18 @@ def ingest_multimodal_forecasts(data_date, forecast_data, control_points):
                     mike_hydro_imerg = EXCLUDED.mike_hydro_imerg
             """, rows, page_size=1000)
 
+            # Update the geomanager dataset's latest_date so the homepage widget
+            # and API reflect the freshest available data_date (issue date).
+            cursor.execute("""
+                UPDATE geomanager_dataset
+                SET latest_date = (
+                    SELECT MAX(data_date)
+                    FROM gha.multimodal_forecasts
+                )
+                WHERE title = 'Multi Model'
+                  AND (latest_date IS NULL OR latest_date < %s)
+            """, (data_date,))
+
             logger.info(
                 f"Ingested {len(rows)} forecast rows for {data_date} "
                 f"({matched} points with data)"

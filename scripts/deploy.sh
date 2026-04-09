@@ -17,7 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-BACKUP_DIR="${EAFW_BACKUP_DIR:-$HOME/eafw-backups}"
+BACKUP_DIR="${EAFW_BACKUP_DIR:-$HOME/data/backups/eafw}"
 REGISTRY="${REGISTRY:-ghcr.io/icpac-igad}"
 
 # ── Colour helpers ──────────────────────────────────────────────

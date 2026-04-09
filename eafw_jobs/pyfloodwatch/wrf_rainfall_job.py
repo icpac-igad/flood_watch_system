@@ -468,8 +468,32 @@ quit
         # Export COGs from the freshly ingested data
         self._export_cogs(folder)
 
+        # Update latest_date on the geomanager datasets so homepage/API are current
+        self._update_dataset_dates()
+
         logger.info("WRF Rainfall Job Completed")
         return True
+
+    def _update_dataset_dates(self):
+        """Update Extreme Rainfall and Total Rainfall dataset latest_date from COG timestamps."""
+        try:
+            from pyfloodwatch.database import get_db_connection
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE geomanager_dataset
+                    SET latest_date = sub.max_date
+                    FROM (
+                        SELECT MAX(forecast_date) AS max_date
+                        FROM wrf.daily_rainfall
+                    ) sub
+                    WHERE title IN ('Extreme Rainfall', 'Total Rainfall')
+                      AND (latest_date IS NULL OR latest_date < sub.max_date)
+                """)
+                if cursor.rowcount:
+                    logger.info(f"Updated {cursor.rowcount} WRF dataset latest_date(s)")
+        except Exception as e:
+            logger.warning(f"Failed to update WRF dataset dates: {e}")
 
     def _export_cogs(self, folder_date):
         """Export Cloud Optimised GeoTIFFs after WRF data ingestion.

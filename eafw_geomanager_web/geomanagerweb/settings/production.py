@@ -66,7 +66,7 @@ logging.config.dictConfig(
             "file": {
                 "level": "INFO",
                 "class": "logging.FileHandler",
-                "filename": "cms-web-app.log",
+                "filename": os.environ.get("CMS_LOG_FILE", "/tmp/cms-web-app.log"),
                 "formatter": "default",
             },
         },
