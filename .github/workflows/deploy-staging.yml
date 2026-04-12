@@ -326,14 +326,17 @@ jobs:
               cd $REPO_DIR
             fi
 
-            # One-time cleanup: legacy tracked directories from before the
+            # One-time aside: legacy tracked directories from before the
             # submodule split linger on disk after a git reset --hard, blocking
-            # the fresh submodule clone. Remove anything that isn't already a
-            # git checkout itself.
+            # the fresh submodule clone. Move (don't delete) anything that
+            # isn't already a git checkout. Renaming the directory only needs
+            # write access on the *parent*, so root-owned children inside the
+            # legacy dir are preserved untouched in the .legacy backup.
+            TS=$(date +%Y%m%d_%H%M%S)
             for sub in eafw_geomanager eafw_geomanager_web eafw_geomapviewer eafw_georeport; do
               if [ -d "$sub" ] && [ ! -e "$sub/.git" ]; then
-                rm -rf "$sub"
-                echo "  cleaned stale legacy directory: $sub"
+                mv "$sub" "${sub}.legacy.${TS}"
+                echo "  moved aside: $sub -> ${sub}.legacy.${TS}"
               fi
             done
 
