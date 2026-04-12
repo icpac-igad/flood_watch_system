@@ -310,7 +310,11 @@ jobs:
             # Login to GHCR
             echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
 
-            # Safe repo update
+            # Safe repo update — submodules are private repos under icpac-igad,
+            # so configure a per-user insteadOf rewrite that injects GH_TOKEN
+            # for any github.com URL the submodule machinery touches.
+            git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+
             REPO_DIR=~/projects/flood_watch_system
             if [ -d "$REPO_DIR/.git" ]; then
               cd $REPO_DIR
@@ -322,7 +326,12 @@ jobs:
               cd $REPO_DIR
             fi
 
+            # Sync + init/update every submodule to the SHA committed by the parent
+            git submodule sync --recursive
+            git submodule update --init --recursive --force
+
             echo "Git SHA: $(git rev-parse --short HEAD)"
+            git submodule status
 
             # Smart .env — create from template only on first deploy
             if [ ! -f .env ]; then
