@@ -326,6 +326,17 @@ jobs:
               cd $REPO_DIR
             fi
 
+            # One-time cleanup: legacy tracked directories from before the
+            # submodule split linger on disk after a git reset --hard, blocking
+            # the fresh submodule clone. Remove anything that isn't already a
+            # git checkout itself.
+            for sub in eafw_geomanager eafw_geomanager_web eafw_geomapviewer eafw_georeport; do
+              if [ -d "$sub" ] && [ ! -e "$sub/.git" ]; then
+                rm -rf "$sub"
+                echo "  cleaned stale legacy directory: $sub"
+              fi
+            done
+
             # Sync + init/update every submodule to the SHA committed by the parent
             git submodule sync --recursive
             git submodule update --init --recursive --force
