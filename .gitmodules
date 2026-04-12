@@ -1,0 +1,16 @@
+[submodule "eafw_geomanager"]
+	path = eafw_geomanager
+	url = https://github.com/icpac-igad/geomanager.git
+	branch = eafw
+[submodule "eafw_geomanager_web"]
+	path = eafw_geomanager_web
+	url = https://github.com/icpac-igad/geomanager-web.git
+	branch = eafw
+[submodule "eafw_geomapviewer"]
+	path = eafw_geomapviewer
+	url = https://github.com/icpac-igad/geomapviewer.git
+	branch = eafw
+[submodule "eafw_georeport"]
+	path = eafw_georeport
+	url = https://github.com/icpac-igad/georeport.git
+	branch = eafw

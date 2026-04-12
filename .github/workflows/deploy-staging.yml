@@ -38,6 +38,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+          submodules: false
 
       - name: Check for changes
         id: changes
@@ -45,13 +46,15 @@ jobs:
           CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
           echo "Changed files: $CHANGED"
 
-          if echo "$CHANGED" | grep -qE "^eafw_geomanager_web/|^docker/cms/"; then
+          # Match both regular file paths (eafw_geomanager_web/...) and bare
+          # submodule pointer changes (eafw_geomanager_web with no trailing slash)
+          if echo "$CHANGED" | grep -qE "^(eafw_geomanager_web|eafw_geomanager|eafw_georeport)(/|$)|^docker/cms/"; then
             echo "cms=true" >> $GITHUB_OUTPUT
           else
             echo "cms=false" >> $GITHUB_OUTPUT
           fi
 
-          if echo "$CHANGED" | grep -qE "^eafw_geomapviewer/|^docker/mapviewer/"; then
+          if echo "$CHANGED" | grep -qE "^eafw_geomapviewer(/|$)|^docker/mapviewer/"; then
             echo "mapviewer=true" >> $GITHUB_OUTPUT
           else
             echo "mapviewer=false" >> $GITHUB_OUTPUT

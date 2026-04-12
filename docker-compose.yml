@@ -115,6 +115,8 @@ services:
     build:
       context: .
       dockerfile: ./docker/cms/Dockerfile
+      args:
+        - GH_TOKEN=${GH_TOKEN:-}
     restart: ${RESTART_POLICY:-unless-stopped}
     command: >
       sh -c "/wait

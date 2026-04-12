@@ -13,6 +13,11 @@ node_modules/
 
 # Environment
 .env
+
+# Local credential dumps — never commit
+WHCA_CREDENTIALS.md
+*credentials*.md
+!CLAUDE.md
 *.env.local
 
 # Docker volumes
