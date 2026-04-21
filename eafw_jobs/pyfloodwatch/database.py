@@ -45,7 +45,7 @@ def ingest_deterministic_geojson(data_date, date_string, geojson_data, feature_c
 
             # Check if record exists
             cursor.execute(
-                "SELECT id FROM home_merged_deterministic_geojson WHERE data_date = %s",
+                "SELECT id FROM gha.merged_deterministic_geojson WHERE data_date = %s",
                 (data_date,)
             )
             existing = cursor.fetchone()
@@ -54,7 +54,7 @@ def ingest_deterministic_geojson(data_date, date_string, geojson_data, feature_c
                 # Update existing
                 logger.info(f"Updating existing record for {data_date}")
                 cursor.execute("""
-                    UPDATE home_merged_deterministic_geojson
+                    UPDATE gha.merged_deterministic_geojson
                     SET geojson_data = %s,
                         feature_count = %s,
                         file_count = 1,
@@ -66,7 +66,7 @@ def ingest_deterministic_geojson(data_date, date_string, geojson_data, feature_c
                 # Insert new
                 logger.info(f"Creating new record for {data_date}")
                 cursor.execute("""
-                    INSERT INTO home_merged_deterministic_geojson
+                    INSERT INTO gha.merged_deterministic_geojson
                     (data_date, date_string, geojson_data, feature_count, file_count,
                      file_path, processed_by, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, 1, %s, 'floodwatch_jobs', NOW(), NOW())
@@ -167,6 +167,22 @@ def ingest_multimodal_forecasts(data_date, forecast_data, control_points):
                 WHERE title = 'Multi Model'
                   AND (latest_date IS NULL OR latest_date < %s)
             """, (data_date,))
+
+            # Keep percentile alert thresholds in sync with the newly-ingested
+            # forecasts — only for the point_ids we just touched. Cheap (<100ms)
+            # compared to the nightly full sweep and guarantees map colours /
+            # chart threshold lines reflect the freshest history immediately.
+            touched_point_ids = sorted({row[0] for row in rows})
+            if touched_point_ids:
+                cursor.execute(
+                    "SELECT gha.refresh_point_alert_thresholds_for(%s::integer[])",
+                    (touched_point_ids,),
+                )
+                refreshed = cursor.fetchone()[0] if cursor.rowcount else 0
+                logger.info(
+                    f"Refreshed percentile thresholds for {refreshed} "
+                    f"of {len(touched_point_ids)} touched points"
+                )
 
             logger.info(
                 f"Ingested {len(rows)} forecast rows for {data_date} "

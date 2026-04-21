@@ -28,35 +28,46 @@ def get_forecast_date():
 
 
 def load_db_rivers():
-    """Load river IDs and return period thresholds from the database."""
+    """Load river IDs and return period thresholds from the database.
+
+    DB columns are rp2/rp10/rp25/rp50/rp100 (no "_yr" suffix)."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT river_id, rp_2yr, rp_10yr, rp_25yr, rp_50yr
+            SELECT river_id, rp2, rp10, rp25, rp50, rp100
             FROM gha.geoglows_rivers
         """)
         rows = cursor.fetchall()
 
     rivers = {}
-    for rid, rp2, rp10, rp25, rp50 in rows:
+    for rid, rp2, rp10, rp25, rp50, rp100 in rows:
         rivers[rid] = {
-            'rp_2yr': rp2 or 0,
-            'rp_10yr': rp10 or 0,
-            'rp_25yr': rp25 or 0,
-            'rp_50yr': rp50 or 0,
+            'rp2': rp2 or 0,
+            'rp10': rp10 or 0,
+            'rp25': rp25 or 0,
+            'rp50': rp50 or 0,
+            'rp100': rp100 or 0,
         }
     return rivers
 
 
 def compute_alert_level(max_flow, thresholds):
-    """Determine alert level based on return period exceedance."""
-    if max_flow >= thresholds['rp_50yr'] > 0:
+    """Return the advisory bucket the max flow falls into.
+
+    Aligned with the system-wide 4-tier palette:
+      50 -> Extreme   (>= rp50 — also catches rp100 exceedance)
+      25 -> Severe    (>= rp25)
+      10 -> Moderate  (>= rp10)
+       2 -> Less Risk (>= rp2)
+       0 -> Normal    (below rp2)
+    """
+    if max_flow >= thresholds['rp50'] > 0:
         return 50
-    elif max_flow >= thresholds['rp_25yr'] > 0:
+    elif max_flow >= thresholds['rp25'] > 0:
         return 25
-    elif max_flow >= thresholds['rp_10yr'] > 0:
+    elif max_flow >= thresholds['rp10'] > 0:
         return 10
-    elif max_flow >= thresholds['rp_2yr'] > 0:
+    elif max_flow >= thresholds['rp2'] > 0:
         return 2
     return 0
 
@@ -109,32 +120,40 @@ def run_geoglows_sync():
         logger.warning("No matching rivers found in forecast")
         return False
 
-    # Process in batches - read chunks of rivers
-    updates = []
-    batch_size = 500
+    # Process in BIG batches using zarr orthogonal indexing. The previous
+    # per-river loop issued 300k+ separate S3 requests (≈ 4-8 h total). One
+    # `oindex` call fetches a whole chunk at once, so the same work completes
+    # in a handful of minutes. Sorting indices first keeps requested river
+    # slices contiguous along the rivid chunk dimension, which lets zarr/s3fs
+    # merge adjacent chunk reads.
+    qout = z['Qout']
     total = len(matching_indices)
 
-    for batch_start in range(0, total, batch_size):
-        batch_end = min(batch_start + batch_size, total)
-        batch_indices = matching_indices[batch_start:batch_end]
-        batch_rids = matching_rids[batch_start:batch_end]
+    order = np.argsort(matching_indices)
+    sorted_indices = np.asarray(matching_indices, dtype=np.int64)[order]
+    sorted_rids = np.asarray(matching_rids, dtype=np.int64)[order]
 
+    CHUNK_RIVERS = 2000  # tune if zarr chunk shape differs; 2000 keeps memory
+                         # modest (52*280*2000*4 B ≈ 113 MB per batch) while
+                         # drastically reducing HTTP round-trips.
+    max_flows = np.zeros(total, dtype=np.float32)
+
+    for batch_start in range(0, total, CHUNK_RIVERS):
+        batch_end = min(batch_start + CHUNK_RIVERS, total)
+        batch_ids = sorted_indices[batch_start:batch_end].tolist()
         try:
-            for idx, rid in zip(batch_indices, batch_rids):
-                # Read all ensembles for this river: shape (52, 280)
-                data = z['Qout'][:, :, idx]
-                # Median across ensembles, then max across time
-                median_ts = np.median(data, axis=0)
-                max_flow = float(np.nanmax(median_ts))
-
-                alert = compute_alert_level(max_flow, db_rivers[rid])
-                updates.append((max_flow, alert, rid))
+            block = qout.oindex[:, :, batch_ids]  # shape (ens, time, N)
+            median_ts = np.median(block, axis=0)   # shape (time, N)
+            max_flows[batch_start:batch_end] = np.nanmax(median_ts, axis=0)
         except Exception as e:
             logger.error(f"Error reading batch {batch_start}-{batch_end}: {e}")
             continue
+        logger.info(f"  Read {batch_end}/{total} rivers...")
 
-        if (batch_start // batch_size) % 10 == 0:
-            logger.info(f"  Processed {batch_end}/{total} rivers...")
+    updates = []
+    for rid, mf in zip(sorted_rids.tolist(), max_flows.tolist()):
+        alert = compute_alert_level(mf, db_rivers[rid])
+        updates.append((float(mf), alert, int(rid)))
 
     # Batch update DB
     logger.info(f"Updating {len(updates)} rivers in DB...")
@@ -145,8 +164,8 @@ def run_geoglows_sync():
             execute_values(
                 cursor,
                 """UPDATE gha.geoglows_rivers AS t SET
-                    forecast_flow = v.flow,
-                    return_period = v.rp,
+                    max_forecast = v.flow,
+                    alert_level  = v.rp,
                     forecast_date = NOW(),
                     updated_at = NOW()
                 FROM (VALUES %s) AS v(flow, rp, rid)

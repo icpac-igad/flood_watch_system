@@ -1,0 +1,79 @@
+country_code,station_name,river,basin,lon,lat
+ET,Great Akaki,Akaki,Awash,38.7845,8.875735
+ET,Bello,Awash,Awash,38.410022,8.848444
+ET,Hombole,Awash,Awash,38.789964,8.373387
+ET,Wonji,Awash,Awash,39.232963,8.473075
+ET,Metehara,Awash,Awash,39.921192,8.851936
+ET,station 7 kilo,Awash,Awash,40.182231,9.004281
+ET,Melka Sedi,Awash,Awash,40.125111,9.190216
+ET,Melka Werere,Awash,Awash,40.17567,9.319047
+ET,Mille,Mille,Awash,40.759042,11.414445
+ET,Logia,Logia,Awash,40.986894,11.732691
+ET,Assayita,AwashBerga,Awash,41.44698,11.541591
+ET,Boyhaile,Awash,Awash,41.199406,11.702197
+ET,Bokyitu  Assyita,Awash,Awash,41.450496,11.544635
+ET,Nr Dima,Akobo,Baro Akobo,35.18844,6.503574
+ET,Nr Etang,Baro,Baro Akobo,34.269479,8.191799
+ET,Gambella,Baro,Baro Akobo,34.589428,8.238082
+ET,Dam site,Alwero,Baro Akobo,34.497458,7.872275
+ET,Orta Alem,Demie River,Omogibe,37.514301,6.636503
+ET,Abelti,Gilgile Gibe,Omogibe,37.324155,7.836202
+ET,Nr Asendabo,Gilgile Gibe,Omogibe,37.188716,7.757768
+ET,Nr Danal,Gogera River,Omogibe,37.541016,6.726509
+ET,Omorate,Omo,Omogibe,36.050806,4.815458
+ET,Nr Addis Zemen,Ribb,Abbay,37.711015,11.993433
+ET,Nr Bahirdar,Gummera,Abbay,37.635161,11.838342
+ET,Nr Azezo,Megech,Abbay,37.447631,12.486954
+ET,Koladiba,Dirma,Abbay,37.326244,12.427277
+ET,Tena Bilate,Billate,Rift Valley,38.131618,6.930508
+ET,Arbaminch,Kulfo,Rift Valley,37.548207,6.044465
+ET,Nr Alaba Kulito,Bilate,Rift Valley,38.072483,7.285798
+ET,Nr Arbaminch,Harie,Rift Valley,37.56033,6.115535
+ET,Weito,Weito,Rift Valley,37.032234,5.353945
+ET,Humera,Tekeze,Tekeze,36.611685,14.295291
+ET,Sheraro,Tekeze,Tekeze,37.522253,14.136938
+ET,Dedebit,Tekeze,Tekeze,37.67005,13.912942
+ET,Nr Embamadre,Tekeze,Tekeze,38.198234,13.737165
+ET,Melka Guba,Dawa,Genale Dawa,39.317892,4.864937
+ET,Kole Bridge,Genale,Genale Dawa,41.817992,4.434475
+ET,Melka Siftu,Dawa,Genale Dawa,41.856614,3.962856
+ET,Gode,Wabisheble,Wabi Sheble,43.550933,5.924186
+ET,Kelafo,Wabisheble,Wabi Sheble,44.200019,5.589073
+ET,Nr Jigjiga,Fafem,Wabi Sheble,44.276714,6.750342
+RW,Kanzenze,,Upper-Akagera,30.0877,-2.0613
+RW,Ruliba,,Lower-Nyabarongo,30.00348,-1.96253
+RW,Ngaru-Mukungwa,,Mukungwa,29.638298,-1.6862
+RW,Kagitumba,,Muvumba,30.45837,-1.05132
+RW,Nyagisozi,,Upper-Nyabarongo,29.57601,-2.19927
+RW,Gihinga,,Akanyaru,29.96741,-2.28506
+RW,Akagera-outlet,,Lower-Akagera,30.451876,-1.092353
+RW,Gatumba-Cyome,,Upper-Nyabarongo,29.661646,-1.943799
+RW,Karuruma,,Lower-Nyabarongo,30.053966,-1.904337
+RW,Gatore,,Lower-Akagera,30.551832,-2.411491
+SD,Al Jabalayn,White Nile,,32.79959,12.5897882
+SD,Eddiem,Blue Nile,,34.9264246,11.2397386
+SD,Khartoum,Blue Nile,,32.5330914,15.6120937
+SD,Tamaniat,Main  Nile,,32.558649,15.983881
+SD,Berber,Main  Nile,,33.98696,17.997117
+SD,Dongola,Main  Nile,,30.487943,19.186293
+SD,Kh Girba,Atbara,,35.91184,14.966247
+SD,Gash,Gash,,36.490699,15.232822
+SD,Tokar,Tokar,,37.573448,18.15767
+SS,Juba,,,31.6206,4.8485
+SS,Malakal,,,31.6472,9.5533
+SS,Mongalla,,,31.765,5.1998
+SS,Nimule,,,32.0342,3.5967
+SS,Wau,,,28.0932,7.6419
+UG,R. Kafu at Kampala - Gulu Road,,,32.0424,1.543
+UG,R. Katonga at Kampala - Masaka Road,,,32.0072,-0.344
+UG,R. Mpologoma at Budumba,,,33.79,0.8273
+UG,R. Semliki at Bweramule,,,30.1833,0.95
+UG,L. Edward at Katwe,,,29.9,-0.15
+UG,L. Victoria at Jinja Pier,,,33.2045,0.4085
+UG,L. Albert at Butiaba,,,31.3275,1.8197
+UG,R. Ruizi at New  Waterworks,,,30.6172,-0.6173
+UG,R. Kagera at Masangano,,,31.75,-0.94
+UG,R. Kibale at Kalungi (Lower Site),,,31.35,-0.7667
+UG,R. Manafwa at Mbale - Tororo Road,,,34.1577,0.937
+UG,R. Sipi at Mbale - Moroto Road,,,34.31439,1.3825
+UG,Ora at Inde pakwach road,,,31.392778,2.717778

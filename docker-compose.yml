@@ -8,29 +8,17 @@ networks:
 
 volumes:
   eafw_pgdata:
-    name: eafw_pgdata
   eafw_static:
-    name: eafw_static
   eafw_media:
-    name: eafw_media
   eafw_mapviewer_static:
-    name: eafw_mapviewer_static
   eafw_geomanager_data:
-    name: eafw_geomanager_data
   eafw_mapcache_tiles:
-    name: eafw_mapcache_tiles
   eafw_jobs_data:
-    name: eafw_jobs_data
   eafw_jobs_logs:
-    name: eafw_jobs_logs
   eafw_backups:
-    name: eafw_backups
   eafw_cogs:
-    name: eafw_cogs
   eafw_caddy_data:
-    name: eafw_caddy_data
   eafw_caddy_config:
-    name: eafw_caddy_config
 
 services:
   # ============================================================
@@ -105,6 +93,42 @@ services:
       - -I 10m
 
   # ============================================================
+  # One-shot init: runs three scripts in sequence and exits.
+  #   1) docker/init/01-restore-db.sh      — restore dump if DB empty
+  #   2) docker/init/02-apply-migrations.sh — apply extra SQL migrations
+  #   3) docker/init/03-compute-thresholds.sh — recompute percentile thresholds
+  # Each script is idempotent; safe to re-run.
+  # ============================================================
+  geomanager_init:
+    image: postgis/postgis:${PG_VERSION:-16-3.4}
+    container_name: ${INIT_CNTR_NAME:-eafw-init}
+    restart: "no"
+    depends_on:
+      geomanager_db:
+        condition: service_healthy
+    volumes:
+      - ./db-init:/db-init:ro
+      - ./backups:/backups:ro
+      - ./docker/init:/init:ro
+    environment:
+      - PGHOST=geomanager_db
+      - PGPORT=5432
+      - PGUSER=${CMS_DB_USER}
+      - PGPASSWORD=${CMS_DB_PASSWORD}
+      - PGDATABASE=${CMS_DB_NAME}
+      - DB_DUMP=${DB_DUMP:-/backups/staging_fresh.dump}
+      - THRESHOLD_WINDOW_DAYS=${THRESHOLD_WINDOW_DAYS:-365}
+      - THRESHOLD_MIN_SAMPLES=${THRESHOLD_MIN_SAMPLES:-30}
+    entrypoint:
+      - /bin/bash
+      - -eu
+      - -c
+      - >-
+        /init/01-restore-db.sh &&
+        /init/02-apply-migrations.sh &&
+        /init/03-compute-thresholds.sh
+
+  # ============================================================
   # CMS (Django / Wagtail + GeoManager)
   # ============================================================
   geomanager_web:
@@ -151,6 +175,8 @@ services:
     depends_on:
       geomanager_db:
         condition: service_healthy
+      geomanager_init:
+        condition: service_completed_successfully
     volumes:
       - eafw_static:/home/app/static
       - eafw_media:/home/app/media

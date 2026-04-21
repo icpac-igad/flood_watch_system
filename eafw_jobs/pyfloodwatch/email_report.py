@@ -45,7 +45,7 @@ def _query_job_stats():
                 cursor.execute("SAVEPOINT floodproofs_check")
                 cursor.execute("""
                     SELECT data_date, feature_count
-                    FROM home_merged_deterministic_geojson
+                    FROM gha.merged_deterministic_geojson
                     ORDER BY data_date DESC
                     LIMIT 3
                 """)
