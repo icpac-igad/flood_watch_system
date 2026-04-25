@@ -49,3 +49,6 @@ docker-compose.override.yml
 *.egg-info/
 dist/
 build/
+
+# WHCA training-exercise hindcast data (large, source-of-record kept locally)
+data/training/

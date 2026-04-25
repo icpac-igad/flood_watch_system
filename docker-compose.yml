@@ -157,6 +157,10 @@ services:
       - eafw_geomanager_data:/geomanager/data
       - ./docker/volumes/cms/.cache:/root/.cache:z
       - ${CMS_LOG_FILE:-./logs/cms-web.log}:/home/app/cms-web-app.log:z
+      # WHCA training-exercise hindcast data — gitignored bind mount, no
+      # production impact. Read-only; the loader writes parquet on the
+      # host side, the endpoint reads parquet from inside the container.
+      - ./data/training:/home/app/data/training:ro
 
   # ============================================================
   # MapViewer (Next.js)
