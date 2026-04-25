@@ -1,16 +1,71 @@
+# JRC CEMS-GLOFAS flood-depth return-period layers (permanent water removed).
+# Source: data/mapfiles/data/jrc_flood/jrc_flood_rp{10,20,50,75,100}_nowater_gha.tif
+# Mounted into mapserver at /opt/rasterdata/jrc_flood/.
+
 LAYER
-    NAME "flood_extent_rp25"
+    NAME "flood_extent_rp10"
     TYPE RASTER
     STATUS ON
-    DATA "/opt/rasterdata/return_periods/M6_25y_clipped.tif"
+    DATA "/opt/rasterdata/jrc_flood/jrc_flood_rp10_nowater_gha.tif"
     MASK "gha_admin_extent_mask"
-    PROCESSING "NODATA=0"
+    PROCESSING "NODATA=-9999"
     INCLUDE "shared/common-layer-properties.map"
     TYPE RASTER
-    INCLUDE "classifications/flood-extent-rp25.classes.map"
+    INCLUDE "classifications/flood-extent-jrc-depth.classes.map"
     METADATA
-        "wms_title" "Flood Extent / Hazard - 25 Year Return Period"
-        "wms_abstract" "Aggregated fluvial flood hazard model-consensus raster (1-in-25 years)"
+        "wms_title" "Flood Extent / Hazard - 10 Year Return Period"
+        "wms_abstract" "JRC CEMS-GLOFAS flood-depth raster for a 1-in-10 year fluvial event (permanent water removed)"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+END
+
+LAYER
+    NAME "flood_extent_rp20"
+    TYPE RASTER
+    STATUS ON
+    DATA "/opt/rasterdata/jrc_flood/jrc_flood_rp20_nowater_gha.tif"
+    MASK "gha_admin_extent_mask"
+    PROCESSING "NODATA=-9999"
+    INCLUDE "shared/common-layer-properties.map"
+    TYPE RASTER
+    INCLUDE "classifications/flood-extent-jrc-depth.classes.map"
+    METADATA
+        "wms_title" "Flood Extent / Hazard - 20 Year Return Period"
+        "wms_abstract" "JRC CEMS-GLOFAS flood-depth raster for a 1-in-20 year fluvial event (permanent water removed)"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+END
+
+LAYER
+    NAME "flood_extent_rp50"
+    TYPE RASTER
+    STATUS ON
+    DATA "/opt/rasterdata/jrc_flood/jrc_flood_rp50_nowater_gha.tif"
+    MASK "gha_admin_extent_mask"
+    PROCESSING "NODATA=-9999"
+    INCLUDE "shared/common-layer-properties.map"
+    TYPE RASTER
+    INCLUDE "classifications/flood-extent-jrc-depth.classes.map"
+    METADATA
+        "wms_title" "Flood Extent / Hazard - 50 Year Return Period"
+        "wms_abstract" "JRC CEMS-GLOFAS flood-depth raster for a 1-in-50 year fluvial event (permanent water removed)"
+        INCLUDE "shared/wms-layer-metadata.map"
+    END
+END
+
+LAYER
+    NAME "flood_extent_rp75"
+    TYPE RASTER
+    STATUS ON
+    DATA "/opt/rasterdata/jrc_flood/jrc_flood_rp75_nowater_gha.tif"
+    MASK "gha_admin_extent_mask"
+    PROCESSING "NODATA=-9999"
+    INCLUDE "shared/common-layer-properties.map"
+    TYPE RASTER
+    INCLUDE "classifications/flood-extent-jrc-depth.classes.map"
+    METADATA
+        "wms_title" "Flood Extent / Hazard - 75 Year Return Period"
+        "wms_abstract" "JRC CEMS-GLOFAS flood-depth raster for a 1-in-75 year fluvial event (permanent water removed)"
         INCLUDE "shared/wms-layer-metadata.map"
     END
 END
@@ -19,15 +74,15 @@ LAYER
     NAME "flood_extent_rp100"
     TYPE RASTER
     STATUS ON
-    DATA "/opt/rasterdata/return_periods/M6_100y_clipped.tif"
+    DATA "/opt/rasterdata/jrc_flood/jrc_flood_rp100_nowater_gha.tif"
     MASK "gha_admin_extent_mask"
-    PROCESSING "NODATA=0"
+    PROCESSING "NODATA=-9999"
     INCLUDE "shared/common-layer-properties.map"
     TYPE RASTER
-    INCLUDE "classifications/flood-extent-rp100.classes.map"
+    INCLUDE "classifications/flood-extent-jrc-depth.classes.map"
     METADATA
         "wms_title" "Flood Extent / Hazard - 100 Year Return Period"
-        "wms_abstract" "Aggregated fluvial flood hazard model-consensus raster (1-in-100 years)"
+        "wms_abstract" "JRC CEMS-GLOFAS flood-depth raster for a 1-in-100 year fluvial event (permanent water removed)"
         INCLUDE "shared/wms-layer-metadata.map"
     END
 END

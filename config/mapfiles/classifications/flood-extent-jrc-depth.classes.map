@@ -1,0 +1,49 @@
+# JRC CEMS-GLOFAS flood depth classes (Float32, meters, NoData=-9999).
+# Shared by all JRC depth return-period layers (rp10/20/50/75/100).
+# Permanent water is already masked out in the source _nowater rasters,
+# so any non-NoData pixel represents return-period flood water only.
+
+CLASS
+    NAME "Very shallow (0.1 - 0.5 m)"
+    EXPRESSION ([pixel] > 0 AND [pixel] <= 0.5)
+    STYLE
+        COLOR 198 219 239
+        OPACITY 90
+    END
+END
+
+CLASS
+    NAME "Shallow (0.5 - 1 m)"
+    EXPRESSION ([pixel] > 0.5 AND [pixel] <= 1.0)
+    STYLE
+        COLOR 158 202 225
+        OPACITY 90
+    END
+END
+
+CLASS
+    NAME "Moderate (1 - 2 m)"
+    EXPRESSION ([pixel] > 1.0 AND [pixel] <= 2.0)
+    STYLE
+        COLOR 107 174 214
+        OPACITY 90
+    END
+END
+
+CLASS
+    NAME "Deep (2 - 5 m)"
+    EXPRESSION ([pixel] > 2.0 AND [pixel] <= 5.0)
+    STYLE
+        COLOR 49 130 189
+        OPACITY 90
+    END
+END
+
+CLASS
+    NAME "Very deep (> 5 m)"
+    EXPRESSION ([pixel] > 5.0)
+    STYLE
+        COLOR 8 81 156
+        OPACITY 90
+    END
+END
