@@ -201,12 +201,16 @@ def start_scheduler():
 
     scheduler = BlockingScheduler()
 
-    # Schedule multimodal sync - daily at 6:00 PM (18:00) East Africa Time
-    # MikeHYDRO server uploads CSVs to Drive at 5:40 PM via rclone;
-    # run at 6:00 PM to allow upload of ~3000 files to complete first.
+    # Multimodal sync — fires at 18:00, 20:00, 22:00 EAT.
+    # MikeHYDRO uploads ~3000 CSVs to Drive starting 17:40 via rclone;
+    # 18:00 normally catches the first batch but late uploads (we've seen
+    # the full set complete past 19:00) used to wait 24 hours for the
+    # next 18:00 fire. The 20:00 + 22:00 retries close that window.
+    # Each ingest is INSERT … ON CONFLICT DO UPDATE, so multiple fires
+    # per day are safe and only re-write what's new.
     scheduler.add_job(
         run_multimodal_sync,
-        CronTrigger(hour=18, minute=0),
+        CronTrigger(hour='18,20,22', minute=0),
         id='multimodal_sync',
         name='Multimodal Ensemble Sync',
         replace_existing=True
@@ -290,7 +294,7 @@ def start_scheduler():
     run_google_flood_sync_job()
 
     logger.info("Scheduler started. Jobs will run on schedule.")
-    logger.info("Multimodal sync: Daily at 18:00 (6:00 PM) EAT")
+    logger.info("Multimodal sync: 18:00, 20:00, 22:00 EAT (catches late Drive uploads)")
     logger.info("FloodProofs sync: 01:00, 07:00, 13:00, 19:00 EAT")
     logger.info("GCS Inundation sync: Weekly on Sunday at 02:00 EAT")
     logger.info("WRF Rainfall sync: Daily at 06:00 EAT")

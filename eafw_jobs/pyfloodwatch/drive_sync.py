@@ -117,51 +117,70 @@ class DriveSyncer:
             return False
 
     def get_all_folders(self):
-        """Get all dated folders from Drive.
+        """List every dated folder under DRIVE_FOLDER_ID, sorted newest first.
+
+        Drive's API caps each page at ~100 results when no pageSize is given,
+        and orderBy='name desc' is alphabetic — which means once you cross
+        a month boundary the new folder names (e.g. ``02052026``) sort
+        BELOW the old ones (``30042026``) because '0' < '3'. The first
+        page therefore drops the most-recent dates off the bottom.
+
+        We page through every result with ``nextPageToken``, then sort by
+        the actual parsed date so callers always see the latest folder
+        first regardless of API page order.
 
         Returns:
-            list of dicts with 'id', 'name', 'data_date' keys, sorted by date desc
+            list of dicts with ``id``, ``name``, ``data_date`` (date) keys,
+            sorted by ``data_date`` descending.
         """
         folder_id = self.config.get('folder_id')
         if not folder_id:
             logger.error("No DRIVE_FOLDER_ID configured")
             return []
 
+        query = (
+            f"'{folder_id}' in parents and "
+            f"mimeType='application/vnd.google-apps.folder' and trashed=false"
+        )
+
+        raw_files = []
+        page_token = None
         try:
-            query = (
-                f"'{folder_id}' in parents and "
-                f"mimeType='application/vnd.google-apps.folder' and trashed=false"
-            )
-            results = self.service.files().list(
-                q=query,
-                fields='files(id, name)',
-                orderBy='name desc'
-            ).execute()
-
-            folders = []
-            for f in results.get('files', []):
-                name = f['name']
-                # Parse date from folder name (DDMMYYYY format)
-                try:
-                    # Skip folders with _hist suffix or other non-date names
-                    clean_name = name.replace('_hist', '')
-                    data_date = datetime.strptime(clean_name, '%d%m%Y').date()
-                    folders.append({
-                        'id': f['id'],
-                        'name': name,
-                        'data_date': data_date
-                    })
-                except ValueError:
-                    logger.warning(f"Skipping folder with unparseable name: {name}")
-                    continue
-
-            # Sort by date descending (newest first)
-            folders.sort(key=lambda x: x['data_date'], reverse=True)
-            return folders
-
+            while True:
+                results = self.service.files().list(
+                    q=query,
+                    fields='nextPageToken, files(id, name)',
+                    pageSize=1000,
+                    pageToken=page_token,
+                ).execute()
+                raw_files.extend(results.get('files', []))
+                page_token = results.get('nextPageToken')
+                if not page_token:
+                    break
         except Exception as e:
             logger.error(f"Failed to get folders: {e}")
             return []
+
+        folders = []
+        for f in raw_files:
+            name = f['name']
+            # Folder names are DDMMYYYY (e.g. ``02052026``). Skip anything
+            # that doesn't parse — ``_hist`` suffixes, archive folders, etc.
+            clean_name = name.replace('_hist', '')
+            try:
+                data_date = datetime.strptime(clean_name, '%d%m%Y').date()
+            except ValueError:
+                logger.warning(f"Skipping folder with unparseable name: {name}")
+                continue
+            folders.append({
+                'id': f['id'],
+                'name': name,
+                'data_date': data_date,
+            })
+
+        # Sort by parsed date descending — independent of API result order.
+        folders.sort(key=lambda x: x['data_date'], reverse=True)
+        return folders
 
     def get_ingested_dates(self):
         """Get dates that have already been ingested to the database.
