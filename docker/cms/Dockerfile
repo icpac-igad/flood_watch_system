@@ -47,6 +47,7 @@ RUN apt-get update && apt-get install -y \
     gnupg2 \
     libgeos-dev \
     imagemagick \
+    gettext \
     lsb-release \
     --fix-missing
 

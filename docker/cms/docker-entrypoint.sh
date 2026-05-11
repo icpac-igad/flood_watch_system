@@ -17,6 +17,11 @@ fi
 mkdir -p "$STATIC_ROOT_DIR"
 python manage.py collectstatic --no-input
 
+# Compile gettext translations (.po -> .mo) so LANGUAGE_CODE-prefixed URLs
+# can load translations on request. Idempotent: skipped for locales that
+# are already up to date.
+python manage.py compilemessages 2>&1 | tail -5 || true
+
 # ensure environment-variables are available for cronjob
 printenv | grep -v "no_proxy" >>/etc/environment
 
