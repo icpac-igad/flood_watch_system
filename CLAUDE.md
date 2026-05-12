@@ -260,6 +260,20 @@ The jobs service (`eafw-jobs`) runs these scheduled syncs:
 - **Vector tile URLs**: always absolute (include host:port) — mapviewer web worker can't resolve relative URLs
 - **No hardcoding**: Follow a modular structure throughout. Configuration comes from DB, environment variables, or API — never hardcode values (URLs, country lists, thresholds, etc.) directly in templates or components. Use Wagtail StreamFields, Django settings, or DB-driven config so changes can be made without code deploys
 
+## Pending — CI/CD simplification ("Path X")
+
+Single coherent PR to land when ready. Pipeline currently works but has friction that bit us on the 2026-05-11 i18n deploy (35-min `docker pull` stall from ghcr.io while building CMS with `--no-cache`).
+
+| # | Change | File | Why |
+|---|---|---|---|
+| 1 | Switch CMS `Dockerfile` to build-context model (copy submodules from checkout, drop `git clone` over network) — mirror what `docker/cms/Dockerfile.local` already does | `docker/cms/Dockerfile` | Removes `GH_PAT` build-arg dependency; layers become cache-friendly |
+| 2 | Drop `--no-cache: true` and `CACHEBUST` from build-cms; add `submodules: recursive` to that job's checkout | `.github/workflows/deploy-staging.yml` | CMS builds drop from ~15 min to ~3 min for incremental edits |
+| 3 | Add memcached flush + curl HTTP health check to the tail of `scripts/deploy.sh` (after migrations) | `scripts/deploy.sh` | No more manual cache flush; deploy fails loudly if site doesn't return 200 |
+| 4 | Replace the 11 `sed -i` secret injections with one `envsubst` rendering from a `.env.template` (or single Python one-liner) | `.github/workflows/deploy-staging.yml` | One less way to silently corrupt `.env`; easier to add/remove secrets |
+| 5 | Strengthen prune at end of `scripts/deploy.sh`: `docker image prune -af --filter "until=720h"` | `scripts/deploy.sh` | Disk doesn't drift to 97% over months (we hit this 2026-05-11) |
+
+Out of scope for this PR (defer): self-hosted runner, Kamal migration, touching mapviewer/mapserver/mapcache/jobs Dockerfiles, removing `GH_PAT` entirely (still needed elsewhere).
+
 ## Troubleshooting
 
 ### CMS won't start
@@ -310,3 +324,40 @@ cd eafw_geomanager_web && docker compose build --no-cache geomanager_mapviewer &
 # Fake the migration if the column exists but migration isn't recorded
 docker exec eafw-cms /home/app/.venv/bin/python manage.py migrate app_name NNNN --fake
 ```
+
+## Restoration Log
+
+### 2026-05-11 — Restored from Debian backup
+The project was missing from this machine and was restored from the Debian backup on the portable SSD.
+
+- **Source**: `/media/koros/PortableSSD/backup-debian-2026-05-05/IGAD_ICPAC-2026-05-05.tar` (49 GB, taken 2026-05-05 17:32)
+- **Restored to**: `/home/koros/IGAD-ICPAC/Projects/Systems/flood_watch_system/` (20 GB on disk, 71,883 files)
+- **Command used**:
+  ```bash
+  tar -xf /media/koros/PortableSSD/backup-debian-2026-05-05/IGAD_ICPAC-2026-05-05.tar \
+    -C /home/koros/IGAD-ICPAC/Projects/Systems \
+    --strip-components=2 \
+    IGAD_ICPAC/Projects/flood_watch_system
+  ```
+
+**Note on working dir**: the path referenced earlier in this doc (`~/IGAD-ICPAC/Projects/GHoA_Flood_watcher/eafw_geomanager_web/`) is stale. Current working dir is `~/IGAD-ICPAC/Projects/Systems/flood_watch_system/`.
+
+#### Verification (post-extract)
+- 125 secret/`.env`/credential paths — all match the tar listing
+- Top-level `.env` (2183 B), `.env.example` (3211 B), `.env.bak.20260421_1154` (2116 B) — present
+- `WHCA_CREDENTIALS.md`, `FW_ DELAYED TLS CERTS.zip` — present
+- All 5 `.git` directories intact (root + 4 submodules: geomanager, geomanager_web, geomapviewer, georeport)
+- All submodules on branch `eafw` tracking `origin/eafw`
+- Pre-backup uncommitted edits preserved as-is:
+  - `eafw_geomanager_web`: `M geomanagerweb/settings/base.py`
+  - `eafw_georeport`: `M georeport/dashboard/models.py`
+  - `eafw_geomapviewer`: untracked `src/projects/`
+
+#### HEADs at restore time
+| Repo | Commit | Subject |
+|---|---|---|
+| flood_watch_system | `f2b03ca` | chore: bump eafw_geomapviewer — welcome-modal storage key versioning |
+| eafw_geomanager | `7db7498` | legend: pass icon URL from raw legend JSON through vector-tile serializer |
+| eafw_geomanager_web | `bf7e3cb` | perf: tile function 100× faster + correct freshness rule |
+| eafw_geomapviewer | `0ab2c7a` | fix(welcome-modal): version localStorage key so content updates re-show modal |
+| eafw_georeport | `f43ca5a` | assessment: Regional Advisory Report title, rolling Thu validity, CAP 4-tier severity, map-only layout |

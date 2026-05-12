@@ -209,20 +209,32 @@ class DriveSyncer:
         return self.config.get('folder_id')
 
     def list_zone_files(self, folder_id):
-        """List all Zone*.csv files in folder with pagination"""
+        """List all Zone*.csv files in folder with pagination.
+
+        We used to filter on ``mimeType='text/csv'``, but Drive labels many
+        uploaded ``.csv`` files as ``application/vnd.ms-excel`` or
+        ``application/octet-stream`` depending on the uploader's OS — that
+        filter silently dropped ~70% of yesterday's files. Now we list every
+        non-trashed file in the folder and let the ``Zone\\d+_\\d+\\.csv``
+        regex in ``_download_one`` keep only the right ones.
+        """
         files = []
         page_token = None
-        query = f"'{folder_id}' in parents and mimeType='text/csv' and trashed=false"
+        query = f"'{folder_id}' in parents and trashed=false"
 
         while True:
             results = self.service.files().list(
                 q=query,
-                fields='nextPageToken, files(id, name)',
+                fields='nextPageToken, files(id, name, mimeType)',
                 pageSize=1000,
                 pageToken=page_token
             ).execute()
 
-            files.extend(results.get('files', []))
+            for f in results.get('files', []):
+                # Keep only files whose name matches the Zone*.csv pattern,
+                # regardless of how Drive classified the MIME type.
+                if f.get('name', '').lower().endswith('.csv') and f.get('name', '').lower().startswith('zone'):
+                    files.append(f)
             page_token = results.get('nextPageToken')
             if not page_token:
                 break

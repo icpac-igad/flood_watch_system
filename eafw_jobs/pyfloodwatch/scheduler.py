@@ -13,13 +13,21 @@ logger = setup_logger(__name__, 'scheduler.log')
 
 
 def run_multimodal_sync():
-    """Run multimodal/ensemble sync based on configured source"""
+    """Run multimodal/ensemble sync based on configured source.
+
+    Pulls every available Drive folder that hasn't been ingested yet — not
+    just today's. This way upstream gaps (e.g. a missing 2026-05-10 folder)
+    don't leave a hole in the timeline: as soon as the folder appears, the
+    next scheduled run picks it up automatically. Consumers read the
+    "active" run via ``MAX(data_date)`` (or the helper view) so the
+    dashboard always shows the freshest data we have.
+    """
     logger.info(f"[{datetime.now()}] Running multimodal sync (source: {SYNC_SOURCE})")
 
     try:
         if SYNC_SOURCE == 'drive':
             from .drive_sync import run_drive_sync
-            success = run_drive_sync()
+            success = run_drive_sync(sync_all=True)
         elif SYNC_SOURCE == 'ftp':
             from .ensemble_sync import run_ensemble_sync
             success = run_ensemble_sync()
