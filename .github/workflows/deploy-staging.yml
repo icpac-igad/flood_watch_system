@@ -1,5 +1,5 @@
 # EAFW FloodWatch - Build & Deploy to Staging
-# Triggers on push to eafw branch
+# Triggers on push to main branch
 # Only builds images when their source files change
 # Deploy is modular: only pulls + restarts services that were rebuilt
 
@@ -8,7 +8,7 @@ name: Build & Deploy to Staging
 on:
   push:
     branches:
-      - eafw
+      - main
   workflow_dispatch:
     inputs:
       force_build:
@@ -310,42 +310,22 @@ jobs:
             # Login to GHCR
             echo ${GH_TOKEN} | docker login ghcr.io -u icpac-igad --password-stdin
 
-            # Safe repo update — submodules are private repos under icpac-igad,
-            # so configure a per-user insteadOf rewrite that injects GH_TOKEN
-            # for any github.com URL the submodule machinery touches.
-            git config --global url."https://${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
-
             REPO_DIR=~/projects/flood_watch_system
             if [ -d "$REPO_DIR/.git" ]; then
               cd $REPO_DIR
               git fetch origin
-              git reset --hard origin/eafw
+              git reset --hard origin/main
             else
               mkdir -p ~/projects
-              git clone -b eafw https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git $REPO_DIR
+              git clone -b main https://${GH_TOKEN}@github.com/icpac-igad/flood_watch_system.git $REPO_DIR
               cd $REPO_DIR
             fi
 
-            # One-time aside: legacy tracked directories from before the
-            # submodule split linger on disk after a git reset --hard, blocking
-            # the fresh submodule clone. Move (don't delete) anything that
-            # isn't already a git checkout. Renaming the directory only needs
-            # write access on the *parent*, so root-owned children inside the
-            # legacy dir are preserved untouched in the .legacy backup.
-            TS=$(date +%Y%m%d_%H%M%S)
-            for sub in eafw_geomanager eafw_geomanager_web eafw_geomapviewer eafw_georeport; do
-              if [ -d "$sub" ] && [ ! -e "$sub/.git" ]; then
-                mv "$sub" "${sub}.legacy.${TS}"
-                echo "  moved aside: $sub -> ${sub}.legacy.${TS}"
-              fi
-            done
-
-            # Sync + init/update every submodule to the SHA committed by the parent
-            git submodule sync --recursive
-            git submodule update --init --recursive --force
+            # No submodules — upstream component refs are pinned in
+            # docker-compose.yml build args; the parent repo is pure
+            # orchestration (Docker, compose, scripts, configs).
 
             echo "Git SHA: $(git rev-parse --short HEAD)"
-            git submodule status
 
             # Smart .env — create from template only on first deploy
             if [ ! -f .env ]; then

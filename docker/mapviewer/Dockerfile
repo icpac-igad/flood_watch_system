@@ -1,19 +1,21 @@
 # check=skip=SecretsUsedInArgOrEnv
 # syntax=docker/dockerfile:1.6
 #
-# Three-stage build:
-#   1. deps     — yarn install, cached on package.json/yarn.lock only.
-#   2. builder  — copies source, runs `yarn build` with a persistent
-#                 .next/cache mount for incremental compiles.
-#   3. runtime  — slim image using Next.js standalone output (~300 MB
-#                 instead of 1.4 GB).
+# Mapviewer image — clones the geomapviewer repo at build time using refs
+# pinned in docker-compose.yml. No submodule in the parent repo; build
+# context is just docker/mapviewer/.
 #
-# Source-only changes reuse the deps layer, keeping warm rebuilds under a
-# minute.
+# Build args (set in docker-compose.yml under geomanager_mapviewer.build.args):
+#   GEOMAPVIEWER_REPO / GEOMAPVIEWER_REF — the Next.js viewer source pin
+#   GH_TOKEN — optional, only needed if the upstream repo is private
+#
+# Three-stage build:
+#   1. source   — clone the geomapviewer repo at the pinned ref
+#   2. deps     — yarn install, cached on package.json/yarn.lock only
+#   3. builder  — runs `yarn build` with a persistent .next/cache mount
+#   4. runtime  — slim image using Next.js standalone output (~300 MB)
 
-# ── Stage 0: base with native libs (shared by deps + builder) ───────────────
-# cwebp/webp-loader needs libGL at build time; native npm modules need the
-# toolchain. We install once here so both subsequent stages inherit.
+# ── Stage 0: base with native libs ──────────────────────────────────────────
 FROM node:20-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git zlib1g-dev libpng-dev libgl1 libxi6 \
@@ -21,17 +23,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /tmp/geomapviewer
 
 
-# ── Stage 1: dependencies ────────────────────────────────────────────────────
+# ── Stage 1: clone source from pinned upstream ──────────────────────────────
+FROM base AS source
+ARG GH_TOKEN=""
+ARG GEOMAPVIEWER_REPO=https://github.com/icpac-igad/geomapviewer.git
+ARG GEOMAPVIEWER_REF=eafw
+
+RUN _AUTH_URL=$(echo "${GEOMAPVIEWER_REPO}" | sed "s|https://github.com/|https://${GH_TOKEN}@github.com/|") && \
+    git clone --depth 1 -b ${GEOMAPVIEWER_REF} "$_AUTH_URL" /tmp/geomapviewer
+
+
+# ── Stage 2: dependencies ────────────────────────────────────────────────────
 FROM base AS deps
-COPY package.json yarn.lock ./
+COPY --from=source /tmp/geomapviewer/package.json /tmp/geomapviewer/yarn.lock ./
 RUN --mount=type=cache,target=/root/.yarn \
     YARN_CACHE_FOLDER=/root/.yarn \
     yarn install --frozen-lockfile
 
 
-# ── Stage 2: build ───────────────────────────────────────────────────────────
+# ── Stage 3: build ───────────────────────────────────────────────────────────
 FROM base AS builder
 
+COPY --from=source /tmp/geomapviewer/ ./
 COPY --from=deps /tmp/geomapviewer/node_modules ./node_modules
 
 # Build-time ARGs (unchanged semantics from the previous Dockerfile)
@@ -54,7 +67,7 @@ ENV ANALYTICS_PROPERTY_ID=${ANALYTICS_PROPERTY_ID} DEBUG=${DEBUG} \
     FEATURE_ENV=${FEATURE_ENV} BASE_PATH=${BASE_PATH} CMS_API=${CMS_API} \
     ASSET_PREFIX=${ASSET_PREFIX}
 
-COPY . .
+# Source already copied from --from=source above; just synthesize .env.
 
 RUN rm -f .env && { \
       echo "ANALYTICS_PROPERTY_ID=${ANALYTICS_PROPERTY_ID}"; \

@@ -4,16 +4,51 @@
 
 The East Africa Flood Watch (EAFW) is a flood monitoring and early warning system for the Greater Horn of Africa (GHA), covering 11 IGAD member states: Ethiopia, Kenya, Uganda, Sudan, South Sudan, Tanzania, Rwanda, Burundi, Somalia, Djibouti, Eritrea.
 
-Built on the GeoManager platform with three core upstream repos maintained as subdirectories:
-- `eafw_geomanager_web/` — Django/Wagtail CMS (from [geomanager-web](https://github.com/icpac-igad/geomanager-web))
-- `eafw_geomanager/` — GeoManager Django app (from [geomanager](https://github.com/icpac-igad/geomanager))
-- `eafw_geomapviewer/` — Next.js map viewer (from [geomapviewer](https://github.com/icpac-igad/geomapviewer))
+## Architecture — pure orchestration parent + 4 external component repos
 
-## Architecture
+`flood_watch_system` is **pure Docker/infra orchestration**. No source code from upstream components lives here. The four upstream repos are pinned by `repo + ref` build args in `docker-compose.yml`, and the Dockerfiles `git clone` them at build time.
+
+```
+flood_watch_system/                  ← THIS REPO — orchestration only
+├── docker-compose.yml               ← pins upstream repo+ref per service (build args)
+├── docker-compose.override.yml      ← local dev only (gitignored)
+├── docker/
+│   ├── cms/Dockerfile               ← clones geomanager-web + uses pyproject sed-rewrite to pin geomanager + georeport
+│   ├── mapviewer/Dockerfile         ← clones geomapviewer
+│   ├── jobs/Dockerfile              ← uses eafw_jobs/ (will move to its own repo: eafw_jobs)
+│   ├── mapserver/Dockerfile         ← (will move to its own repo: eafw_mapserver, also housing db-init)
+│   └── mapcache/Dockerfile
+├── scripts/                         ← deploy.sh, up.sh, down.sh, reset.sh
+├── config/                          ← mapfiles, mapcache config (moves to eafw_mapserver later)
+├── db-init/                         ← SQL bootstrap (moves to eafw_mapserver later)
+├── eafw_jobs/                       ← jobs source code (moves to its own repo later)
+├── .github/workflows/deploy-staging.yml
+└── CLAUDE.md, README.md
+```
+
+### Upstream component repos (external, cloned at build time)
+
+| Repo | Purpose | Build-arg pin |
+|---|---|---|
+| [`icpac-igad/geomanager-web`](https://github.com/icpac-igad/geomanager-web) | Wagtail/Django app orchestration — EAFW-specific glue (settings, urls, home/, base/, partners/, contact/, mapwidget/) | `GEOMANAGER_WEB_REPO` + `GEOMANAGER_WEB_REF` |
+| [`icpac-igad/geomanager`](https://github.com/icpac-igad/geomanager) | GeoManager Django app — shared lib (also used by EAMW, drought watch) | `GEOMANAGER_REPO` + `GEOMANAGER_REF` |
+| [`icpac-igad/georeport`](https://github.com/icpac-igad/georeport) | `hazard-georeport` Django package — shared lib | `GEOREPORT_REPO` + `GEOREPORT_REF` |
+| [`icpac-igad/geomapviewer`](https://github.com/icpac-igad/geomapviewer) | Next.js map viewer — shared lib | `GEOMAPVIEWER_REPO` + `GEOMAPVIEWER_REF` |
+
+### To-be-created repos (Phase 2)
+
+| Future repo | Source today | Pattern reference |
+|---|---|---|
+| `eafw_jobs` | `eafw_jobs/` directory | TBD |
+| `eafw_mapserver` | `docker/mapserver/`, `docker/mapcache/`, `config/mapfiles/`, `db-init/` | [`icpac-igad/mukau-mapserver`](https://github.com/icpac-igad/mukau-mapserver) |
+
+### Why the shared libs are NOT vendored in
+
+`geomanager-web`, `geomanager`, `georeport`, `geomapviewer` are **shared across ICPAC products** (EAFW, EAMW, kenya-drought-watch, climweb). Each product has its own branch in each repo and its own orchestration parent. Don't try to monorepo — it would break the other products.
 
 ### Services (Docker Compose)
 
-All services run from `eafw_geomanager_web/docker-compose.yml`:
+All services run from the **parent** `docker-compose.yml` (root of `flood_watch_system/`), NOT from `eafw_geomanager_web/docker-compose.yml` (that one is the upstream's standalone-dev file — ignored here):
 
 | Service | Container | Port | Purpose |
 |---------|-----------|------|---------|
@@ -50,19 +85,22 @@ Local development uses `eafw_clean_*` volumes (mapped via `docker-compose.overri
 
 ### Local Development
 - **URL**: http://127.0.0.1:9068
-- **Working dir**: `~/IGAD-ICPAC/Projects/GHoA_Flood_watcher/eafw_geomanager_web/`
-- **Config**: `.env` in `eafw_geomanager_web/`
-- **Compose**: `docker-compose.yml` + `docker-compose.override.yml`
+- **Working dir**: `~/IGAD-ICPAC/Projects/Systems/flood_watch_system/` (the parent, NOT inside `eafw_geomanager_web/`)
+- **Config**: `.env` at the parent root
+- **Compose**: `./docker-compose.yml` + `./docker-compose.override.yml`
 
 ### Staging
 - **URL**: http://floodwatch.icpac.net
 - **Server**: 41.139.151.242 (SSH alias: `staging`)
 - **SSH**: `ssh staging` (user: hkoros, key: ~/.ssh/eafw_staging_deploy)
-- **Repo**: `~/flood_watch_system/eafw_geomanager_web/`
-- **Config**: `.env` in `eafw_geomanager_web/`
+- **Working dir**: `~/projects/flood_watch_system/` (parent root). The `~/flood_watch_system` symlink also points here for backwards compat.
+- **Compose file**: `~/projects/flood_watch_system/docker-compose.yml` (root). The `eafw_geomanager_web/docker-compose.yml` inside the submodule is unused — ignore it.
+- **Config**: `.env` at `~/projects/flood_watch_system/.env`
 - **DB creds**: eafw_user / eafw_db
+- **DB backups**: `~/data/backups/eafw/` (auto pg_dump before every deploy)
 - **Note**: CSRF_COOKIE_SECURE=False, SESSION_COOKIE_SECURE=False (HTTP, no HTTPS yet)
 - **Note**: DNS goes through eadw-nginx (port 80) which proxies to eafw-nginx (port 9068). Do NOT modify eadw-nginx.
+- **Note**: Caddy fronts the eafw stack at 443; staging is currently HTTP only externally.
 
 ### Production
 - **URL**: https://floodwatch.icpac.net (when HTTPS is configured)
@@ -77,7 +115,8 @@ Local development uses `eafw_clean_*` volumes (mapped via `docker-compose.overri
 **Manual (SSH)**:
 ```bash
 ssh staging
-cd ~/flood_watch_system && git pull origin eafw --ff-only
+cd ~/projects/flood_watch_system && git pull origin eafw --ff-only
+git submodule update --init --recursive --force
 
 # Deploy all app services (DB stays untouched)
 ./scripts/deploy.sh --full
@@ -94,11 +133,12 @@ cd ~/flood_watch_system && git pull origin eafw --ff-only
 ### Key Deployment Rules
 
 1. **DB is never recreated during deploy** — `scripts/deploy.sh` only restarts app containers
-2. **Auto-backup** — DB is dumped to `~/eafw-backups/` before every deploy
+2. **Auto-backup** — DB is dumped to `~/data/backups/eafw/` before every deploy
 3. **Volume names are pinned** — `eafw_pgdata`, `eafw_media`, etc. are stable regardless of clone directory
 4. **COMPOSE_PROJECT_NAME=eafw** — must be in `.env` for consistent container/network naming
 5. **Never use `docker compose down`** on staging — use `docker compose stop <service>` or the deploy script
 6. **Never `docker rm -f` the DB container** — this is the #1 cause of data loss
+7. **One deploy entry point**: `scripts/deploy.sh`. There is no `deploy-staging.sh` anymore (removed 2026-05-12 — legacy that pointed at the old `eafw_geomanager_web/` compose path)
 
 ### Rebuild Specific Services
 
@@ -259,20 +299,30 @@ The jobs service (`eafw-jobs`) runs these scheduled syncs:
 - **Separate services**: keep eafw_jobs as separate container from CMS for fault isolation
 - **Vector tile URLs**: always absolute (include host:port) — mapviewer web worker can't resolve relative URLs
 - **No hardcoding**: Follow a modular structure throughout. Configuration comes from DB, environment variables, or API — never hardcode values (URLs, country lists, thresholds, etc.) directly in templates or components. Use Wagtail StreamFields, Django settings, or DB-driven config so changes can be made without code deploys
+- **Submodules are deliberate, keep them**: `eafw_geomanager`, `eafw_georeport`, `eafw_geomapviewer` are shared across ICPAC products. Code changes there → commit to submodule first → bump submodule pointer in parent. `eafw_geomanager_web` is the EAFW-specific Wagtail glue (also a submodule, but only EAFW uses its `eafw` branch).
+- **Compose files**: only the parent's `docker-compose.yml` (root) is real. The `docker-compose.yml` inside each submodule is an upstream artifact for standalone-dev users of that lib — ignore it on EAFW.
 
 ## Pending — CI/CD simplification ("Path X")
 
-Single coherent PR to land when ready. Pipeline currently works but has friction that bit us on the 2026-05-11 i18n deploy (35-min `docker pull` stall from ghcr.io while building CMS with `--no-cache`).
+Single coherent PR to land. The pipeline works but bites us on every CMS deploy: `--no-cache` rebuilds (~15 min) and unreliable ghcr.io pulls on the staging host (we've seen blob-server stalls > 20 min on specific layers; deploy.sh silently warns and uses the old image, masking the failure).
+
+Decided architecture (do NOT change): keep all 4 submodules. `eafw_geomanager_web` is the Wagtail orchestration layer; `geomanager` / `georeport` / `geomapviewer` are shared libs across ICPAC products. Don't monorepo.
 
 | # | Change | File | Why |
 |---|---|---|---|
-| 1 | Switch CMS `Dockerfile` to build-context model (copy submodules from checkout, drop `git clone` over network) — mirror what `docker/cms/Dockerfile.local` already does | `docker/cms/Dockerfile` | Removes `GH_PAT` build-arg dependency; layers become cache-friendly |
-| 2 | Drop `--no-cache: true` and `CACHEBUST` from build-cms; add `submodules: recursive` to that job's checkout | `.github/workflows/deploy-staging.yml` | CMS builds drop from ~15 min to ~3 min for incremental edits |
-| 3 | Add memcached flush + curl HTTP health check to the tail of `scripts/deploy.sh` (after migrations) | `scripts/deploy.sh` | No more manual cache flush; deploy fails loudly if site doesn't return 200 |
-| 4 | Replace the 11 `sed -i` secret injections with one `envsubst` rendering from a `.env.template` (or single Python one-liner) | `.github/workflows/deploy-staging.yml` | One less way to silently corrupt `.env`; easier to add/remove secrets |
-| 5 | Strengthen prune at end of `scripts/deploy.sh`: `docker image prune -af --filter "until=720h"` | `scripts/deploy.sh` | Disk doesn't drift to 97% over months (we hit this 2026-05-11) |
+| 1 | Rewrite CMS `Dockerfile` to use build-context model (mirror `Dockerfile.local`): `COPY eafw_geomanager_web/`, `COPY eafw_georeport/`, `COPY eafw_geomanager/`. Drop the in-Dockerfile `git clone` and the `GH_PAT` build-arg. Submodule pointer becomes authoritative (today it's silently ignored — correctness bug). | `docker/cms/Dockerfile` | Removes the in-build network fetch, restores layer cache, makes submodule SHA actually matter |
+| 2 | `build-cms` job: drop `no-cache: true` + `CACHEBUST`; add `submodules: recursive` to its checkout | `.github/workflows/deploy-staging.yml` | CMS builds drop from ~15 min → ~3 min for incremental edits |
+| 3 | `scripts/deploy.sh`: fail-fast on pull failure (today it `warn`s + uses existing image → silent stale deploys). At tail: memcached `flush_all` + `curl -fsS http://floodwatch.icpac.net/` health check. | `scripts/deploy.sh` | No more silent stale deploys; manual flush goes away |
+| 4 | Add `scripts/deploy.sh --fast <service>` mode: `git pull --recurse-submodules` → docker cp source into container → migrate → restart → flush → curl. No ghcr.io. | `scripts/deploy.sh` | Source-only changes deploy in <60 s, sidesteps the ghcr.io stall entirely. Validated manually 2026-05-12 (bulletin + i18n deploy). |
+| 5 | Replace 11 `sed -i` secret injections with one `envsubst` from a `.env.template` (or single Python one-liner) | `.github/workflows/deploy-staging.yml` | One less way to silently corrupt `.env` |
+| 6 | Strengthen prune at end of `scripts/deploy.sh`: `docker image prune -af --filter "until=720h"` + `find ~/data/backups/eafw -name 'pre_deploy_*.dump' -mtime +30 -delete` | `scripts/deploy.sh` | Disk doesn't drift |
 
-Out of scope for this PR (defer): self-hosted runner, Kamal migration, touching mapviewer/mapserver/mapcache/jobs Dockerfiles, removing `GH_PAT` entirely (still needed elsewhere).
+Out of scope for this PR (defer): self-hosted runner, Kamal migration, touching mapviewer/mapserver/mapcache/jobs Dockerfiles, removing `GH_PAT` entirely (still needed for repo clone in `appleboy/ssh-action` step), build-on-staging.
+
+### Things NOT to do
+- Don't vendor submodules into the parent ("merge the monorepo"). The shared libs are used by other ICPAC products (drought watch, climweb). Keep them as submodules.
+- Don't touch each submodule's own `Dockerfile` / `docker-compose.yml` — those are for upstream standalone-dev users.
+- Don't build CMS on staging — only ~600 MB RAM free, 84 % swap used. Would OOM. (mapserver/mapcache/mapviewer would be fine; CMS/jobs are not.)
 
 ## Troubleshooting
 

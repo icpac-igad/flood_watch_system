@@ -113,10 +113,19 @@ services:
     image: ${WEB_IMAGE_NAME:-icpac/eafw-cms:local}
     pull_policy: ${PULL_POLICY:-never}
     build:
-      context: .
-      dockerfile: ./docker/cms/Dockerfile
+      context: ./docker/cms
+      dockerfile: Dockerfile
       args:
-        - GH_TOKEN=${GH_TOKEN:-}
+        GH_TOKEN: ${GH_TOKEN:-}
+        # Upstream pins — all three live here so the parent orchestration
+        # YAML is the single source of truth for shipped versions. Override
+        # via the same-named env vars in .env to deploy a different ref.
+        GEOMANAGER_WEB_REPO: ${GEOMANAGER_WEB_REPO:-https://github.com/icpac-igad/geomanager-web.git}
+        GEOMANAGER_WEB_REF: ${GEOMANAGER_WEB_REF:-eafw}
+        GEOMANAGER_REPO: ${GEOMANAGER_REPO:-https://github.com/icpac-igad/geomanager.git}
+        GEOMANAGER_REF: ${GEOMANAGER_REF:-eafw}
+        GEOREPORT_REPO: ${GEOREPORT_REPO:-https://github.com/icpac-igad/georeport.git}
+        GEOREPORT_REF: ${GEOREPORT_REF:-eafw}
     restart: ${RESTART_POLICY:-unless-stopped}
     command: >
       sh -c "/wait
@@ -172,18 +181,21 @@ services:
     pull_policy: ${PULL_POLICY:-never}
     restart: ${RESTART_POLICY:-unless-stopped}
     build:
-      context: ./eafw_geomapviewer
-      dockerfile: ../docker/mapviewer/Dockerfile
+      context: ./docker/mapviewer
+      dockerfile: Dockerfile
       args:
-        - CMS_API=${MAPVIEWER_CMS_API:-/api}
-        - BASE_PATH=${MAPVIEWER_BASE_PATH:-/}
-        - ASSET_PREFIX=${MAPVIEWER_ASSET_PREFIX:-}
-        - ANALYTICS_PROPERTY_ID=${ANALYTICS_PROPERTY_ID:-}
-        - BITLY_TOKEN=${BITLY_TOKEN:-}
-        - GOOGLE_CUSTOM_SEARCH_CX=${GOOGLE_CUSTOM_SEARCH_CX:-}
-        - GOOGLE_SEARCH_API_KEY=${GOOGLE_SEARCH_API_KEY:-}
-        - ADMIN_BOUNDARY_API=${ADMIN_BOUNDARY_API:-}
-        - NEXT_TELEMETRY_DISABLED=1
+        GH_TOKEN: ${GH_TOKEN:-}
+        GEOMAPVIEWER_REPO: ${GEOMAPVIEWER_REPO:-https://github.com/icpac-igad/geomapviewer.git}
+        GEOMAPVIEWER_REF: ${GEOMAPVIEWER_REF:-eafw}
+        CMS_API: ${MAPVIEWER_CMS_API:-/api}
+        BASE_PATH: ${MAPVIEWER_BASE_PATH:-/}
+        ASSET_PREFIX: ${MAPVIEWER_ASSET_PREFIX:-}
+        ANALYTICS_PROPERTY_ID: ${ANALYTICS_PROPERTY_ID:-}
+        BITLY_TOKEN: ${BITLY_TOKEN:-}
+        GOOGLE_CUSTOM_SEARCH_CX: ${GOOGLE_CUSTOM_SEARCH_CX:-}
+        GOOGLE_SEARCH_API_KEY: ${GOOGLE_SEARCH_API_KEY:-}
+        ADMIN_BOUNDARY_API: ${ADMIN_BOUNDARY_API:-}
+        NEXT_TELEMETRY_DISABLED: "1"
     volumes:
       - eafw_mapviewer_static:/app/nginx/.next/static
       - ./docker/volumes/mapviewer/.cache:/root/.cache:z
