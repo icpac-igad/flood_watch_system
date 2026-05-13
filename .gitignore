@@ -17,8 +17,11 @@ node_modules/
 # Local credential dumps — never commit
 WHCA_CREDENTIALS.md
 *credentials*.md
-!CLAUDE.md
 *.env.local
+
+# Claude / agent notes — local only
+CLAUDE.md
+.claude/
 
 # Docker volumes
 docker/volumes/
